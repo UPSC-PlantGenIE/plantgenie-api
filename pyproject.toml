@@ -1,14 +1,19 @@
 [project]
 name = "plantgenie-api"
 version = "0.1.0"
-description = "Add your description here"
+description = "Backend for the PlantGenIE Web Application (and general usage)"
 readme = "README.md"
 authors = [
     { name = "Jamie McCann", email = "jamie.mccann@umu.se" }
 ]
 requires-python = ">=3.13"
 dependencies = [
+    "celery>=5.4.0",
     "duckdb>=1.2.0",
+    "fastapi[standard]>=0.115.11",
+    "pyarrow>=19.0.1",
+    "pydantic>=2.10.6",
+    "redis>=5.2.1",
 ]
 
 [project.scripts]

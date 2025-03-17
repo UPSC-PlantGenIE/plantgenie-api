@@ -1,0 +1,56 @@
+version: "3.8"
+
+services:
+  api:
+    image: plantgenie-api:local-latest
+    build: .
+    container_name: plantgenie_api
+    ports:
+      - "8000:8000"
+    environment:
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - rabbitmq
+      - redis
+    networks:
+      - plantgenie_network
+
+  celery_worker:
+    build: .
+    image: plantgenie-api:local-latest
+    container_name: celery_worker
+    # command: celery -A src.plantgenie_api.celery worker --loglevel=info
+    command: uv run celery -A src.plantgenie_api.celery worker --loglevel=info
+    environment:
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - rabbitmq
+      - redis
+    networks:
+      - plantgenie_network
+
+  rabbitmq:
+    image: rabbitmq:4.0.7-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"  # RabbitMQ management console
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    networks:
+      - plantgenie_network
+
+  redis:
+    image: redis:6
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - plantgenie_network
+
+networks:
+  plantgenie_network:
+    driver: bridge
