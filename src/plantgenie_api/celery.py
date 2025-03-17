@@ -12,8 +12,14 @@ celery_app.conf.task_routes = {
     "src.plantgenie_api.tasks.*": {"queue": "blast_tasks"},
 }
 
+# celery_app.conf.task_routes = {
+#     "plantgenie_api.tasks.*": {"queue": "blast_tasks"},
+# }
+
+
 # If you want Celery to automatically discover tasks from a module
-celery_app.autodiscover_tasks(["src.plantgenie_api.tasks"])
+# celery_app.autodiscover_tasks(["src.plantgenie_api.tasks"])
+celery_app.autodiscover_tasks(["plantgenie_api.tasks"])
 
 if __name__ == '__main__':
     celery_app.start()

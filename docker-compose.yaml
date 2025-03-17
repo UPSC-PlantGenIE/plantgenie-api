@@ -21,7 +21,7 @@ services:
     image: plantgenie-api:local-latest
     container_name: celery_worker
     # command: celery -A src.plantgenie_api.celery worker --loglevel=info
-    command: uv run celery -A src.plantgenie_api.celery worker --loglevel=info
+    command: uv run celery -A plantgenie_api.celery worker --loglevel=DEBUG
     environment:
       - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
       - CELERY_RESULT_BACKEND=redis://redis:6379/0

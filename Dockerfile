@@ -12,10 +12,17 @@ RUN sh /uv-installer.sh && rm /uv-installer.sh
 
 # Ensure the installed binary is on the `PATH`
 ENV PATH="/root/.local/bin/:$PATH"
+ENV UV_SYSTEM_PYTHON=1
 
-ADD . /app
-
+# ADD . /app
 WORKDIR /app
 
-RUN uv sync --frozen
+COPY pyproject.toml .
+RUN uv pip install -r pyproject.toml
+
+COPY . .
+RUN uv pip install -e .
+
+# RUN uv sync --frozen
+
 CMD ["uv", "run", "fastapi", "dev", "/app/src/plantgenie_api/main.py", "--host", "0.0.0.0", "--port", "8000"]
