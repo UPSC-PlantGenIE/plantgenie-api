@@ -7,6 +7,8 @@ celery_app = Celery(
     backend="redis://redis:6379/0",
 )
 
+celery_app.conf.result_expires = 1800
+
 # Optional: Configure task routes or other settings
 celery_app.conf.task_routes = {
     "src.plantgenie_api.tasks.*": {"queue": "blast_tasks"},

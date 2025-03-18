@@ -13,6 +13,7 @@ dependencies = [
     "fastapi[standard]>=0.115.11",
     "pyarrow>=19.0.1",
     "pydantic>=2.10.6",
+    "python-multipart>=0.0.20",
     "redis>=5.2.1",
 ]
 

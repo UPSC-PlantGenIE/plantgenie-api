@@ -23,6 +23,4 @@ RUN uv pip install -r pyproject.toml
 COPY . .
 RUN uv pip install -e .
 
-# RUN uv sync --frozen
-
 CMD ["uv", "run", "fastapi", "dev", "/app/src/plantgenie_api/main.py", "--host", "0.0.0.0", "--port", "8000"]

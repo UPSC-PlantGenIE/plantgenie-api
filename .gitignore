@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Alternative environment variable files
+.env.*

@@ -1,4 +1,5 @@
 version = 1
+revision = 1
 requires-python = ">=3.13"
 
 [[package]]
@@ -424,6 +425,7 @@ dependencies = [
     { name = "fastapi", extra = ["standard"] },
     { name = "pyarrow" },
     { name = "pydantic" },
+    { name = "python-multipart" },
     { name = "redis" },
 ]
 
@@ -441,6 +443,7 @@ requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115.11" },
     { name = "pyarrow", specifier = ">=19.0.1" },
     { name = "pydantic", specifier = ">=2.10.6" },
+    { name = "python-multipart", specifier = ">=0.0.20" },
     { name = "redis", specifier = ">=5.2.1" },
 ]
 
