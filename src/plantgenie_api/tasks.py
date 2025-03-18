@@ -2,8 +2,10 @@ import os
 import subprocess
 import tempfile
 import time
-from celery import Celery
+from celery import Celery, chain
 from .celery import celery_app  # Import the Celery instance
+
+from os import PathLike
 
 from celery import Task
 
@@ -17,7 +19,7 @@ BLAST_CONFIG = {
     },
     "mrna": {
         "db": os.path.join(BLAST_DB_PATH, "Picab02_230926_at01_all_mRNA.fa"),
-        "program": "blastx",
+        "program": "blastn",
     },
     "cds": {
         "db": os.path.join(BLAST_DB_PATH, "Picab02_230926_at01_all_cds.fa"),
@@ -32,6 +34,7 @@ BLAST_CONFIG = {
 
 class BlastTask(Task):
     name = "bioinformatics.blast_task"
+    acks_late = True
 
     def run(
         self,
@@ -57,13 +60,8 @@ class BlastTask(Task):
         blast_program = BLAST_CONFIG[blast_type]["program"]
         blast_db = BLAST_CONFIG[blast_type]["db"]
 
-        # Create a temporary file to store the query sequence
-        # with tempfile.NamedTemporaryFile(mode="w", delete=False) as query_file:
-        #     # query_file.write(query_sequence)
-        #     query_file_path = query_file.name
-
         # Construct BLAST command
-        results_file_path = f"{BLAST_DB_PATH}/{self.request.id}_blast_results.tsv"
+        results_file_path = f"{BLAST_DB_PATH}/{self.request.id}_blast_results.asn"
         blast_cmd = [
             blast_program,
             "-query",
@@ -71,12 +69,41 @@ class BlastTask(Task):
             "-db",
             blast_db,
             "-outfmt",
-            "6",  # Tabular output format
+            "11",  # Tabular output format
             "-evalue",
             str(evalue),
             "-max_target_seqs",
             str(max_hits),
-            "-out", results_file_path
+            "-out",
+            results_file_path,
+        ]
+
+        try:
+            # Execute BLAST
+            result = subprocess.run(
+                blast_cmd, capture_output=True, text=True, check=True
+            )
+            output = result.stdout
+        except subprocess.CalledProcessError as e:
+            output = f"BLAST error: {e.stderr}"
+
+        # chain(blast_formatter_task).apply_async(args=(results_file_path,))
+        # chain(delete_results_task).apply_async(
+        #     args=(query_file_path, results_file_path), countdown=1800
+        # )
+
+        return output
+
+
+class BlastResultToHtmlTask(Task):
+    def run(self, results_file_path: str):
+        blast_cmd = [
+            "blast_formatter",
+            "-archive",
+            results_file_path,
+            "-out",
+            results_file_path.split(".")[0] + ".html",
+            "-html",
         ]
 
         try:
@@ -91,8 +118,46 @@ class BlastTask(Task):
         return output
 
 
-class FakeBlastTask(Task):
+class BlastResultToTabularTask(Task):
+    def run(self, results_file_path: str):
+        blast_cmd = [
+            "blast_formatter",
+            "-archive",
+            results_file_path,
+            "-outfmt 6"
+            "-out",
+            results_file_path.split(".")[0] + ".tsv",
+            "-html",
+        ]
 
+        try:
+            # Execute BLAST
+            result = subprocess.run(
+                blast_cmd, capture_output=True, text=True, check=True
+            )
+            output = result.stdout
+        except subprocess.CalledProcessError as e:
+            output = f"BLAST error: {e.stderr}"
+
+        return output
+
+class DeleteResultsTask(Task):
+    name = "bioinformatics.clean_up"
+    acks_late = True
+
+    def run(self, query_file_path: str, results_file_path: str):
+        if os.path.exists(path=query_file_path):
+            # clean dir
+            pass
+
+        if os.path.exists(path=results_file_path):
+            pass
+
+        if os.path.exists(path=results_file_path.split(".")[0] + ".html"):
+            pass
+
+
+class FakeBlastTask(Task):
     name = "custom.fake_blast_task"
     acks_late = True
 
@@ -106,7 +171,8 @@ class FakeBlastTask(Task):
 
 fake_blast_task = celery_app.register_task(FakeBlastTask())
 real_blast_task = celery_app.register_task(BlastTask())
-
+blast_formatter_task = celery_app.register_task(BlastResultToHtmlTask())
+delete_results_task = celery_app.register_task(DeleteResultsTask())
 
 # @celery_app.task(bind=True)
 # def fake_blast_task(self, job_id: str):

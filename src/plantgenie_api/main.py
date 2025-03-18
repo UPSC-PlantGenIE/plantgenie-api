@@ -51,13 +51,20 @@ def check_blast(job_id: str):
 async def submit_blast_query(
     file: UploadFile = File(...),  # File upload
     description: str = Form(...),  # Form field: description
-    category: str = Form(...),  # Form field: category
+    dbtype: str = Form(...),
 ):
+
+    if dbtype not in ["protein", "mrna", "cds", "genome"]:
+        raise HTTPException(
+            status_code=422, detail=f"{dbtype} not a valid dbtype parameter"
+        )
+
     if file.size > 2**20:
         raise HTTPException(
-            status_code=422,
+            status_code=413,
             detail=f"Size of your uploaded file - {file.size} - > 1MB",
         )
+
     file_content = await file.read()
 
     host_file_path = f"{DATA_PATH}/{uuid.uuid4()}_query.fasta"
@@ -65,13 +72,13 @@ async def submit_blast_query(
     with open(host_file_path, "wb") as f:
         f.write(file_content)
 
-    task = real_blast_task.apply_async(args=(host_file_path, "cds"))
+    task = real_blast_task.apply_async(args=(host_file_path, dbtype))
 
     return JSONResponse(
         content={
             "filename": file.filename,
             "description": description,
-            "category": category,
+            "dbtype": dbtype,
             "file_size": len(file_content),
             "job_id": task.id,
         }
@@ -103,3 +110,12 @@ def retrieve_blast_result(job_id: str):
         status_code=404,
         detail=f"result for requested job id - {job_id} - was not found",
     )
+
+@app.get("/retrieve-blast-result-as-tsv/{job_id}")
+def retrieve_blast_result_as_html(job_id: str):
+    pass
+
+
+@app.get("/retrieve-blast-result-as-html/{job_id}")
+def retrieve_blast_result_as_html(job_id: str):
+    pass
