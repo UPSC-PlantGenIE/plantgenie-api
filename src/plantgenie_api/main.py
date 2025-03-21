@@ -57,7 +57,7 @@ def check_blast(job_id: str):
         return {"job_id": job_id, "status": result.state, "result": None}
 
 
-@app.post("/submit_blast_query/")
+@app.post("/submit-blast-query/")
 async def submit_blast_query(
     file: UploadFile = File(...),  # File upload
     description: str = Form(...),  # Form field: description
@@ -109,8 +109,14 @@ def poll_for_blast_result(job_id: str):
         return_result = None
 
     return JSONResponse(
-        content={"job_id": job_id, "status": job_result.state, "result": return_result}
+        content={
+            "job_id": job_id,
+            "status": job_result.state,
+            "result": return_result,
+            "completed_at": job_result.date_done.isoformat(),
+        }
     )
+
 
 @app.get("/retrieve-blast-result/{job_id}")
 def retrieve_blast_result(job_id: str):
