@@ -3,6 +3,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.exceptions import HTTPException
 from celery.result import AsyncResult
@@ -16,6 +17,15 @@ DATA_PATH = (
 )
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "*"
+    ],  # Allow all origins (change this to specific origins in production)
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all methods
+    allow_headers=["*"],  # Allow all headers
+)
 
 
 @app.post("/submit-blast")
@@ -87,17 +97,20 @@ async def submit_blast_query(
 
 @app.get("/poll-for-blast-result/{job_id}")
 def poll_for_blast_result(job_id: str):
-    result = AsyncResult(job_id)
+    job_result = AsyncResult(job_id)
 
-    if result.state == "PENDING":
-        return {"job_id": job_id, "status": "pending", "result": None}
-    elif result.state == "SUCCESS":
-        return {"job_id": job_id, "status": "completed", "result": result.result}
-    elif result.state == "FAILURE":
-        return {"job_id": job_id, "status": "failed", "result": str(result.result)}
+    if job_result.state == "PENDING":
+        return_result = None
+    elif job_result.state == "SUCCESS":
+        return_result = job_result.result
+    elif job_result.state == "FAILURE":
+        return_result = str(job_result.result)
     else:
-        return {"job_id": job_id, "status": result.state, "result": None}
+        return_result = None
 
+    return JSONResponse(
+        content={"job_id": job_id, "status": job_result.state, "result": return_result}
+    )
 
 @app.get("/retrieve-blast-result/{job_id}")
 def retrieve_blast_result(job_id: str):
@@ -110,6 +123,7 @@ def retrieve_blast_result(job_id: str):
         status_code=404,
         detail=f"result for requested job id - {job_id} - was not found",
     )
+
 
 @app.get("/retrieve-blast-result-as-tsv/{job_id}")
 def retrieve_blast_result_as_html(job_id: str):

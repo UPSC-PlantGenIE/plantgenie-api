@@ -60,8 +60,10 @@ class BlastTask(Task):
         blast_program = BLAST_CONFIG[blast_type]["program"]
         blast_db = BLAST_CONFIG[blast_type]["db"]
 
+        results_base_path = f"{BLAST_DB_PATH}/{self.request.id}_blast_results"
+
         # Construct BLAST command
-        results_file_path = f"{BLAST_DB_PATH}/{self.request.id}_blast_results.asn"
+        results_file_path = f"{results_base_path}.asn"
         blast_cmd = [
             blast_program,
             "-query",
@@ -75,7 +77,7 @@ class BlastTask(Task):
             "-max_target_seqs",
             str(max_hits),
             "-out",
-            results_file_path,
+            f"{results_base_path}.asn",
         ]
 
         try:
@@ -91,6 +93,43 @@ class BlastTask(Task):
         # chain(delete_results_task).apply_async(
         #     args=(query_file_path, results_file_path), countdown=1800
         # )
+
+        blast_cmd = [
+            "blast_formatter",
+            "-archive",
+            f"{results_base_path}.asn",
+            "-out",
+            f"{results_base_path}.html",
+            "-html",
+        ]
+
+        try:
+            # Execute BLAST
+            result = subprocess.run(
+                blast_cmd, capture_output=True, text=True, check=True
+            )
+            output = result.stdout
+        except subprocess.CalledProcessError as e:
+            output = f"BLAST error: {e.stderr}"
+
+        blast_cmd = [
+            "blast_formatter",
+            "-archive",
+            f"{results_base_path}.asn",
+            "-outfmt",
+            "6",
+            "-out",
+            f"{results_base_path}.tsv",
+        ]
+
+        try:
+            # Execute BLAST
+            result = subprocess.run(
+                blast_cmd, capture_output=True, text=True, check=True
+            )
+            output = result.stdout
+        except subprocess.CalledProcessError as e:
+            output = f"BLAST error: {e.stderr}"
 
         return output
 
@@ -124,8 +163,7 @@ class BlastResultToTabularTask(Task):
             "blast_formatter",
             "-archive",
             results_file_path,
-            "-outfmt 6"
-            "-out",
+            "-outfmt 6" "-out",
             results_file_path.split(".")[0] + ".tsv",
             "-html",
         ]
@@ -140,6 +178,7 @@ class BlastResultToTabularTask(Task):
             output = f"BLAST error: {e.stderr}"
 
         return output
+
 
 class DeleteResultsTask(Task):
     name = "bioinformatics.clean_up"
