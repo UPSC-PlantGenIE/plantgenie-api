@@ -127,15 +127,23 @@ def retrieve_blast_result(job_id: str):
 
     raise HTTPException(
         status_code=404,
-        detail=f"result for requested job id - {job_id} - was not found",
+        detail=f"tab-delimited result for requested job id - {job_id} - was not found",
     )
 
 
 @app.get("/retrieve-blast-result-as-tsv/{job_id}")
-def retrieve_blast_result_as_html(job_id: str):
+def retrieve_blast_result_as_tsv(job_id: str):
     pass
 
 
 @app.get("/retrieve-blast-result-as-html/{job_id}")
 def retrieve_blast_result_as_html(job_id: str):
-    pass
+    result = AsyncResult(job_id)
+
+    if result.state == "SUCCESS":
+        return FileResponse(f"{DATA_PATH}/{job_id}_blast_results.html")
+
+    raise HTTPException(
+        status_code=404,
+        detail=f"html result for requested job id - {job_id} - was not found",
+    )

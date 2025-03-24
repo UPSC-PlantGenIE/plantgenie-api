@@ -89,11 +89,6 @@ class BlastTask(Task):
         except subprocess.CalledProcessError as e:
             output = f"BLAST error: {e.stderr}"
 
-        # chain(blast_formatter_task).apply_async(args=(results_file_path,))
-        # chain(delete_results_task).apply_async(
-        #     args=(query_file_path, results_file_path), countdown=1800
-        # )
-
         blast_cmd = [
             "blast_formatter",
             "-archive",
