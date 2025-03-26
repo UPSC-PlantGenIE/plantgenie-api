@@ -62,6 +62,8 @@ async def submit_blast_query(
     file: UploadFile = File(...),  # File upload
     description: str = Form(...),  # Form field: description
     dbtype: str = Form(...),
+    # program: str = Form(...),
+    species: str = Form(...),
 ):
 
     if dbtype not in ["protein", "mrna", "cds", "genome"]:
