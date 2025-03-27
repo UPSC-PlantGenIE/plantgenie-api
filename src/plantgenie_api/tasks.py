@@ -1,11 +1,9 @@
 import os
 import subprocess
-import tempfile
 import time
 from celery import Celery, chain
 from .celery import celery_app  # Import the Celery instance
 
-from os import PathLike
 
 from celery import Task
 
@@ -39,7 +37,8 @@ class BlastTask(Task):
     def run(
         self,
         query_file_path: str,
-        blast_type: str,
+        blast_program: str,
+        blast_db_path: str,
         evalue: float = 0.001,
         max_hits: int = 10,
     ):
@@ -52,24 +51,16 @@ class BlastTask(Task):
         :param max_hits: Maximum number of hits to return.
         :return: BLAST output as a string.
         """
-        if blast_type not in BLAST_CONFIG:
-            raise ValueError(
-                f"Invalid BLAST type: {blast_type}. Choose from {list(BLAST_CONFIG.keys())}."
-            )
-
-        blast_program = BLAST_CONFIG[blast_type]["program"]
-        blast_db = BLAST_CONFIG[blast_type]["db"]
 
         results_base_path = f"{BLAST_DB_PATH}/{self.request.id}_blast_results"
 
         # Construct BLAST command
-        results_file_path = f"{results_base_path}.asn"
         blast_cmd = [
             blast_program,
             "-query",
             query_file_path,
             "-db",
-            blast_db,
+            blast_db_path,
             "-outfmt",
             "11",  # Tabular output format
             "-evalue",
@@ -80,14 +71,16 @@ class BlastTask(Task):
             f"{results_base_path}.asn",
         ]
 
+        output = f"Executed command: {" ".join(blast_cmd)}\n"
+
         try:
             # Execute BLAST
             result = subprocess.run(
                 blast_cmd, capture_output=True, text=True, check=True
             )
-            output = result.stdout
+            output += f"blast results: {result.stdout}\n"
         except subprocess.CalledProcessError as e:
-            output = f"BLAST error: {e.stderr}"
+            output += f"BLAST error: {e.stderr}\n"
 
         blast_cmd = [
             "blast_formatter",
@@ -103,9 +96,9 @@ class BlastTask(Task):
             result = subprocess.run(
                 blast_cmd, capture_output=True, text=True, check=True
             )
-            output = result.stdout
+            # output = result.stdout
         except subprocess.CalledProcessError as e:
-            output = f"BLAST error: {e.stderr}"
+            output += f"BLAST error: {e.stderr}\n"
 
         blast_cmd = [
             "blast_formatter",
@@ -122,9 +115,9 @@ class BlastTask(Task):
             result = subprocess.run(
                 blast_cmd, capture_output=True, text=True, check=True
             )
-            output = result.stdout
+            # output = result.stdout
         except subprocess.CalledProcessError as e:
-            output = f"BLAST error: {e.stderr}"
+            output += f"BLAST error: {e.stderr}\n"
 
         return output
 

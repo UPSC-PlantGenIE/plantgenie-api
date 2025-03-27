@@ -1,6 +1,8 @@
 import os
 import uuid
+
 from pathlib import Path
+from typing import Annotated, Literal
 
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +17,41 @@ from plantgenie_api.tasks import (
 DATA_PATH = (
     Path(os.environ.get("DATA_PATH")) or Path(__file__).parent.parent / "example_data"
 )
+
+BLAST_DB_MAPPER = {
+    "Picea abies": {
+        "v2.0": {
+            "cds": DATA_PATH
+            / "picea-abies/v2.0/blast"
+            / "Picab02_230926_at01_all_cds.fa",
+            "mrna": DATA_PATH
+            / "picea-abies/v2.0/blast"
+            / "Picab02_230926_at01_all_mRNA.fa",
+            "protein": DATA_PATH
+            / "picea-abies/v2.0/blast"
+            / "Picab02_230926_at01_all_aa.fa",
+            "genome": DATA_PATH
+            / "picea-abies/v2.0/blast"
+            / "Picab02_chromosomes_bgzipped.fasta",
+        }
+    },
+    "Pinus sylvestris": {
+        "v1.0": {
+            "cds": DATA_PATH
+            / "pinus-sylvestris/v1.0/blast"
+            / "Pinsy01_240308_at01_all_cds.fa",
+            "mrna": DATA_PATH
+            / "pinus-sylvestris/v1.0/blast"
+            / "Pinsy01_240308_at01_all_mRNA.fa",
+            "protein": DATA_PATH
+            / "pinus-sylvestris/v1.0/blast"
+            / "Pinsy01_240308_at01_all_aa.fa",
+            "genome": DATA_PATH
+            / "pinus-sylvestris/v1.0/blast"
+            / "Pinsy01_chromosomes_bgzipped.fasta",
+        }
+    },
+}
 
 app = FastAPI()
 app.add_middleware(
@@ -59,12 +96,16 @@ def check_blast(job_id: str):
 
 @app.post("/submit-blast-query/")
 async def submit_blast_query(
+    program: Annotated[Literal["blastn", "blastp", "blastx"], Form()],
     file: UploadFile = File(...),  # File upload
     description: str = Form(...),  # Form field: description
     dbtype: str = Form(...),
-    # program: str = Form(...),
     species: str = Form(...),
 ):
+    if program not in ["blastn", "blastx", "blastp"]:
+        raise HTTPException(
+            status_code=422, detail=f"{program} not a valid blast program"
+        )
 
     if dbtype not in ["protein", "mrna", "cds", "genome"]:
         raise HTTPException(
@@ -77,6 +118,18 @@ async def submit_blast_query(
             detail=f"Size of your uploaded file - {file.size} - > 1MB",
         )
 
+    match species:
+        case "Picea abies":
+            version = "v2.0"
+        case "Pinus sylvestris":
+            version = "v1.0"
+        case _:
+            raise HTTPException(
+                status_code=422, detail=f"database for {species} not found"
+            )
+
+    database_path = BLAST_DB_MAPPER[species][version][dbtype].absolute().as_posix()
+
     file_content = await file.read()
 
     host_file_path = f"{DATA_PATH}/{uuid.uuid4()}_query.fasta"
@@ -84,7 +137,7 @@ async def submit_blast_query(
     with open(host_file_path, "wb") as f:
         f.write(file_content)
 
-    task = real_blast_task.apply_async(args=(host_file_path, dbtype))
+    task = real_blast_task.apply_async(args=(host_file_path, program, database_path))
 
     return JSONResponse(
         content={
@@ -115,7 +168,11 @@ def poll_for_blast_result(job_id: str):
             "job_id": job_id,
             "status": job_result.state,
             "result": return_result,
-            "completed_at": job_result.date_done.isoformat(),
+            "completed_at": (
+                job_result.date_done.isoformat()
+                if job_result.state == "SUCCESS" or job_result.state == "FAILURE"
+                else None
+            ),
         }
     )
 
