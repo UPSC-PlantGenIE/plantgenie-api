@@ -72,7 +72,12 @@ BLAST_DB_MAPPER = {
     },
 }
 
-app = FastAPI()
+app = FastAPI(
+    root_path="/api",
+    title="UPSC PlantGenIE API",
+    version="0.0.1",
+    description="Backend for the PlantGenIE React Frontend",
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -227,7 +232,6 @@ def retrieve_blast_result_as_html(job_id: str):
     )
 
 
-
 @app.get("/api/available-species")
 async def get_available_species() -> AvailableSpeciesResponse:
     with duckdb.connect(DATABASE_PATH, read_only=True) as connection:
@@ -249,7 +253,9 @@ async def get_available_species() -> AvailableSpeciesResponse:
 @app.get("/api/available-genomes")
 async def get_available_genomes() -> AvailableGenomesResponse:
     with duckdb.connect(DATABASE_PATH, read_only=True) as connection:
-        query_relation = connection.sql("select * from genomes join species on (genomes.species_id = species.id);").project(
+        query_relation = connection.sql(
+            "select * from genomes join species on (genomes.species_id = species.id);"
+        ).project(
             "id", "species_id", "species_name", "version", "publication_date", "doi"
         )
         print(query_relation)
