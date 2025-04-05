@@ -13,11 +13,12 @@ class PlantGenieModel(BaseModel):
 class GeneAnnotation(PlantGenieModel):
     chromosome_id: str = Field(alias="chromosomeId")
     gene_id: str = Field(alias="geneId")
-    tool: Optional[str]
+    # tool: Optional[str]
     evalue: Optional[float]
     score: Optional[float]
-    seed_ortholog: Optional[str]
+    seed_ortholog: Optional[str] = Field(alias="seedOrtholog")
     description: Optional[str]
+    preferred_name: Optional[str] = Field(alias="preferredName")
 
 
 class AnnotationsRequest(PlantGenieModel):

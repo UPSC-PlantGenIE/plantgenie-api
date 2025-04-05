@@ -232,7 +232,7 @@ def retrieve_blast_result_as_html(job_id: str):
     )
 
 
-@app.get("/api/available-species")
+@app.get("/available-species")
 async def get_available_species() -> AvailableSpeciesResponse:
     with duckdb.connect(DATABASE_PATH, read_only=True) as connection:
         query_relation = connection.sql("select * from species;")
@@ -250,7 +250,7 @@ async def get_available_species() -> AvailableSpeciesResponse:
         )
 
 
-@app.get("/api/available-genomes")
+@app.get("/available-genomes")
 async def get_available_genomes() -> AvailableGenomesResponse:
     with duckdb.connect(DATABASE_PATH, read_only=True) as connection:
         query_relation = connection.sql(
@@ -273,7 +273,7 @@ async def get_available_genomes() -> AvailableGenomesResponse:
         )
 
 
-@app.post("/api/annotations")
+@app.post("/annotations")
 async def get_annotations_duckdb(request: AnnotationsRequest) -> AnnotationsResponse:
     if len(request.gene_ids) == 0:
         return AnnotationsResponse(results=[])
@@ -303,11 +303,12 @@ async def get_annotations_duckdb(request: AnnotationsRequest) -> AnnotationsResp
         ).project(  # we don't need id or genome_id here
             "chromosome_id",
             "gene_id",
-            "tool",
+            # "tool",
             "evalue",
             "score",
             "seed_ortholog",
             "description",
+            "preferred_name"
         )
 
         # Collect and reorder results based on original input order
@@ -329,7 +330,7 @@ async def get_annotations_duckdb(request: AnnotationsRequest) -> AnnotationsResp
         return AnnotationsResponse(results=ordered_annotations)
 
 
-@app.post("/api/expression")
+@app.post("/expression")
 async def get_expression_duckdb(request: ExpressionRequest) -> ExpressionResponse:
     if len(request.gene_ids) == 0:
         return ExpressionResponse(genes=[], samples=[], values=[])
