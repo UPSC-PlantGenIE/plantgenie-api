@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 import duckdb
+from duckdb import DuckDBPyRelation
 
 from celery.result import AsyncResult
 from fastapi import FastAPI, UploadFile, File, Form
@@ -26,14 +27,30 @@ from plantgenie_api.models import (
     SampleInfo,
 )
 
+from plantgenie_api.api.v1.blast.routes import router as blast_router
+
 from plantgenie_api.tasks import (
     fake_blast_task,
     real_blast_task,
 )
 
+# from swiftclient.service import SwiftService, SwiftError
+from swiftclient.client import Connection
+
+ENV_DATA_PATH = os.environ.get("DATA_PATH")
+
 DATA_PATH = (
-    Path(os.environ.get("DATA_PATH")) or Path(__file__).parent.parent / "example_data"
+    Path(ENV_DATA_PATH)
+    if ENV_DATA_PATH
+    else Path(__file__).parent.parent / "example_data"
 )
+
+BLAST_QUERIES_CONTAINER_ID = "test-blast-container"
+
+
+# DATA_PATH = (
+#     Path(os.environ.get("DATA_PATH")) or Path(__file__).parent.parent / "example_data"
+# )
 
 DATABASE_PATH = DATA_PATH / "upsc-plantgenie.db"
 
@@ -78,7 +95,7 @@ app = FastAPI(
     version="0.0.1",
     description="Backend for the PlantGenIE React Frontend",
 )
-app.add_middleware(
+app.add_middleware(  # type: ignore[bad-argument-type]
     CORSMiddleware,
     allow_origins=[
         "*"
@@ -87,6 +104,9 @@ app.add_middleware(
     allow_methods=["*"],  # Allow all methods
     allow_headers=["*"],  # Allow all headers
 )
+# app.include_router(router=genome_router, prefix="/api")
+app.include_router(router=blast_router, prefix="/v1")
+
 
 
 @app.post("/submit-blast")
@@ -118,6 +138,78 @@ def check_blast(job_id: str):
         return {"job_id": job_id, "status": result.state, "result": None}
 
 
+async def upload_to_object_store(
+    file_content: bytes, unique_id: uuid.UUID
+) -> str:
+    return f"swift://{BLAST_QUERIES_CONTAINER_ID}/{str(unique_id)}.fasta"
+
+
+@app.post("/submit-blast-swift")
+async def submit_blast_swift(
+    program: Annotated[Literal["blastn", "blastp", "blastx"], Form()],
+    file: UploadFile = File(...),  # File upload
+    description: str = Form(...),  # Form field: description
+    dbtype: str = Form(...),
+    species: str = Form(...),
+):
+    if program not in ["blastn", "blastx", "blastp"]:
+        raise HTTPException(
+            status_code=422, detail=f"{program} not a valid blast program"
+        )
+
+    if dbtype not in ["protein", "mrna", "cds", "genome"]:
+        raise HTTPException(
+            status_code=422, detail=f"{dbtype} not a valid dbtype parameter"
+        )
+
+    if file.size and (file.size > 2**20):
+        raise HTTPException(
+            status_code=413,
+            detail=f"Size of your uploaded file - {file.size} - > 1MB",
+        )
+
+    match species:
+        case "Picea abies":
+            version = "v2.0"
+        case "Pinus sylvestris":
+            version = "v1.0"
+        case _:
+            raise HTTPException(
+                status_code=422, detail=f"database for {species} not found"
+            )
+
+    if (
+        species not in BLAST_DB_MAPPER
+        or version not in BLAST_DB_MAPPER[species]
+        or dbtype not in BLAST_DB_MAPPER[species][version]
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid species/version/dbtype combination: {species}/{version}/{dbtype}",
+        )
+
+    database_path = BLAST_DB_MAPPER[species][version][dbtype].absolute().as_posix()
+
+    file_content = await file.read()
+
+    host_file_path = f"{DATA_PATH}/{uuid.uuid4()}_query.fasta"
+
+    with open(host_file_path, "wb") as f:
+        f.write(file_content)
+
+    task = real_blast_task.apply_async(args=(host_file_path, program, database_path))
+
+    return JSONResponse(
+        content={
+            "filename": file.filename,
+            "description": description,
+            "dbtype": dbtype,
+            "file_size": len(file_content),
+            "job_id": task.id,
+        }
+    )
+
+
 @app.post("/submit-blast-query/")
 async def submit_blast_query(
     program: Annotated[Literal["blastn", "blastp", "blastx"], Form()],
@@ -136,7 +228,7 @@ async def submit_blast_query(
             status_code=422, detail=f"{dbtype} not a valid dbtype parameter"
         )
 
-    if file.size > 2**20:
+    if file.size and (file.size > 2**20):
         raise HTTPException(
             status_code=413,
             detail=f"Size of your uploaded file - {file.size} - > 1MB",
@@ -194,7 +286,8 @@ def poll_for_blast_result(job_id: str):
             "result": return_result,
             "completed_at": (
                 job_result.date_done.isoformat()
-                if job_result.state == "SUCCESS" or job_result.state == "FAILURE"
+                if (job_result.state == "SUCCESS" or job_result.state == "FAILURE")
+                and job_result.date_done is not None
                 else None
             ),
         }
@@ -308,7 +401,7 @@ async def get_annotations_duckdb(request: AnnotationsRequest) -> AnnotationsResp
             "score",
             "seed_ortholog",
             "description",
-            "preferred_name"
+            "preferred_name",
         )
 
         # Collect and reorder results based on original input order
@@ -345,14 +438,17 @@ async def get_expression_duckdb(request: ExpressionRequest) -> ExpressionRespons
         experiment = connection.sql(
             "SELECT relation_name FROM experiments WHERE id = ?",
             params=[request.experiment_id],
-        ).fetchone()[0]
+        ).fetchone()
+
+        if experiment is None:
+            raise HTTPException(status_code=422, detail=f"Experiment with id={request.experiment_id} not found")
 
         samples_ordered = [
             SampleInfo(
                 experiment=experiment,
-                sample_id=sample[0],
+                sample_id=sample[0], # type: ignore
                 reference=sample[1],
-                sequencing_id=sample[2],
+                sequencing_id=sample[2], #type: ignore
                 condition=sample[3],
             )
             for sample in connection.sql(
@@ -382,7 +478,7 @@ async def get_expression_duckdb(request: ExpressionRequest) -> ExpressionRespons
         )
 
         gene_infos = [
-            GeneInfo(chromosome_id=gene[0], gene_id=gene[1])
+            GeneInfo(chromosome_id=gene[0], gene_id=gene[1]) #type: ignore
             for gene in query_relation.project("chromosome_id", "gene_id")
             .distinct()
             .order("chromosome_id, gene_id")

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import date
@@ -35,7 +35,7 @@ class GeneInfo(PlantGenieModel):
     gene_id: str = Field(alias="geneId")
 
     @staticmethod
-    def split_from_request(gene_id_request: Tuple[str, str]) -> GeneInfo:
+    def split_from_request(gene_id_request: str) -> GeneInfo:
         """
         Gene IDs normally come in like this:
             {chromosome_id}_{gene_id}
