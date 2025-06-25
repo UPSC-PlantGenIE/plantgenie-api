@@ -443,6 +443,8 @@ async def get_expression_duckdb(request: ExpressionRequest) -> ExpressionRespons
         if experiment is None:
             raise HTTPException(status_code=422, detail=f"Experiment with id={request.experiment_id} not found")
 
+        experiment = experiment[0]
+
         samples_ordered = [
             SampleInfo(
                 experiment=experiment,
