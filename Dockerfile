@@ -1,8 +1,11 @@
-# FROM ghcr.io/astral-sh/uv:python3.13-bookworm
 FROM python:3.13-bookworm
 
 # The installer requires curl (and certificates) to download the release archive
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates ncbi-blast+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        curl \
+        ca-certificates \
+        ncbi-blast+
 
 # Download the latest installer
 ADD https://astral.sh/uv/0.6.6/install.sh /uv-installer.sh
