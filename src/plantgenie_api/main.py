@@ -1,9 +1,8 @@
 import os
 import uuid
 
-from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Literal
 
 import duckdb
 
@@ -12,8 +11,6 @@ from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.exceptions import HTTPException
-
-from plantgenie_api.client import AsyncSwiftClient
 
 from plantgenie_api.models import (
     AnnotationsRequest,
