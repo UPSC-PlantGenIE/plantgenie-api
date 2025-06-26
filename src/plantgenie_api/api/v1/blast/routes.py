@@ -8,7 +8,6 @@ from celery import chain
 from celery.result import AsyncResult
 from fastapi import APIRouter, File, HTTPException, UploadFile, Form
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
 from swiftclient.service import (
     SwiftService,
     SwiftUploadObject,
@@ -17,7 +16,12 @@ from swiftclient.service import (
 )
 
 from plantgenie_api import DUCKDB_DATABASE_PATH, ENV_DATA_PATH
-from plantgenie_api.api.v1.blast.models import BlastSubmitResponse, BlastPollResponse
+from plantgenie_api.api.v1.blast.models import (
+    AvailableDatabase,
+    BlastVersion,
+    BlastSubmitResponse,
+    BlastPollResponse,
+)
 from plantgenie_api.api.v1.blast.tasks import (
     retrieve_query_from_object_store,
     execute_blast_query,
@@ -25,6 +29,7 @@ from plantgenie_api.api.v1.blast.tasks import (
     upload_blast_result,
 )
 from plantgenie_api.api.v1.blast.utils import download_object_from_object_store
+
 
 router = APIRouter(prefix="/blast")
 
@@ -39,19 +44,6 @@ swift_service = SwiftService(
         "application_credential_secret": os.environ["OS_APPLICATION_CREDENTIAL_SECRET"],
     }
 )
-
-
-class BlastVersion(BaseModel):
-    version: str
-
-
-class AvailableDatabase(BaseModel):
-    species: str
-    genome: str
-    sequence_type: str
-    program: str
-    database_path: str
-
 
 @router.get(path="/version")
 async def get_blast_version() -> BlastVersion:
@@ -106,17 +98,18 @@ async def submit_blast(
 
     job_id = str(uuid.uuid4())
     try:
-        # temp_file.write(b"Hello, from my temporary file!")
         temp_file.write(file_content)
         temp_file.close()
 
         object_name = f"blast_files/{job_id}.fasta"
 
-        object = SwiftUploadObject(source=temp_file.name, object_name=object_name)
+        upload_object = SwiftUploadObject(
+            source=temp_file.name, object_name=object_name
+        )
 
         print(temp_file.name, object_name)
 
-        result = swift_service.upload("plantgenie-share", objects=[object])
+        result = swift_service.upload("plantgenie-share", objects=[upload_object])
         print(result)
 
         if result:

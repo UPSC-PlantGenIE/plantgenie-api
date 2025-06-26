@@ -7,6 +7,18 @@ class BlastBaseModel(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class BlastVersion(BlastBaseModel):
+    version: str
+
+
+class AvailableDatabase(BlastBaseModel):
+    species: str
+    genome: str
+    sequence_type: str
+    program: str
+    database_path: str
+
+
 class BlastSubmitResponse(BlastBaseModel):
     job_id: str = Field(alias="jobId")
     program: Literal["blastn", "blastx", "blastp"] = Field(default="blastn")
