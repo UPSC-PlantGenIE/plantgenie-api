@@ -51,29 +51,29 @@ BLAST_DB_MAPPER = {
             "cds": GENOMES_PATH
             / "picea-abies/Picab02_230926/blast"
             / "Picab02_230926_at01_all_cds.fa",
-            "mrna": DATA_PATH
+            "mrna": GENOMES_PATH
             / "picea-abies/Picab02_230926/blast"
             / "Picab02_230926_at01_all_mRNA.fa",
-            "protein": DATA_PATH
+            "protein": GENOMES_PATH
             / "picea-abies/Picab02_230926/blast"
             / "Picab02_230926_at01_all_aa.fa",
-            "genome": DATA_PATH
+            "genome": GENOMES_PATH
             / "picea-abies/Picab02_230926/blast"
             / "Picab02_chromosomes_and_unplaced.fa",
         }
     },
     "Pinus sylvestris": {
         "v1.0": {
-            "cds": DATA_PATH
+            "cds": GENOMES_PATH
             / "pinus-sylvestris/Pinsy01_240308/blast"
             / "Pinsy01_240308_at01_all_cds.fa",
-            "mrna": DATA_PATH
+            "mrna": GENOMES_PATH
             / "pinus-sylvestris/Pinsy01_240308/blast"
             / "Pinsy01_240308_at01_all_mRNA.fa",
-            "protein": DATA_PATH
+            "protein": GENOMES_PATH
             / "pinus-sylvestris/Pinsy01_240308/blast"
             / "Pinsy01_240308_at01_all_aa.fa",
-            "genome": DATA_PATH
+            "genome": GENOMES_PATH
             / "pinus-sylvestris/Pinsy01_240308/blast"
             / "Pinsy01_chromosomes_and_unplaced.fa",
         }
@@ -117,7 +117,7 @@ def check_blast(job_id: str):
     """
     Check the status of a BLAST job using the Celery result backend (Redis).
     """
-    result = AsyncResult(job_id)
+    result: AsyncResult = AsyncResult(job_id)
 
     if result.state == "PENDING":
         return {"job_id": job_id, "status": "pending", "result": None}
@@ -186,7 +186,7 @@ async def submit_blast_query(
 
 @app.get("/poll-for-blast-result/{job_id}")
 def poll_for_blast_result(job_id: str):
-    job_result = AsyncResult(job_id)
+    job_result: AsyncResult = AsyncResult(job_id)
 
     if job_result.state == "PENDING":
         return_result = None
@@ -214,7 +214,7 @@ def poll_for_blast_result(job_id: str):
 
 @app.get("/retrieve-blast-result/{job_id}")
 def retrieve_blast_result(job_id: str):
-    result = AsyncResult(job_id)
+    result: AsyncResult = AsyncResult(job_id)
 
     if result.state == "SUCCESS":
         return FileResponse(f"{DATA_PATH}/{job_id}_blast_results.tsv")
@@ -232,7 +232,7 @@ def retrieve_blast_result_as_tsv(job_id: str):
 
 @app.get("/retrieve-blast-result-as-html/{job_id}")
 def retrieve_blast_result_as_html(job_id: str):
-    result = AsyncResult(job_id)
+    result: AsyncResult = AsyncResult(job_id)
 
     if result.state == "SUCCESS":
         return FileResponse(f"{DATA_PATH}/{job_id}_blast_results.html")

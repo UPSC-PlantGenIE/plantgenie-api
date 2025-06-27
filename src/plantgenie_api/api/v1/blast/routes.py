@@ -8,7 +8,7 @@ from celery import chain
 from celery.result import AsyncResult
 from fastapi import APIRouter, File, HTTPException, UploadFile, Form
 from fastapi.responses import FileResponse
-from swiftclient.service import (
+from swiftclient.service import (  # type: ignore
     SwiftService,
     SwiftUploadObject,
     ClientException,
@@ -44,6 +44,7 @@ swift_service = SwiftService(
         "application_credential_secret": os.environ["OS_APPLICATION_CREDENTIAL_SECRET"],
     }
 )
+
 
 @router.get(path="/version")
 async def get_blast_version() -> BlastVersion:
@@ -147,33 +148,35 @@ async def submit_blast(
 
 @router.get(path="/poll/{job_id}")
 def poll_blast_job(job_id: str):
-    job_result = AsyncResult(job_id)
+    job_result: AsyncResult = AsyncResult(job_id)
 
     match job_result.state:
         case "SUCCESS":
             return_result = job_result.result
-            completed_at = job_result.date_done.isoformat()
         case "FAILURE":
             return_result = str(job_result.result)
-            completed_at = job_result.date_done.isoformat()
         case _:
             return_result = None
-            completed_at = None
 
     return BlastPollResponse(
         job_id=job_id,
         status=job_result.state,
         result=return_result,
-        completed_at=completed_at,
+        completed_at=(
+            job_result.date_done.isoformat()
+            if job_result.date_done is not None
+            else None
+        ),
     )
 
 
 @router.get(path="/retrieve/{job_id}")
 def retrieve_blast_result(job_id: str):
-    job_result = AsyncResult(job_id)
+    job_result: AsyncResult = AsyncResult(job_id)
 
     result = download_object_from_object_store(
-        container="plantgenie-share",
+        service=swift_service,
+        container="plan tgenie-share",
         object_path=f"blast_files/{job_id}.tsv",
         output_directory=ENV_DATA_PATH,
     )

@@ -36,3 +36,6 @@ dev = [
     "pyrefly>=0.18.0",
     "ruff>=0.9.5",
 ]
+
+[tool.mypy]
+plugins = ['pydantic.mypy']

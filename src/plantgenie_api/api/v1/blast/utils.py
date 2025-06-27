@@ -1,6 +1,6 @@
 import time
 
-from swiftclient.service import SwiftService, ClientException
+from swiftclient.service import SwiftService, ClientException  # type: ignore
 
 
 def download_object_from_object_store(
