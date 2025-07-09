@@ -27,6 +27,8 @@ from plantgenie_api.models import (
 )
 
 from plantgenie_api.api.v1.blast.routes import router as blast_router
+from plantgenie_api.api.v1.genome.routes import router as genome_router
+from plantgenie_api.api.v1.expression.routes import router as expression_router
 
 from plantgenie_api.tasks import (
     fake_blast_task,
@@ -97,6 +99,8 @@ app.add_middleware(  # type: ignore[bad-argument-type]
 )
 # app.include_router(router=genome_router, prefix="/api")
 app.include_router(router=blast_router, prefix="/v1")
+app.include_router(router=genome_router, prefix="/v1")
+app.include_router(router=expression_router, prefix="/v1")
 
 
 
