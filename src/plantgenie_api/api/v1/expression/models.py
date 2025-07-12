@@ -49,21 +49,9 @@ class ExpressionRequest(PlantGenieModel):
     gene_ids: List[str] = Field(alias="geneIds", default=[])
 
 
-class ExpressionResult(PlantGenieModel):
-    gene_id: str
-    sample_id: str
-    value: float
-
-
-# class ExpressionResponse(PlantGenieModel):
-#     results: List[ExpressionResult]
-#     units: Optional[Literal["tpm", "vst"]] = Field(default=None)
-#     missing_gene_ids: List[str] = Field(alias="missingGeneIds", default=[])
-
-
 class ExpressionResponse(PlantGenieModel):
     genes: List[str]
     samples: List[str]
     values: List[float]
-    units: Literal["tpm", "vst"]
+    units: Optional[Literal["tpm", "vst"]] = Field(default=None)
     missing_gene_ids: List[str] = Field(alias="missingGeneIds", default=[])

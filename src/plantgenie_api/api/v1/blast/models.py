@@ -8,6 +8,7 @@ class BlastBaseModel(BaseModel):
 
 
 class BlastVersion(BlastBaseModel):
+    program: str
     version: str
 
 
@@ -28,8 +29,14 @@ class BlastSubmitResponse(BlastBaseModel):
     file_size: int = Field(alias="fileSize")
 
 
+# class BlastPollResponse(BlastBaseModel):
+#     job_id: str = Field(alias="jobId")
+#     status: Literal["PENDING", "SUCCESS", "FAILURE", "STARTED", "RETRY"]
+#     result: Optional[str]
+#     completed_at: Optional[str] = Field(alias="completedAt")
+
 class BlastPollResponse(BlastBaseModel):
     job_id: str = Field(alias="jobId")
     status: Literal["PENDING", "SUCCESS", "FAILURE", "STARTED", "RETRY"]
-    result: Optional[str]
+    # result: Optional[str]
     completed_at: Optional[str] = Field(alias="completedAt")

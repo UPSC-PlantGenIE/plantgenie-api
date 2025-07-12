@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Dict, List
 
 import duckdb
@@ -6,21 +5,11 @@ from fastapi import APIRouter
 from fastapi.exceptions import HTTPException
 from loguru import logger
 
-from plantgenie_api import ENV_DATA_PATH
+from plantgenie_api.api.v1 import DATABASE_PATH
 from plantgenie_api.api.v1.expression.models import (
     ExpressionRequest,
     ExpressionResponse,
-    ExpressionResult,
 )
-
-DATA_PATH = (
-    Path(ENV_DATA_PATH)
-    if ENV_DATA_PATH
-    else Path(__file__).parent.parent / "example_data"
-)
-
-DATABASE_PATH = DATA_PATH / "plantgenie-backend.db"
-
 
 router = APIRouter(prefix="/expression")
 
@@ -126,3 +115,8 @@ async def get_expression_data(request: ExpressionRequest) -> ExpressionResponse:
     return ExpressionResponse(
         genes=genes, samples=samples, values=values, units=expression_units
     )
+
+
+# @router.get(path="/available-experiments")
+# async def get_available_experiments():
+#     pass

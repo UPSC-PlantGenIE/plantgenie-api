@@ -114,7 +114,7 @@ class AsyncSwiftClient:
                         for service in json_response["token"]["catalog"]
                         if service["type"] == "object-store"
                     ][0]
-                except IndexError | KeyError as _error:
+                except (IndexError, KeyError) as _error:
                     raise SwiftNotFoundException(
                         "object-store service was not found in the catalog"
                     )
@@ -129,7 +129,7 @@ class AsyncSwiftClient:
                     swift_service_url = public_endpoint["url"]
                     print(swift_service_url)
 
-                except IndexError | KeyError:
+                except (IndexError, KeyError):
                     raise SwiftNotFoundException(
                         "public endpoint was not found for object-store service"
                     )

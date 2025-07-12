@@ -1,33 +1,23 @@
+import math
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
+import pendulum
 from celery import Task
+from FastaValidator import fasta_validator  # type: ignore
+from loguru import logger
 from pydantic import BaseModel, Field
 from swiftclient.service import (
     SwiftService,
-    ClientException,
-    SwiftError,
     SwiftUploadObject,
 )
 
-from plantgenie_api import ENV_DATA_PATH
+from plantgenie_api import BACKEND_DATA_PATH, ENV_DATA_PATH
 from plantgenie_api.celery import celery_app
 
 BLAST_PATH = Path(ENV_DATA_PATH) if ENV_DATA_PATH else Path(__file__).parent
-
-# swift_service = SwiftService(
-#     options={
-#         "auth_type": os.environ["OS_AUTH_TYPE"],
-#         "auth_url": os.environ["OS_AUTH_URL"],
-#         "identity_api_version": os.environ["OS_IDENTITY_API_VERSION"],
-#         "region_name": os.environ["OS_REGION_NAME"],
-#         "interface": os.environ["OS_INTERFACE"],
-#         "application_credential_id": os.environ["OS_APPLICATION_CREDENTIAL_ID"],
-#         "application_credential_secret": os.environ["OS_APPLICATION_CREDENTIAL_SECRET"],
-#     }
-# )
 
 swift_service = SwiftService()
 
@@ -58,14 +48,42 @@ class RetrieveQueryResult(BaseModel):
     database_path: str
     evalue: Optional[float] = Field(default=0.0001)
     max_hits: Optional[int] = Field(default=10)
-    output_path: Optional[str]
-    error: Optional[str]
+    output_path: Optional[str] = Field(default=None)
+    error: Optional[str] = Field(default=None)
+
+
+class VerifyExistsArgs(BaseModel):
+    query_path: str
+    program: str
+    database_path: str
+    evalue: Optional[float] = Field(default=0.0001)
+    max_hits: Optional[int] = Field(default=10)
+
+
+class VerifyExistsResult(BaseModel):
+    query_path: str
+    program: str
+    database_path: str
+    evalue: Optional[float] = Field(default=0.0001)
+    max_hits: Optional[int] = Field(default=10)
+
+
+ValidateFastaArgs = VerifyExistsArgs
+ValidateFastaResult = VerifyExistsResult
+
+
+class BlastExecutionResult(BaseModel):
+    output_path: str
+
+
+FormatTsvResult = BlastExecutionResult
+FormatHtmlResult = BlastExecutionResult
 
 
 class ExecuteBlastResult(BaseModel):
-    output_path: Optional[str]
-    stdout: Optional[str]
-    stderr: Optional[str]
+    output_path: Optional[str] = Field(default=None)
+    stdout: Optional[str] = Field(default=None)
+    stderr: Optional[str] = Field(default=None)
     error: bool = Field(default=False)
 
 
@@ -74,7 +92,7 @@ class BlastFormatOutput(BaseModel):
     stdout: Optional[str]
     stderr: Optional[str]
     exit_code: int
-    output_path: Optional[str]
+    output_path: Optional[str] = Field(default=None)
 
 
 class BlastFormatResult(BaseModel):
@@ -92,58 +110,106 @@ class UploadResult(BaseModel):
     results: List[UploadPath]
 
 
-@celery_app.task(name="blast.retrieve_query", bind=True, acks_late=True, pydantic=True)
-def retrieve_query_from_object_store(
-    self: Task, task_args: RetrieveQueryArgs
-) -> RetrieveQueryResult:
+class DeleteBlastDataResponse(BaseModel):
+    paths: List[str]
 
-    # print(task_args)
-    # print(f"[blast_execute_task] path to download {task_args.query_path}")
 
-    max_attempts = 5
+def handle_query_file_not_found(task_id: Optional[str], message: str):
+    if task_id is None:
+        return
 
-    for attempt in range(max_attempts):
-        result = next(
-            swift_service.download(
-                container="plantgenie-share",
-                objects=[task_args.query_path],
-                options={"out_directory": BLAST_PATH},
+    timestamped_message = f"{pendulum.now().to_iso8601_string()} - {message}"
+
+    error_log_path = (BACKEND_DATA_PATH / f"{task_id}-errors.log").resolve()
+
+    with open(error_log_path, "a") as error_log_file:
+        print(timestamped_message, file=error_log_file)
+
+
+NUCLEOTIDES = "ACGTUNRYKMSWBDHV"
+AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWY"
+NUCLEOTIDES_SET = set(NUCLEOTIDES)  # IUPAC codes for nucleotides
+AMINO_ACIDS_SET = set(AMINO_ACIDS)
+
+
+@celery_app.task(name="blast.verify_query_exists", bind=True, pydantic=True)
+def verify_query_file_exists(
+    self: Task, task_args: VerifyExistsArgs
+) -> VerifyExistsResult:
+    max_retry_attempts = 5
+
+    query_path = Path(task_args.query_path)
+
+    for x in range(0, max_retry_attempts):
+        if query_path.exists():
+            print(f"Sleeping: {math.pow(2, x)}")
+            return VerifyExistsResult(**task_args.model_dump())
+        logger.debug(f"Sleeping: {math.pow(2, x)}")
+        time.sleep(math.pow(2, x))
+
+    message = f"[{self.name}] {query_path} was not found"
+    handle_query_file_not_found(self.request.get("id"), message=message)
+    raise FileNotFoundError(message)
+
+
+@celery_app.task(name="blast.validate_fasta", bind=True, pydantic=True)
+def validate_fasta_query(
+    self: Task, task_args: ValidateFastaArgs
+) -> ValidateFastaResult:
+    return_code = fasta_validator(task_args.query_path)
+    match return_code:
+        case 0:
+            print("basic fasta validation passed")
+        case 1:
+            raise SyntaxError(
+                f"{task_args.query_path}, first line does not start with '>'"
             )
-        )
+        case 2:
+            raise SyntaxError(f"{task_args.query_path}, duplicate sequence identifiers")
+        case _:
+            raise RuntimeError(
+                f"Some error occured while processing {task_args.query_path}"
+            )
 
-        # don't sleep on last attempt
-        if result["success"] or attempt == (max_attempts - 1):
-            break
-
-        if "error" in result and isinstance(result["error"], ClientException):
-            time.sleep((attempt + 1) * 2)
-            continue
-
-    return RetrieveQueryResult(
-        program=task_args.program,
-        database_path=task_args.database_path,
-        evalue=task_args.evalue,
-        max_hits=task_args.max_hits,
-        output_path=result["path"] if "path" in result else None,
-        error=result["error"] if "error" in result else None,
+    expected_sequence_characters = (
+        AMINO_ACIDS if task_args.program in {"blastp", "blastx"} else NUCLEOTIDES
     )
 
+    expected_sequence_characters_set = (
+        AMINO_ACIDS_SET
+        if task_args.program in {"blastp", "blastx"}
+        else NUCLEOTIDES_SET
+    )
 
-@celery_app.task(name="blast.execute_query", bind=True, pydantic=True)
-def execute_blast_query(
-    self: Task, task_args: RetrieveQueryResult
-) -> ExecuteBlastResult:
+    with open(task_args.query_path) as input_fasta:
+        for i, line in enumerate(input_fasta):
+            if line.startswith(">"):
+                continue
+            for character in line.strip():
+                if character.upper() not in expected_sequence_characters_set:
+                    raise ValueError(
+                        f"{character} not in {",".join(expected_sequence_characters.split())}"
+                    )
 
-    if task_args.error is not None:
-        return ExecuteBlastResult(error=True)
+    return ValidateFastaResult(**task_args.model_dump())
 
-    result_base_path = Path(task_args.output_path).stem
-    result_output_path = f"{BLAST_PATH}/blast_files/{result_base_path}.asn"
+
+@celery_app.task(name="blast.execute_search", bind=True, pydantic=True)
+def execute_blast_search(
+    self: Task, task_args: ValidateFastaResult
+) -> BlastExecutionResult:
+
+    result_base_path = Path(task_args.query_path).stem
+    result_output_path = (
+        (BACKEND_DATA_PATH / "blast_results" / f"{result_base_path}.asn")
+        .resolve()
+        .as_posix()
+    )
 
     blast_cmd = [
         task_args.program,
         "-query",
-        task_args.output_path,
+        task_args.query_path,
         "-db",
         task_args.database_path,
         "-outfmt",
@@ -156,43 +222,18 @@ def execute_blast_query(
         result_output_path,
     ]
 
-    command_errored = False
-    result_stdout = None
-    result_stderr = None
+    completed_blast_process = subprocess.run(blast_cmd, capture_output=True, text=True)
+    completed_blast_process.check_returncode()
 
-    try:
-        blast_result = subprocess.run(
-            blast_cmd, capture_output=True, text=True, check=True
-        )
-        result_stdout = blast_result.stdout
-        result_stderr = blast_result.stderr
-    except subprocess.CalledProcessError as error:
-        command_errored = True
-        result_stderr = error.stderr
-
-    return ExecuteBlastResult(
-        output_path=result_output_path if not (command_errored) else None,
-        stdout=result_stdout,
-        stderr=result_stderr,
-        error=command_errored,
-    )
+    return BlastExecutionResult(output_path=result_output_path)
 
 
-@celery_app.task(name="blast.format_result", bind=True, pydantic=True)
-def format_blast_result(self: Task, task_args: ExecuteBlastResult) -> BlastFormatResult:
-
+@celery_app.task(name="blast.format_result_tsv", bind=True, pydantic=True)
+def format_blast_result_tsv(
+    self: Task, task_args: BlastExecutionResult
+) -> FormatTsvResult:
     result_path = Path(task_args.output_path)
-    output_html = f"{result_path.parent}/{result_path.stem}.html"
     output_tsv = f"{result_path.parent}/{result_path.stem}.tsv"
-
-    blast_format_html = [
-        "blast_formatter",
-        "-archive",
-        task_args.output_path,
-        "-out",
-        output_html,
-        "-html",
-    ]
 
     blast_format_tsv = [
         "blast_formatter",
@@ -204,82 +245,74 @@ def format_blast_result(self: Task, task_args: ExecuteBlastResult) -> BlastForma
         output_tsv,
     ]
 
-    try:
-        result = subprocess.run(
-            blast_format_html,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-
-        html_output = BlastFormatOutput(
-            command=result.args,
-            stdout=result.stdout,
-            stderr=result.stderr,
-            exit_code=result.returncode,
-            output_path=output_html,
-        )
-    except subprocess.CalledProcessError as error:
-        html_output = BlastFormatOutput(
-            command=error.cmd,
-            stdout=error.stdout,
-            stderr=error.stderr,
-            exit_code=error.returncode,
-        )
-
-    try:
-        result = subprocess.run(
-            blast_format_tsv,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-
-        tsv_output = BlastFormatOutput(
-            command=result.args,
-            stdout=result.stdout,
-            stderr=result.stderr,
-            exit_code=result.returncode,
-            output_path=output_tsv,
-        )
-    except subprocess.CalledProcessError as error:
-        tsv_output = BlastFormatOutput(
-            command=error.cmd,
-            stdout=error.stdout,
-            stderr=error.stderr,
-            exit_code=error.returncode,
-        )
-
-    return BlastFormatResult(
-        results=[
-            BlastFormatOutput(
-                command=[],
-                output_path=task_args.output_path,
-                exit_code=0,
-                stdout=None,
-                stderr=None,
-            ),
-            html_output,
-            tsv_output,
-        ]
+    blast_format_process = subprocess.run(
+        blast_format_tsv, capture_output=True, text=True
     )
+    blast_format_process.check_returncode()
+
+    return FormatTsvResult(output_path=output_tsv)
 
 
-@celery_app.task(name="blast.upload_result", bind=True, pydantic=True)
-def upload_blast_result(self: Task, task_args: BlastFormatResult) -> UploadResult:
-    objects_to_upload = []
-    for result in task_args.results:
-        if result.exit_code != 0:
-            continue
-        output_path = Path(result.output_path)
-        upload_object = SwiftUploadObject(
-            source=result.output_path, object_name=f"blast_files/{output_path.name}"
+@celery_app.task(name="blast.format_result_html", bind=True, pydantic=True)
+def format_blast_result_html(
+    self: Task, task_args: BlastExecutionResult
+) -> FormatHtmlResult:
+    # result_path is the tsv result from the previous task
+    result_path = Path(task_args.output_path)
+    asn_path = f"{result_path.parent}/{result_path.stem}.asn"
+    output_html = f"{result_path.parent}/{result_path.stem}.html"
+
+    blast_format_html = [
+        "blast_formatter",
+        "-archive",
+        asn_path,
+        "-out",
+        output_html,
+        "-html"
+    ]
+
+    blast_format_process = subprocess.run(
+        blast_format_html, capture_output=True, text=True
+    )
+    blast_format_process.check_returncode()
+
+    return FormatHtmlResult(output_path=output_html)
+
+
+@celery_app.task(
+    name="blast.upload_to_bucket", bind=True, acks_late=True, pydantic=True
+)
+def upload_blast_data_to_storage_bucket(
+    self: Task, task_args: FormatHtmlResult
+) -> UploadResult:
+    job_id = Path(task_args.output_path).stem
+    query_file = BACKEND_DATA_PATH / "blast_queries" / f"{job_id}.fa"
+    results_glob = (BACKEND_DATA_PATH / "blast_results").glob(f"{job_id}.*")
+    logs_glob = (BACKEND_DATA_PATH / "blast_logs").glob(f"{job_id}.*")
+
+    upload_objects = [
+        SwiftUploadObject(
+            source=query_file.as_posix(), object_name=f"blast_queries/{query_file.name}"
         )
-        objects_to_upload.append(upload_object)
+    ]
 
-    results = swift_service.upload("plantgenie-share", objects=objects_to_upload)
+    for result in results_glob:
+        upload_objects.append(
+            SwiftUploadObject(
+                source=result.as_posix(), object_name=f"blast_results/{result.name}"
+            )
+        )
 
-    # get rid of create_container result
+    for log in logs_glob:
+        upload_objects.append(
+            SwiftUploadObject(
+                source=log.as_posix(), object_name=f"blast_logs/{log.name}"
+            )
+        )
+
+    results = swift_service.upload("plantgenie-share", objects=upload_objects)
+
+    # get rid of container create result
     next(results)
 
     return UploadResult(
@@ -290,102 +323,44 @@ def upload_blast_result(self: Task, task_args: BlastFormatResult) -> UploadResul
                 object_path=obj.object_name,
                 error="error" in result,
             )
-            for obj, result in zip(objects_to_upload, results)
+            for obj, result in zip(upload_objects, results)
         ]
     )
 
 
-celery_app.register_task(retrieve_query_from_object_store)
+@celery_app.task(name="blast.delete_data", bind=True, pydantic=True)
+def delete_blast_data_old(
+    self: Task, task_args: UploadResult
+) -> DeleteBlastDataResponse:
 
-# @celery_app.task(name="blast.submit", bind=True, acks_late=True, pydantic=True)
-# def blast_submit_task(self: Task, task_args: BlastTaskInput) -> BlastSubmitOutput:
-#     results_base_path = f"{BLAST_PATH}/{self.request.id}_results"
+    for uploaded_object in task_args.results:
+        host_path = Path(uploaded_object.host_path)
 
-#     output = BlastSubmitOutput(results=[], errors=[])
-#     local_download_path: Optional[str] = None
+        if host_path.exists() and host_path.is_file():
+            host_path.unlink()
 
-#     try:
-#         results = swift_service.download(
-#             container="plantgenie-share",
-#             objects=[task_args.query_path],
-#             options={"out_directory": BLAST_PATH},
-#         )
+    return DeleteBlastDataResponse(
+        paths=[uploaded_object.host_path for uploaded_object in task_args.results]
+    )
 
-#         for result in results:
-#             # output.results.append(result["success"])
-#             print(result)
-#             local_download_path = result.get("path", None)
 
-#     except (ClientException, SwiftError) as err:
-#         # output.errors.append(err.)
-#         pass
+class DeleteBlastDataArgs(BaseModel):
+    job_id: str
 
-#     if local_download_path is None:
-#         output.errors.append(f"No output path found for {task_args.query_path}")
-#         return output
 
-#     blast_cmd = [
-#         task_args.program,
-#         "-query",
-#         task_args.query_path,
-#         "-db",
-#         task_args.database_path,
-#         "-outfmt",
-#         "11",  # Tabular output format
-#         "-evalue",
-#         str(task_args.evalue),
-#         "-max_target_seqs",
-#         str(task_args.max_hits),
-#         "-out",
-#         f"{results_base_path}.asn",
-#     ]
+@celery_app.task(name="blast.delete_data", bind=True, pydantic=True)
+def delete_blast_data(
+    self: Task, task_args: DeleteBlastDataArgs
+) -> DeleteBlastDataResponse:
+    query_file = BACKEND_DATA_PATH / "blast_queries" / f"{task_args.job_id}.fa"
+    results_glob = (BACKEND_DATA_PATH / "blast_results").glob(f"{task_args.job_id}.*")
+    logs_glob = (BACKEND_DATA_PATH / "blast_logs").glob(f"{task_args.job_id}.*")
 
-#     output.results.append(f"Executed command: {" ".join(blast_cmd)}\n")
+    data_to_delete = [query_file, *list(results_glob), *list(logs_glob)]
 
-#     try:
-#         blast_result = subprocess.run(
-#             blast_cmd, capture_output=True, text=True, check=True
-#         )
-#         output.results.append(f"BLAST results: {blast_result.stdout}")
-#     except subprocess.CalledProcessError as err:
-#         output.errors.append(f"BLAST error: {err.stderr}")
-#         return output
+    for f in data_to_delete:
+        f.unlink()
 
-#     blast_cmd = [
-#         "blast_formatter",
-#         "-archive",
-#         f"{results_base_path}.asn",
-#         "-out",
-#         f"{results_base_path}.html",
-#         "-html",
-#     ]
-
-#     try:
-#         blast_html_result = subprocess.run(
-#             blast_cmd, capture_output=True, text=True, check=True
-#         )
-#         output.results.append(f"BLAST format HTML results: {blast_html_result.stdout}")
-
-#     except subprocess.CalledProcessError as e:
-#         output.errors.append(f"BLAST format HTML error: {e.stderr}")
-#         return output
-
-#     blast_cmd = [
-#         "blast_formatter",
-#         "-archive",
-#         f"{results_base_path}.asn",
-#         "-outfmt",
-#         "6",
-#         "-out",
-#         f"{results_base_path}.tsv",
-#     ]
-
-#     try:
-#         blast_tsv_result = subprocess.run(
-#             blast_cmd, capture_output=True, text=True, check=True
-#         )
-#         output.results.append(f"BLAST format tsv results: {blast_tsv_result.stdout}")
-#     except subprocess.CalledProcessError as e:
-#         output.errors.append(f"BLAST format tsv error: {e.stderr}")
-#         return output
-#     return output
+    return DeleteBlastDataResponse(
+        paths=[uploaded_object.as_posix() for uploaded_object in data_to_delete]
+    )

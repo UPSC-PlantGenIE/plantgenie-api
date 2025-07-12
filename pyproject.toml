@@ -13,6 +13,8 @@ dependencies = [
     "duckdb>=1.2.0",
     "fastapi[standard]>=0.115.11",
     "loguru>=0.7.3",
+    "pendulum>=3.1.0",
+    "py-fasta-validator>=0.6",
     "pyarrow>=19.0.1",
     "pydantic>=2.10.6",
     "python-keystoneclient>=5.6.0",
@@ -40,3 +42,7 @@ dev = [
 
 [tool.mypy]
 plugins = ['pydantic.mypy']
+
+[[tool.mypy.overrides]]
+module = ["swiftclient.*"]
+ignore_missing_imports = true
