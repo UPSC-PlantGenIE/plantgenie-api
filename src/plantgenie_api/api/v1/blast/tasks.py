@@ -328,22 +328,6 @@ def upload_blast_data_to_storage_bucket(
     )
 
 
-@celery_app.task(name="blast.delete_data", bind=True, pydantic=True)
-def delete_blast_data_old(
-    self: Task, task_args: UploadResult
-) -> DeleteBlastDataResponse:
-
-    for uploaded_object in task_args.results:
-        host_path = Path(uploaded_object.host_path)
-
-        if host_path.exists() and host_path.is_file():
-            host_path.unlink()
-
-    return DeleteBlastDataResponse(
-        paths=[uploaded_object.host_path for uploaded_object in task_args.results]
-    )
-
-
 class DeleteBlastDataArgs(BaseModel):
     job_id: str
 
