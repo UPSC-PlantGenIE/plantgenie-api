@@ -1,6 +1,5 @@
 from typing import Dict, List
 
-import duckdb
 from fastapi import APIRouter
 from fastapi.exceptions import HTTPException
 from loguru import logger
@@ -91,7 +90,7 @@ async def get_expression_data(request: ExpressionRequest) -> ExpressionResponse:
                 gene_id,
                 expression_value
             FROM expression_values
-            ORDER BY sample_order, gene_order;
+            ORDER BY gene_order, sample_order;
         """
         logger.debug(query)
         query_relation = connection.sql(query=query)
