@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from fastapi.exceptions import HTTPException
 from loguru import logger
 
+from plantgenie_api import SafeDuckDbConnection
 from plantgenie_api.api.v1 import DATABASE_PATH
 from plantgenie_api.api.v1.expression.models import (
     ExpressionRequest,
@@ -19,7 +20,7 @@ async def get_expression_data(request: ExpressionRequest) -> ExpressionResponse:
     if len(request.gene_ids) == 0:
         raise HTTPException(status_code=422, detail="No gene IDs supplied in the request")
 
-    with duckdb.connect(DATABASE_PATH, read_only=True) as connection:
+    with SafeDuckDbConnection(DATABASE_PATH) as connection:
         experiment = connection.sql(
             "SELECT relation_name, expression_units FROM experiments WHERE id = ?",
             params=[request.experiment_id],
