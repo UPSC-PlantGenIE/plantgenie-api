@@ -16,9 +16,6 @@ router = APIRouter(prefix="/expression")
 
 @router.post(path="")
 async def get_expression_data(request: ExpressionRequest) -> ExpressionResponse:
-    if len(request.gene_ids) == 0:
-        raise HTTPException(status_code=422, detail="No gene IDs supplied in the request")
-
     with SafeDuckDbConnection(DATABASE_PATH) as connection:
         experiment = connection.sql(
             "SELECT relation_name, expression_units FROM experiments WHERE id = ?",
@@ -112,10 +109,10 @@ async def get_expression_data(request: ExpressionRequest) -> ExpressionResponse:
             genes.append(gene_id)
         values.append(expression_value)
 
+    missing_genes = [gene_id for gene_id in request.gene_ids if gene_id not in gene_order]
     return ExpressionResponse(
-        genes=genes, samples=samples, values=values, units=expression_units
+        genes=genes, samples=samples, values=values, units=expression_units, missing_gene_ids=missing_genes
     )
-
 
 # @router.get(path="/available-experiments")
 # async def get_available_experiments():

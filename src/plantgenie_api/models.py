@@ -5,9 +5,11 @@ from typing import List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import date
 
+from pydantic.alias_generators import to_camel
+
 
 class PlantGenieModel(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, alias_generator=to_camel, extra="forbid")
 
 
 class GeneAnnotation(PlantGenieModel):
@@ -138,8 +140,10 @@ class AvailableSpecies(PlantGenieModel):
     species_abbreviation: str = Field(alias="speciesAbbreviation")
     avatar_path: str = Field(alias="avatarPath")
 
+
 class AvailableSpeciesResponse(PlantGenieModel):
     species: List[AvailableSpecies]
+
 
 class AvailableGenome(PlantGenieModel):
     genome_id: int = Field(alias="id")
@@ -148,7 +152,6 @@ class AvailableGenome(PlantGenieModel):
     version: str
     publication_date: Optional[date] = Field(alias="publicationDate")
     doi: Optional[str]
-
 
 
 class AvailableGenomesResponse(PlantGenieModel):
