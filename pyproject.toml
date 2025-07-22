@@ -46,3 +46,6 @@ plugins = ['pydantic.mypy']
 [[tool.mypy.overrides]]
 module = ["swiftclient.*"]
 ignore_missing_imports = true
+
+[tool.black]
+line-length = 75

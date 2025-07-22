@@ -18,3 +18,16 @@ class ExpressionResponse(PlantGenieModel):
     values: List[float]
     units: Optional[Literal["tpm", "vst"]] = Field(default=None)
     missing_gene_ids: Optional[List[str]] = Field(default=[])
+
+
+class Experiment(PlantGenieModel):
+    experiment_id: int
+    species_id: int
+    genome_id: int
+    experiment_title: str
+    species_name: str
+    genome_version: str
+
+
+class AvailableExperimentsResponse(PlantGenieModel):
+    experiments: List[Experiment]

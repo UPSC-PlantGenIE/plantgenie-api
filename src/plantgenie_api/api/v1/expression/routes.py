@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from fastapi import APIRouter
 from fastapi.exceptions import HTTPException
@@ -9,13 +9,17 @@ from plantgenie_api.api.v1 import DATABASE_PATH
 from plantgenie_api.api.v1.expression.models import (
     ExpressionRequest,
     ExpressionResponse,
+    AvailableExperimentsResponse,
+    Experiment,
 )
 
 router = APIRouter(prefix="/expression")
 
 
 @router.post(path="")
-async def get_expression_data(request: ExpressionRequest) -> ExpressionResponse:
+async def get_expression_data(
+    request: ExpressionRequest,
+) -> ExpressionResponse:
     with SafeDuckDbConnection(DATABASE_PATH) as connection:
         experiment = connection.sql(
             "SELECT relation_name, expression_units FROM experiments WHERE id = ?",
@@ -38,7 +42,10 @@ async def get_expression_data(request: ExpressionRequest) -> ExpressionResponse:
 
         # all those \t are just for readability when printing it out for debugging
         gene_values = ",\n\t\t\t".join(
-            [f"({i}, '{gene}')" for i, gene in enumerate(request.gene_ids, start=1)]
+            [
+                f"({i}, '{gene}')"
+                for i, gene in enumerate(request.gene_ids, start=1)
+            ]
         )
 
         query = f"""
@@ -109,11 +116,50 @@ async def get_expression_data(request: ExpressionRequest) -> ExpressionResponse:
             genes.append(gene_id)
         values.append(expression_value)
 
-    missing_genes = [gene_id for gene_id in request.gene_ids if gene_id not in gene_order]
+    missing_genes = [
+        gene_id
+        for gene_id in request.gene_ids
+        if gene_id not in gene_order
+    ]
     return ExpressionResponse(
-        genes=genes, samples=samples, values=values, units=expression_units, missing_gene_ids=missing_genes
+        genes=genes,
+        samples=samples,
+        values=values,
+        units=expression_units,
+        missing_gene_ids=missing_genes,
     )
 
-# @router.get(path="/available-experiments")
-# async def get_available_experiments():
-#     pass
+
+@router.get(path="/available-experiments")
+async def get_available_experiments() -> AvailableExperimentsResponse:
+    with SafeDuckDbConnection(DATABASE_PATH) as connection:
+        experiments: List[Tuple[int, int, int, str, str, str]] = (
+            connection.sql(
+                """
+                    SELECT
+                        e.id AS experiment_id,
+                        s.id AS species_id,
+                        g.id AS genome_id,
+                        e.title AS experiment_title,
+                        s.species_name,
+                        g.version AS genome_version,
+                    FROM experiments e
+                        JOIN genomes g ON (e.genome_id = g.id)
+                        JOIN species s ON (s.id = g.species_id);
+                """
+            ).fetchall()
+        )
+
+    return AvailableExperimentsResponse(
+        experiments=[
+            Experiment(
+                experiment_id=row[0],
+                species_id=row[1],
+                genome_id=row[2],
+                experiment_title=row[3],
+                species_name=row[4],
+                genome_version=row[5],
+            )
+            for row in experiments
+        ]
+    )
