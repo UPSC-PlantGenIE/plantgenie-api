@@ -1,7 +1,7 @@
 import os
 import uuid
 from pathlib import Path
-from typing import Annotated, List, Literal, Optional, Tuple
+from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple
 
 import duckdb
 from celery import chain
@@ -14,6 +14,7 @@ from swiftclient.service import (  # type: ignore
 )
 
 from plantgenie_api import SafeDuckDbConnection
+
 # from plantgenie_api import DUCKDB_DATABASE_PATH, ENV_DATA_PATH
 from plantgenie_api.api.v1 import BACKEND_DATA_PATH, DATABASE_PATH
 from plantgenie_api.api.v1.blast.models import (
@@ -43,8 +44,12 @@ swift_service = SwiftService(
         "identity_api_version": os.environ["OS_IDENTITY_API_VERSION"],
         "region_name": os.environ["OS_REGION_NAME"],
         "interface": os.environ["OS_INTERFACE"],
-        "application_credential_id": os.environ["OS_APPLICATION_CREDENTIAL_ID"],
-        "application_credential_secret": os.environ["OS_APPLICATION_CREDENTIAL_SECRET"],
+        "application_credential_id": os.environ[
+            "OS_APPLICATION_CREDENTIAL_ID"
+        ],
+        "application_credential_secret": os.environ[
+            "OS_APPLICATION_CREDENTIAL_SECRET"
+        ],
     }
 )
 
@@ -142,7 +147,9 @@ async def submit_blast(
     file_content = await file.read()
 
     job_id = str(uuid.uuid4())
-    host_file_path = (BACKEND_DATA_PATH / "blast_queries" / f"{job_id}.fa").resolve()
+    host_file_path = (
+        BACKEND_DATA_PATH / "blast_queries" / f"{job_id}.fa"
+    ).resolve()
 
     with open(host_file_path, "wb") as host_file:
         host_file.write(file_content)
@@ -152,7 +159,9 @@ async def submit_blast(
             {
                 "query_path": host_file_path.as_posix(),
                 "program": program,
-                "database_path": (BACKEND_DATA_PATH / blast_path).as_posix(),
+                "database_path": (
+                    BACKEND_DATA_PATH / blast_path
+                ).as_posix(),
                 "evalue": 0.0001,
                 "max_hits": 10,
             }
@@ -167,7 +176,10 @@ async def submit_blast(
     delete_blast_data.s({"job_id": job_id}).apply_async(countdown=15 * 60)
 
     return BlastSubmitResponse(
-        job_id=job_id, file_size=file.size, program=program, database_type=database_type
+        job_id=job_id,
+        file_size=file.size,
+        program=program,
+        database_type=database_type,
     )
 
 
@@ -200,14 +212,17 @@ def retrieve_blast_result(
 
     if job_result.state == "FAILURE":
         raise HTTPException(
-            status_code=404, detail="The job failed, no results to retrieve"
+            status_code=404,
+            detail="The job failed, no results to retrieve",
         )
 
     if job_result.state != "SUCCESS":
-        raise HTTPException(status_code=404, detail="The job is not complete")
+        raise HTTPException(
+            status_code=404, detail="The job is not complete"
+        )
 
     nfs_storage_location = Path(
-        BACKEND_DATA_PATH / "blast_results" / f"{job_id}.{format}"
+        BACKEND_DATA_PATH / "blast_results" / f"{job_id}.{output_format}"
     )
 
     if nfs_storage_location.exists():
@@ -218,33 +233,36 @@ def retrieve_blast_result(
 
         return StreamingResponse(
             iter_file(),
-            media_type="text/tab-separated-values" if format == "tsv" else "text/html",
-        )
-
-    result = next(
-        swift_service.download(
-            container="plantgenie-share",
-            objects=[f"blast_files/{job_id}.{output_format}"],
-            options={
-                "out_file": (
-                    BACKEND_DATA_PATH
-                    / "blast_object_store_downloads"
-                    / f"{job_id}.{output_format}"
-                ).as_posix()
-            },
-        )
-    )
-
-    if result["output_path"]:
-        return StreamingResponse(
-            file_iterator_and_cleanup(Path(result["output_path"])),
             media_type=(
-                "text/tab-separated-values" if output_format == "tsv" else "text/html"
+                "text/tab-separated-values"
+                if format == "tsv"
+                else "text/html"
             ),
         )
 
-    if result["output_path"]:
-        Path(result["output_path"]).unlink()
+    swift_output_path = (
+        BACKEND_DATA_PATH
+        / "blast_object_store_downloads"
+        / f"{job_id}.{output_format}"
+    )
+
+    result: Dict[str, Any] = next(
+        swift_service.download(
+            container="plantgenie-share",
+            objects=[f"blast_results/{job_id}.{output_format}"],
+            options={"out_file": swift_output_path.as_posix()},
+        )
+    )
+
+    if result.get("success", False):
+        return StreamingResponse(
+            file_iterator_and_cleanup(swift_output_path),
+            media_type=(
+                "text/tab-separated-values"
+                if output_format == "tsv"
+                else "text/html"
+            ),
+        )
 
     raise HTTPException(
         status_code=404,
