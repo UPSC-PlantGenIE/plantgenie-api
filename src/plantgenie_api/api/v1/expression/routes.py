@@ -122,7 +122,7 @@ async def get_expression_data(
         if gene_id not in gene_order
     ]
     return ExpressionResponse(
-        genes=genes,
+        gene_ids=genes,
         samples=samples,
         values=values,
         units=expression_units,

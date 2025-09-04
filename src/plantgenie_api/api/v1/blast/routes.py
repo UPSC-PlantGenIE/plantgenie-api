@@ -3,7 +3,6 @@ import uuid
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple
 
-import duckdb
 from celery import chain
 from celery.result import AsyncResult
 from fastapi import APIRouter, File, HTTPException, UploadFile, Form

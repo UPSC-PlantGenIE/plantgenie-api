@@ -1,11 +1,10 @@
 import os
-from os import PathLike
 
 from pathlib import Path
 from typing import Optional
 
 import duckdb
-from duckdb.duckdb import DuckDBPyConnection
+from duckdb import DuckDBPyConnection
 
 DUCKDB_DATABASE_BASENAME = "upsc-plantgenie.db"
 
@@ -28,7 +27,7 @@ class SafeDuckDbConnection:
         self.database_path = database_path
         self.connection: Optional[DuckDBPyConnection] = None
 
-    def __enter__(self):
+    def __enter__(self) -> DuckDBPyConnection:
         self.connection = duckdb.connect(self.database_path, read_only=True)
         self.connection.execute(
             "SET allowed_directories = ['/srv/pg-application-data', '/opt/pg-application-data'];"
@@ -36,7 +35,7 @@ class SafeDuckDbConnection:
         self.connection.execute("SET enable_external_access = false")
         self.connection.execute("SET lock_configuration = true")
 
-        return self.connection;
+        return self.connection
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         if self.connection:
