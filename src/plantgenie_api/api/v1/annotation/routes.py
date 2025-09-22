@@ -22,7 +22,7 @@ async def get_annotations(
         return AnnotationsResponse(results=[])
 
     # all those \t are just for readability when printing it out for debugging
-    gene_values = ",\n\t\t\t".join(
+    gene_values = "\t" + ",\n\t\t".join(
         [
             f"({i}, '{gene}')"
             for i, gene in enumerate(request.gene_ids, start=1)
@@ -32,13 +32,16 @@ async def get_annotations(
     query = f"""
         WITH requested_genes(gene_order, gene_id) AS (
             VALUES
-                {gene_values}
+            {gene_values}
+        ),
+        genes_from_gff AS (
+            SELECT * FROM requested_genes
+                JOIN gff ON (requested_genes.gene_id = gff.feature_id)
         ) SELECT
-            annotations.gene_id, gene_name, description
-        FROM annotations
-            JOIN requested_genes
-                ON (annotations.gene_id = requested_genes.gene_id)
-        ORDER BY requested_genes.gene_order;
+            genes_from_gff.gene_id, gene_name, description
+        FROM genes_from_gff
+            LEFT JOIN annotations ON (annotations.gene_id = genes_from_gff.gene_id)
+        ORDER BY genes_from_gff.gene_order;
     """
 
     with SafeDuckDbConnection(DATABASE_PATH) as connection:
