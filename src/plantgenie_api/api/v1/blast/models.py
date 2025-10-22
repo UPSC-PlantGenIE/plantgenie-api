@@ -21,12 +21,12 @@ class AvailableDatabase(BlastBaseModel):
 
 
 class BlastSubmitResponse(BlastBaseModel):
-    job_id: str = Field(alias="jobId")
+    job_id: str = Field(alias="jobId", validation_alias="job_id")
     program: Literal["blastn", "blastx", "blastp"] = Field(default="blastn")
     database_type: Literal["cds", "mrna", "prot", "genome"] = Field(
         alias="databaseType", default="genome"
     )
-    file_size: int = Field(alias="fileSize")
+    file_size: int = Field(alias="fileSize", validation_alias="file_size")
 
 
 # class BlastPollResponse(BlastBaseModel):
@@ -36,7 +36,7 @@ class BlastSubmitResponse(BlastBaseModel):
 #     completed_at: Optional[str] = Field(alias="completedAt")
 
 class BlastPollResponse(BlastBaseModel):
-    job_id: str = Field(alias="jobId")
+    job_id: str = Field(alias="jobId", validation_alias="job_id")
     status: Literal["PENDING", "SUCCESS", "FAILURE", "STARTED", "RETRY"]
     # result: Optional[str]
-    completed_at: Optional[str] = Field(alias="completedAt")
+    completed_at: Optional[str] = Field(alias="completedAt", validation_alias="completed_at")
