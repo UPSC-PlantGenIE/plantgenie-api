@@ -11,3 +11,6 @@ wheels/
 
 # Alternative environment variable files
 .env.*
+
+.idea/*
+.vscode/*
