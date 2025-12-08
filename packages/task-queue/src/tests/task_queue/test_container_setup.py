@@ -1,7 +1,7 @@
 import pika
 import redis
 
-from task_queue.tasks import add  # type: ignore
+from task_queue.tasks import add
 
 
 def test_redis_container_running(redis_container):

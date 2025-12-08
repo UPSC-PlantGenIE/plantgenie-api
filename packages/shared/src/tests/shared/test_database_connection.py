@@ -8,7 +8,6 @@ from duckdb import (
 )
 
 
-
 def test_can_access_allowed_dir(
     selectable_file: Path, safe_database_connection: DuckDBPyConnection
 ):
@@ -19,17 +18,17 @@ def test_can_access_allowed_dir(
     )
 
 
-def test_cannot_access_disallowed_dir(safe_database_connection: DuckDBPyConnection):
+def test_cannot_access_disallowed_dir(
+    safe_database_connection: DuckDBPyConnection,
+):
     with pytest.raises(PermissionException):
-        safe_database_connection.sql("SELECT * FROM read_csv_auto('/etc/passwd')")
-    # with SafeDuckDbConnection(":memory:", read_only=False) as connection:
-    #     with pytest.raises(PermissionException):
-    #         connection.sql("SELECT * FROM read_csv_auto('/etc/passwd')")
+        safe_database_connection.sql(
+            "SELECT * FROM read_csv_auto('/etc/passwd')"
+        )
 
 
-def test_cannot_modify_configuration(safe_database_connection: DuckDBPyConnection):
+def test_cannot_modify_configuration(
+    safe_database_connection: DuckDBPyConnection,
+):
     with pytest.raises(InvalidInputException):
         safe_database_connection.sql("SET lock_configuration = false")
-    # with SafeDuckDbConnection(":memory:", read_only=False) as connection:
-    #     with pytest.raises(InvalidInputException):
-    #         connection.sql("SET lock_configuration = false")

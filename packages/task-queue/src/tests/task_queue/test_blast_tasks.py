@@ -4,12 +4,12 @@ from subprocess import CalledProcessError
 from celery import Celery
 import pytest
 
-from task_queue.blast.tasks import (  # type: ignore
+from task_queue.blast.tasks import (
     verify_blast_is_installed,
     verify_query_file_exists,
     verify_query_is_fasta,
 )
-from task_queue.blast.exceptions import (  # type: ignore
+from task_queue.blast.exceptions import (
     DuplicateSequenceIdentifiersError,
     NoFirstCaretError,
 )
