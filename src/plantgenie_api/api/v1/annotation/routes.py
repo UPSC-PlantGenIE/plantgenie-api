@@ -11,7 +11,7 @@ from plantgenie_api.api.v1.annotation.models import (
     GeneAnnotation,
 )
 
-router = APIRouter(prefix="/annotations")
+router = APIRouter(prefix="/annotations", tags=["v1", "annotations"])
 
 
 @router.post("")

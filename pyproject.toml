@@ -3,9 +3,7 @@ name = "plantgenie-api"
 version = "0.1.0"
 description = "Backend for the PlantGenIE Web Application (and general usage)"
 readme = "README.md"
-authors = [
-    { name = "Jamie McCann", email = "jamie.mccann@umu.se" }
-]
+authors = [{ name = "Jamie McCann", email = "jamie.mccann@umu.se" }]
 requires-python = ">=3.13"
 dependencies = [
     "aiohttp>=3.12.13",
@@ -21,7 +19,17 @@ dependencies = [
     "python-multipart>=0.0.20",
     "python-swiftclient>=4.8.0",
     "redis>=5.2.1",
+    "shared",
+    "task-queue",
+    "python-dotenv>=1.0.1",
 ]
+
+[tool.uv.workspace]
+members = ["packages/task-queue", "packages/shared"]
+
+[tool.uv.sources]
+task-queue = { workspace = true }
+shared = { workspace = true }
 
 [project.scripts]
 plantgenie-api = "plantgenie_api.main:start"
@@ -32,11 +40,14 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "anyio>=4.9.0",
     "black>=25.1.0",
     "celery-types>=0.23.0",
     "ipython>=9.3.0",
     "mypy>=1.15.0",
     "pyrefly>=0.18.0",
+    "pytest>=9.0.1",
+    "python-dotenv[cli]>=1.0.1",
     "ruff>=0.9.5",
 ]
 
@@ -44,8 +55,24 @@ dev = [
 plugins = ['pydantic.mypy']
 
 [[tool.mypy.overrides]]
-module = ["swiftclient.*"]
+module = [
+    "swiftclient.*",
+    "shared.*",
+    "annotation.*",
+    "expression.*",
+    "task-queue.*",
+]
 ignore_missing_imports = true
 
 [tool.black]
 line-length = 75
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = [
+    "src/tests",
+    "packages/task-queue/src/tests",
+    "packages/shared/src/tests",
+]
+addopts = ["--import-mode=importlib"]
+filterwarnings = ["ignore::DeprecationWarning:testcontainers"]

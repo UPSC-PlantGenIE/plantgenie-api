@@ -1,0 +1,99 @@
+from pathlib import Path
+
+import pytest
+
+from testcontainers.core.container import DockerContainer  # type: ignore
+from testcontainers.core.image import DockerImage  # type: ignore
+from testcontainers.core.network import Network  # type: ignore
+from testcontainers.rabbitmq import RabbitMqContainer  # type: ignore
+from testcontainers.redis import RedisContainer  # type: ignore
+
+from task_queue.celery import app
+
+
+@pytest.fixture(scope="session")
+def network():
+    with Network() as network:
+        yield network
+
+
+@pytest.fixture(scope="session")
+def redis_container(network: Network):
+    with RedisContainer(image="redis:8.4-alpine") as container:
+        container.with_network(network)
+        container.with_network_aliases("redis-service")
+        container.start()
+        yield container
+
+
+@pytest.fixture(scope="session")
+def rabbitmq_container(network: Network):
+    with RabbitMqContainer(
+        image="rabbitmq:4.2-alpine",
+        vhost="celery_testing",
+        username="guest",
+        password="guest",
+        port=5672,
+    ) as container:
+        container.with_network(network)
+        container.with_network_aliases("rabbitmq-service")
+        container.start()
+        yield container
+
+
+@pytest.fixture(scope="session")
+def celery_container(
+    network: Network,
+    rabbitmq_container: RabbitMqContainer,
+    redis_container: RedisContainer,
+):
+    with DockerImage(
+        path=Path(__file__).parent.parent.parent.parent.parent.parent,
+        dockerfile_path=Path(__file__).parent.parent.parent.parent / "Dockerfile",
+        tag="celery-worker:testing",
+        clean_up=False,
+    ) as image:
+        with DockerContainer(str(image)) as container:
+            container.with_network(network)
+            container.with_env(
+                "CELERY_BROKER_URL",
+                "amqp://guest:guest@rabbitmq-service:5672/celery_testing",
+            )
+            container.with_env(
+                "CELERY_RESULT_BACKEND",
+                "redis://redis-service:6379/0",
+            )
+
+            container.with_volume_mapping(
+                host=Path(__file__).parent, container="/tests", mode="ro"
+            )
+
+            container.start()
+            yield container
+
+
+@pytest.fixture(scope="session")
+def configured_celery_test_app(
+    rabbitmq_container: RabbitMqContainer, redis_container: RedisContainer
+):
+    rmq_host = rabbitmq_container.get_container_host_ip()
+    rmq_port = rabbitmq_container.get_exposed_port(5672)
+
+    redis_host = redis_container.get_container_host_ip()
+    redis_port = redis_container.get_exposed_port(6379)
+
+    message_broker_url = (
+        f"amqp://guest:guest@{rmq_host}:{rmq_port}/celery_testing"
+    )
+    result_backend_url = f"redis://{redis_host}:{redis_port}/0"
+
+    app.conf.update(
+        broker_url=message_broker_url,
+        result_backend=result_backend_url,
+    )
+
+    yield app
+
+    app.conf.clear()
+    # shutdown the workers (maybe prevents connection to redis error?)
+    app.control.shutdown()

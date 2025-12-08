@@ -13,6 +13,7 @@ from swiftclient.service import (  # type: ignore
 )
 
 from plantgenie_api import SafeDuckDbConnection
+from plantgenie_api.dependencies import backend_config
 
 # from plantgenie_api import DUCKDB_DATABASE_PATH, ENV_DATA_PATH
 from plantgenie_api.api.v1 import BACKEND_DATA_PATH, DATABASE_PATH
@@ -32,25 +33,10 @@ from plantgenie_api.api.v1.blast.tasks import (
     upload_blast_data_to_storage_bucket,
     delete_blast_data,
 )
+from plantgenie_api.dependencies import get_swift_service
 
 
-router = APIRouter(prefix="/blast")
-
-swift_service = SwiftService(
-    options={
-        "auth_type": os.environ["OS_AUTH_TYPE"],
-        "auth_url": os.environ["OS_AUTH_URL"],
-        "identity_api_version": os.environ["OS_IDENTITY_API_VERSION"],
-        "region_name": os.environ["OS_REGION_NAME"],
-        "interface": os.environ["OS_INTERFACE"],
-        "application_credential_id": os.environ[
-            "OS_APPLICATION_CREDENTIAL_ID"
-        ],
-        "application_credential_secret": os.environ[
-            "OS_APPLICATION_CREDENTIAL_SECRET"
-        ],
-    }
-)
+router = APIRouter(prefix="/blast", tags=["v1", "blast"])
 
 
 @router.get(path="/{program}/version")
@@ -244,6 +230,8 @@ def retrieve_blast_result(
         / "blast_object_store_downloads"
         / f"{job_id}.{output_format}"
     )
+
+    swift_service = get_swift_service(backend_config)
 
     result: Dict[str, Any] = next(
         swift_service.download(

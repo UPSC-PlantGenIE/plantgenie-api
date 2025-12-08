@@ -13,7 +13,7 @@ from plantgenie_api.api.v1.expression.models import (
     Experiment,
 )
 
-router = APIRouter(prefix="/expression")
+router = APIRouter(prefix="/expression", tags=["v1", "expression"])
 
 
 @router.post(path="")

@@ -21,7 +21,6 @@ DUCKDB_DATABASE_PATH = (
     if ENV_DATA_PATH
     else Path(__file__).parent / DUCKDB_DATABASE_BASENAME
 )
-
 class SafeDuckDbConnection:
     def __init__(self, database_path: str | Path) -> None:
         self.database_path = database_path
