@@ -1,23 +1,19 @@
 services:
   api:
     image: plantgenie-api:local-latest
-    build: .
-    container_name: plantgenie_api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pg-local-fastapi
+    command: ["fastapi", "dev", "/app/src/plantgenie_api/main.py", "--host", "0.0.0.0", "--port", "8000"]
     ports:
       - "8000:8000"
     environment:
       - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - OS_AUTH_TYPE=${OS_AUTH_TYPE}
-      - OS_AUTH_URL=${OS_AUTH_URL}
-      - OS_IDENTITY_API_VERSION=${OS_IDENTITY_API_VERSION}
-      - OS_REGION_NAME=${OS_REGION_NAME}
-      - OS_INTERFACE=${OS_INTERFACE}
-      - OS_APPLICATION_CREDENTIAL_ID=${OS_APPLICATION_CREDENTIAL_ID}
-      - OS_APPLICATION_CREDENTIAL_SECRET=${OS_APPLICATION_CREDENTIAL_SECRET}
-      - DATA_PATH=/data
     volumes:
-      - "${HOST_DATA_DIR}:/data:rw"
+      - "${HOST_DATA_DIR}:/opt/pg-application-data:rw"
+      - ".env.shared:/app/.env.shared:ro"
     depends_on:
       - rabbitmq
       - redis
@@ -25,24 +21,19 @@ services:
       - plantgenie_network
 
   celery_worker:
-    build: .
-    image: plantgenie-api:local-latest
-    container_name: celery_worker
-    # command: celery -A src.plantgenie_api.celery worker --loglevel=info
-    command: uv run celery -A plantgenie_api.celery worker --loglevel=DEBUG
+    build:
+      context: .
+      dockerfile: packages/task-queue/Dockerfile
+    image: pg-task-queue:local-latest
+    container_name: pg-local-celery
+    command: ["celery", "-A", "task_queue.celery.app", "worker", "--loglevel=debug"]
+    env_file:
+      - .env.shared
     environment:
       - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - OS_AUTH_TYPE=${OS_AUTH_TYPE}
-      - OS_AUTH_URL=${OS_AUTH_URL}
-      - OS_IDENTITY_API_VERSION=${OS_IDENTITY_API_VERSION}
-      - OS_REGION_NAME=${OS_REGION_NAME}
-      - OS_INTERFACE=${OS_INTERFACE}
-      - OS_APPLICATION_CREDENTIAL_ID=${OS_APPLICATION_CREDENTIAL_ID}
-      - OS_APPLICATION_CREDENTIAL_SECRET=${OS_APPLICATION_CREDENTIAL_SECRET}
-      - DATA_PATH=/data
     volumes:
-      - "${HOST_DATA_DIR}:/data:rw"
+      - "${HOST_DATA_DIR}:/opt/pg-application-data:rw"
     depends_on:
       - rabbitmq
       - redis
@@ -50,11 +41,11 @@ services:
       - plantgenie_network
 
   rabbitmq:
-    image: rabbitmq:4.0.7-management
-    container_name: rabbitmq
+    image: rabbitmq:4.2-management # an ubuntu image base
+    container_name: pg-local-rabbitmq
     ports:
       - "5672:5672"
-      - "15672:15672"  # RabbitMQ management console
+      - "15672:15672"  # RabbitMQ management console port
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
@@ -62,8 +53,8 @@ services:
       - plantgenie_network
 
   redis:
-    image: redis:6
-    container_name: redis
+    image: redis:8.4-bookworm
+    container_name: pg-local-redis
     ports:
       - "6379:6379"
     networks:

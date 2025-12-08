@@ -1,4 +1,3 @@
-import os
 import uuid
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple
@@ -8,9 +7,6 @@ from celery.result import AsyncResult
 from fastapi import APIRouter, File, HTTPException, UploadFile, Form
 from fastapi.responses import StreamingResponse
 from loguru import logger
-from swiftclient.service import (  # type: ignore
-    SwiftService,
-)
 
 from plantgenie_api import SafeDuckDbConnection
 from plantgenie_api.dependencies import backend_config

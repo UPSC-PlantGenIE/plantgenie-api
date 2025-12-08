@@ -1,8 +1,6 @@
 import os
 from contextlib import asynccontextmanager
 
-from dotenv import dotenv_values
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -29,6 +27,8 @@ from shared.db import SafeDuckDbConnection
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     required_environmental_variables = [
+        "DATA_PATH",
+        "DATABASE_NAME",
         "OS_AUTH_TYPE",
         "OS_AUTH_URL",
         "OS_IDENTITY_API_VERSION",
@@ -42,12 +42,9 @@ async def lifespan(app: FastAPI):
         value
         for value in required_environmental_variables
         if os.environ.get(value) is None
+        and backend_config.get(value) is None
     ]
 
-    print("Here are the missing variables!")
-    print(missing_variables)
-
-    print(backend_config)
     if len(missing_variables) > 0:
         raise RuntimeError(
             f"Missing environmental variables must be defined: {", ".join(missing_variables)}"

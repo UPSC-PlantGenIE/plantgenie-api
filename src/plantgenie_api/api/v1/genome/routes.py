@@ -1,6 +1,5 @@
 from pathlib import Path
 
-import duckdb
 from fastapi import APIRouter
 
 from plantgenie_api import ENV_DATA_PATH

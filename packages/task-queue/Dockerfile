@@ -49,4 +49,4 @@ ENV PYTHONPATH="/app/src"
 # obviates the need to do something like `source /app/.venv/bin/activate`
 ENV PATH="/app/.venv/bin:$PATH"
 
-CMD ["/app/.venv/bin/celery", "-A", "task_queue.celery.app", "worker", "--loglevel=info"]
+CMD ["celery", "-A", "task_queue.celery.app", "worker", "--loglevel=info"]

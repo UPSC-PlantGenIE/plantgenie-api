@@ -1,35 +1,26 @@
 FROM python:3.13-bookworm
+COPY --from=ghcr.io/astral-sh/uv:0.9.15 /uv /uvx /bin/
 
-RUN useradd -m -u 1000 appuser
+WORKDIR /app
 
-# The installer requires curl (and certificates) to download the release archive
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    curl \
-    ca-certificates \
-    ncbi-blast+ && \
-    rm -rf /var/lib/apt/lists/*
+# this is the main plantgenie backend app
+COPY README.md .
+COPY pyproject.toml /app/
+COPY uv.lock .
+COPY src ./src
+COPY packages ./packages
 
-RUN mkdir /app
-RUN chown -R appuser:appuser /app
+# installs packages and deps
+RUN uv sync --frozen
+
+RUN useradd --no-create-home appuser
 
 USER appuser
-ENV HOME=/home/appuser
-ENV PATH="$HOME/.local/bin:$PATH"
 
-ADD --chown=appuser:appuser https://astral.sh/uv/0.7.15/install.sh /home/appuser/uv-installer.sh
-RUN sh /home/appuser/uv-installer.sh && rm /home/appuser/uv-installer.sh
+ENV PYTHONUNBUFFERED=1
 
-# Create a virtualenv
-WORKDIR /app
-RUN uv venv /app/.venv
-COPY --chown=appuser:appuser pyproject.toml .
+ENV PYTHONPATH="/app/src"
+# obviates the need to do something like `source /app/.venv/bin/activate`
+ENV PATH="/app/.venv/bin:$PATH"
 
-RUN uv pip install -r pyproject.toml
-
-COPY --chown=appuser:appuser . .
-
-RUN uv pip install -e .
-
-RUN uv sync --locked
-CMD ["uv", "run", "fastapi", "dev", "/app/src/plantgenie_api/main.py", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["fastapi", "run", "/app/src/plantgenie_api/main.py", "--host", "0.0.0.0", "--port", "8000"]
