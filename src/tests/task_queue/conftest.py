@@ -13,41 +13,47 @@ from task_queue.celery import app
 
 @pytest.fixture(scope="session")
 def network():
-    with Network() as network:
-        yield network
+    network = Network()
+    network.create()
+
+    yield network
+
+    network.remove()
 
 
 @pytest.fixture(scope="session")
 def redis_container(network: Network):
-    with RedisContainer(image="redis:8.4-alpine") as container:
-        container.with_network(network)
-        container.with_network_aliases("redis-service")
-        container.start()
-        yield container
+    container = RedisContainer(image="redis:8.4-alpine")
+    container.with_network(network)
+    container.with_network_aliases("redis-service")
+    container.start()
+
+    yield container
+
+    container.stop()
 
 
 @pytest.fixture(scope="session")
 def rabbitmq_container(network: Network):
-    with RabbitMqContainer(
+    container = RabbitMqContainer(
         image="rabbitmq:4.2-alpine",
         vhost="celery_testing",
         username="guest",
         password="guest",
         port=5672,
-    ) as container:
-        container.with_network(network)
-        container.with_network_aliases("rabbitmq-service")
-        container.start()
-        yield container
+    )
+    container.with_network(network)
+    container.with_network_aliases("rabbitmq-service")
+    container.start()
+
+    yield container
+
+    container.stop()
 
 
 @pytest.fixture(scope="session")
-def celery_container(
-    network: Network,
-    rabbitmq_container: RabbitMqContainer,
-    redis_container: RedisContainer,
-):
-    with DockerImage(
+def celery_image():
+    image = DockerImage(
         path=Path(__file__).parent.parent.parent.parent,
         dockerfile_path=(
             Path(__file__).parent.parent.parent.parent
@@ -57,25 +63,32 @@ def celery_container(
         ),
         tag="celery-worker:testing",
         clean_up=False,
-    ) as image:
+    )
 
-        with DockerContainer(str(image)) as container:
-            container.with_network(network)
-            container.with_env(
-                "CELERY_BROKER_URL",
-                "amqp://guest:guest@rabbitmq-service:5672/celery_testing",
-            )
-            container.with_env(
-                "CELERY_RESULT_BACKEND",
-                "redis://redis-service:6379/0",
-            )
+    yield image
 
-            container.with_volume_mapping(
-                host=Path(__file__).parent, container="/tests", mode="ro"
-            )
+    image.remove(force=True)
 
-            container.start()
-            yield container
+
+@pytest.fixture(scope="session")
+def celery_container(network: Network, celery_image: DockerImage):
+    container = DockerContainer(str(celery_image))
+    container.with_network(network)
+    container.with_env(
+        "CELERY_BROKER_URL",
+        "amqp://guest:guest@rabbitmq-service:5672/celery_testing",
+    )
+    container.with_env(
+        "CELERY_RESULT_BACKEND",
+        "redis://redis-service:6379/0",
+    )
+    container.with_volume_mapping(
+        host=Path(__file__).parent, container="/tests", mode="ro"
+    )
+
+    container.start()
+    yield container
+    container.stop()
 
 
 @pytest.fixture(scope="session")
@@ -101,5 +114,4 @@ def configured_celery_test_app(
     yield app
 
     app.conf.clear()
-    # shutdown the workers (maybe prevents connection to redis error?)
     app.control.shutdown()

@@ -36,8 +36,8 @@ def test_rabbitmq_container_running(rabbitmq_container):
 def test_celery_add_task(
     rabbitmq_container,
     redis_container,
-    configured_celery_test_app,
     celery_container,
+    configured_celery_test_app,
 ):
     async_result = add.delay(4, 6)
     result = async_result.get(timeout=10)
