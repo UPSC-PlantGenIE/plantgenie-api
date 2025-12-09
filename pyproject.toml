@@ -19,9 +19,9 @@ dependencies = [
     "python-multipart>=0.0.20",
     "python-swiftclient>=4.8.0",
     "redis>=5.2.1",
+    "python-dotenv>=1.0.1",
     "shared",
     "task-queue",
-    "python-dotenv>=1.0.1",
 ]
 
 [tool.uv.workspace]
@@ -55,13 +55,18 @@ dev = [
 plugins = ['pydantic.mypy']
 
 [[tool.mypy.overrides]]
-module = [
-    "swiftclient.*",
-    "shared.*",
-    "annotation.*",
-    "expression.*",
-    "task-queue.*",
-]
+module = ["task_queue", "task_queue.*"]
+ignore_errors = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["shared", "shared.*"]
+ignore_errors = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["testcontainers", "testcontainers.*"]
+ignore_errors = true
 ignore_missing_imports = true
 
 [tool.black]

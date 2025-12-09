@@ -2,11 +2,11 @@ from pathlib import Path
 
 import pytest
 
-from testcontainers.core.container import DockerContainer  # type: ignore
-from testcontainers.core.image import DockerImage  # type: ignore
-from testcontainers.core.network import Network  # type: ignore
-from testcontainers.rabbitmq import RabbitMqContainer  # type: ignore
-from testcontainers.redis import RedisContainer  # type: ignore
+from testcontainers.core.container import DockerContainer
+from testcontainers.core.image import DockerImage
+from testcontainers.core.network import Network
+from testcontainers.rabbitmq import RabbitMqContainer
+from testcontainers.redis import RedisContainer
 
 from task_queue.celery import app
 
@@ -48,11 +48,17 @@ def celery_container(
     redis_container: RedisContainer,
 ):
     with DockerImage(
-        path=Path(__file__).parent.parent.parent.parent.parent.parent,
-        dockerfile_path=Path(__file__).parent.parent.parent.parent / "Dockerfile",
+        path=Path(__file__).parent.parent.parent.parent,
+        dockerfile_path=(
+            Path(__file__).parent.parent.parent.parent
+            / "packages"
+            / "task-queue"
+            / "Dockerfile"
+        ),
         tag="celery-worker:testing",
         clean_up=False,
     ) as image:
+
         with DockerContainer(str(image)) as container:
             container.with_network(network)
             container.with_env(

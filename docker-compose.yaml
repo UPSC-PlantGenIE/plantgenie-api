@@ -5,7 +5,16 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: pg-local-fastapi
-    command: ["fastapi", "dev", "/app/src/plantgenie_api/main.py", "--host", "0.0.0.0", "--port", "8000"]
+    # command: ["fastapi", "dev", "/app/src/plantgenie_api/main.py", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    entrypoint:
+      - "fastapi"
+      - "dev"
+      - "/app/src/plantgenie_api/main.py"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8000"
+      - "--reload"
     ports:
       - "8000:8000"
     environment:
@@ -19,6 +28,13 @@ services:
       - redis
     networks:
       - plantgenie_network
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /app/src
+        - action: rebuild
+          path: ./pyproject.toml
 
   celery_worker:
     build:
@@ -26,7 +42,14 @@ services:
       dockerfile: packages/task-queue/Dockerfile
     image: pg-task-queue:local-latest
     container_name: pg-local-celery
-    command: ["celery", "-A", "task_queue.celery.app", "worker", "--loglevel=debug"]
+    # command: ["celery", "-A", "task_queue.celery.app", "worker", "--loglevel=debug"]
+    entrypoint:
+      - "celery"
+      - "-A"
+      - "task_queue.celery.app"
+      - "worker"
+      - "--loglevel"
+      - "debug"
     env_file:
       - .env.shared
     environment:
@@ -39,13 +62,20 @@ services:
       - redis
     networks:
       - plantgenie_network
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./packages/task-queue/src
+          target: /app/src
+        - action: rebuild
+          path: ./packages/task-queue/pyproject.toml
 
   rabbitmq:
     image: rabbitmq:4.2-management # an ubuntu image base
     container_name: pg-local-rabbitmq
     ports:
       - "5672:5672"
-      - "15672:15672"  # RabbitMQ management console port
+      - "15672:15672"  # rabbitmq management console port
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest

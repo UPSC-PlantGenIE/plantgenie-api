@@ -1,8 +1,11 @@
 from pathlib import Path
 from subprocess import CalledProcessError
 
-from celery import Celery
 import pytest
+from celery import Celery
+from testcontainers.core.container import DockerContainer  # type: ignore
+from testcontainers.rabbitmq import RabbitMqContainer  # type: ignore
+from testcontainers.redis import RedisContainer  # type: ignore
 
 from task_queue.blast.tasks import (
     verify_blast_is_installed,
@@ -13,9 +16,6 @@ from task_queue.blast.exceptions import (
     DuplicateSequenceIdentifiersError,
     NoFirstCaretError,
 )
-from testcontainers.core.container import DockerContainer  # type: ignore
-from testcontainers.rabbitmq import RabbitMqContainer  # type: ignore
-from testcontainers.redis import RedisContainer  # type: ignore
 
 
 @pytest.fixture(scope="module")

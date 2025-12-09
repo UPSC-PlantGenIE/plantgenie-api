@@ -1,6 +1,6 @@
 import subprocess
 from pathlib import Path
-from typing import List
+from typing import List, Literal
 
 from FastaValidator import fasta_validator  # type: ignore
 
@@ -41,7 +41,9 @@ def verify_query_file_exists(query_path: str) -> str:
 
 
 @app.task(name="blast.verify_query_is_fasta")
-def verify_query_is_fasta(query_path: str, blast_program: str) -> str:
+def verify_query_is_fasta(
+    query_path: str, blast_program: Literal["blastn", "blastx", "blastp"]
+) -> str:
     return_code = fasta_validator(query_path)
 
     match return_code:
@@ -89,15 +91,18 @@ def verify_query_is_fasta(query_path: str, blast_program: str) -> str:
 
 @app.task(name="blast.execute_search", pydantic=True)
 def execute_blast(args: ExecuteBlastArgs) -> str:
-    query_path = Path(args.query_path)
-    database_path = Path(args.database_path)
-    result_path = Path(args.result_path)
+    # raises FileNotFoundError if file doesn't exist
+    query_path = Path(args.query_path).resolve(strict=True)
+    # raises FileNotFoundError if file doesn't exist
+    database_path = Path(args.database_path).resolve(strict=True)
+    result_path = f"{query_path.parent}/{query_path.stem}.asn"
+
     blast_cmd = [
-        args.program,
+        args.program_name,
         "-query",
-        query_path.resolve().as_posix(),
+        query_path.as_posix(),
         "-db",
-        database_path.resolve().as_posix(),
+        database_path.as_posix(),
         "-outfmt",
         "11",  # 11 = BLAST archive (ASN.1),
         "-evalue",
@@ -105,19 +110,56 @@ def execute_blast(args: ExecuteBlastArgs) -> str:
         "-max_target_seqs",
         str(args.max_hits),
         "-out",
-        result_path.resolve().as_posix(),
+        result_path,
     ]
 
     subprocess.run(blast_cmd, capture_output=True, text=True, check=True)
 
-    return args.result_path
+    return result_path
 
 
 @app.task(name="blast.format_result_tsv")
-def blast_result_format_tsv():
-    pass
+def blast_result_format_tsv(input_asn_path: str) -> str:
+    # raises FileNotFoundError if file doesn't exist
+    input_path = Path(input_asn_path).resolve(strict=True)
+    output_path = f"{input_path.parent}/{input_path.stem}.tsv"
+
+    blast_format_tsv = [
+        "blast_formatter",
+        "-archive",
+        input_asn_path,
+        "-outfmt",
+        "6",
+        "-out",
+        output_path,
+    ]
+
+    # raises CalledProcessError
+    subprocess.run(
+        blast_format_tsv, capture_output=True, text=True, check=True
+    )
+
+    return output_path
 
 
 @app.task(name="blast.format_result_html")
-def blast_result_format_html():
-    pass
+def blast_result_format_html(input_asn_path: str) -> str:
+    # raises FileNotFoundError if file doesn't exist
+    input_path = Path(input_asn_path).resolve(strict=True)
+    output_path = f"{input_path.parent}/{input_path.stem}.html"
+
+    blast_format_html = [
+        "blast_formatter",
+        "-archive",
+        input_asn_path,
+        "-out",
+        output_path,
+        "-html",
+    ]
+
+    # raises CalledProcessError
+    subprocess.run(
+        blast_format_html, capture_output=True, text=True, check=True
+    )
+
+    return output_path
