@@ -4,7 +4,6 @@ from fastapi import APIRouter
 from fastapi.exceptions import HTTPException
 from loguru import logger
 
-from plantgenie_api.dependencies import backend_config
 from plantgenie_api.api.v1.expression.models import (
     ExpressionRequest,
     ExpressionResponse,
@@ -12,6 +11,7 @@ from plantgenie_api.api.v1.expression.models import (
     Experiment,
 )
 
+from shared.config import backend_config
 from shared.db import SafeDuckDbConnection
 
 router = APIRouter(prefix="/expression", tags=["v1", "expression"])

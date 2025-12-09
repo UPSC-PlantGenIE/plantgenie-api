@@ -3,13 +3,13 @@ from duckdb import DuckDBPyRelation
 from fastapi import APIRouter
 from loguru import logger
 
-from plantgenie_api.dependencies import backend_config
 from plantgenie_api.api.v1.annotation.models import (
     AnnotationsRequest,
     AnnotationsResponse,
     GeneAnnotation,
 )
 
+from shared.config import backend_config
 from shared.db import SafeDuckDbConnection
 
 router = APIRouter(prefix="/annotations", tags=["v1", "annotations"])

@@ -4,7 +4,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from plantgenie_api.dependencies import backend_config
 from plantgenie_api.models import (
     AvailableSpecies,
     AvailableSpeciesResponse,
@@ -20,7 +19,7 @@ from plantgenie_api.api.v1.annotation.routes import (
 )
 
 from shared.db import SafeDuckDbConnection
-
+from shared.config import backend_config
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

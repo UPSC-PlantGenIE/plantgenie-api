@@ -9,7 +9,7 @@ from fastapi.responses import StreamingResponse
 from loguru import logger
 
 # from plantgenie_api import SafeDuckDbConnection
-from plantgenie_api.dependencies import backend_config
+# from plantgenie_api.dependencies import backend_config
 
 # from plantgenie_api import DUCKDB_DATABASE_PATH, ENV_DATA_PATH
 from plantgenie_api.api.v1 import BACKEND_DATA_PATH, DATABASE_PATH
@@ -29,9 +29,10 @@ from plantgenie_api.api.v1.blast.tasks import (
     upload_blast_data_to_storage_bucket,
     delete_blast_data,
 )
-from plantgenie_api.dependencies import get_swift_service
 
+from shared.config import backend_config
 from shared.db import SafeDuckDbConnection
+from shared.services import get_swift_service
 
 router = APIRouter(prefix="/blast", tags=["v1", "blast"])
 

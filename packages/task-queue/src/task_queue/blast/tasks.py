@@ -14,6 +14,9 @@ from task_queue.blast.exceptions import (
     DuplicateSequenceIdentifiersError,
 )
 
+from shared.services import get_swift_service
+from shared.config import backend_config
+
 NUCLEOTIDES = "ACGTUNRYKMSWBDHV"
 AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWY"
 NUCLEOTIDES_SET = set(NUCLEOTIDES)  # IUPAC codes for nucleotides
@@ -163,3 +166,15 @@ def blast_result_format_html(input_asn_path: str) -> str:
     )
 
     return output_path
+
+
+@app.task(name="blast.upload_results_to_object_store")
+def upload_results_to_object_store(query_path: str) -> List[str]:
+    # input_query_path = Path(query_path).resolve(strict=True)
+    # output_html_path = f"{query_path.parent}/{query_path.stem}.html"
+    # output_tsv_path = f"{query_path.parent}/{query_path.stem}.tsv"
+    # output_asn_path = f"{query_path.parent}/{query_path.stem}.asn"
+
+    swift = get_swift_service(backend_config)
+    pass
+

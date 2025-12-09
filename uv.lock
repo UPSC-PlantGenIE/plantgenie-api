@@ -1602,6 +1602,8 @@ version = "0.1.0"
 source = { editable = "packages/shared" }
 dependencies = [
     { name = "duckdb" },
+    { name = "python-dotenv" },
+    { name = "python-swiftclient" },
 ]
 
 [package.dev-dependencies]
@@ -1610,7 +1612,11 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "duckdb", specifier = ">=1.2.0" }]
+requires-dist = [
+    { name = "duckdb", specifier = ">=1.2.0" },
+    { name = "python-dotenv", specifier = ">=1.0.1" },
+    { name = "python-swiftclient", specifier = ">=4.8.0" },
+]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.0.1" }]

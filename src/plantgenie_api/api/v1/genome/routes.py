@@ -3,14 +3,13 @@ from pathlib import Path
 from fastapi import APIRouter
 
 from plantgenie_api import ENV_DATA_PATH
-from plantgenie_api.dependencies import backend_config
 from plantgenie_api.api.v1.genome.models import (
     AvailableGenome,
     AvailableGenomesResponse,
 )
 
 from shared.db import SafeDuckDbConnection
-
+from shared.config import backend_config
 DATA_PATH = (
     Path(ENV_DATA_PATH)
     if ENV_DATA_PATH

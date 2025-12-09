@@ -9,6 +9,8 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "duckdb>=1.2.0",
+    "python-dotenv>=1.0.1",
+    "python-swiftclient>=4.8.0",
 ]
 
 [project.scripts]
