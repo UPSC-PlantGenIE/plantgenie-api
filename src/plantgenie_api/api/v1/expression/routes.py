@@ -4,14 +4,15 @@ from fastapi import APIRouter
 from fastapi.exceptions import HTTPException
 from loguru import logger
 
-from plantgenie_api import SafeDuckDbConnection
-from plantgenie_api.api.v1 import DATABASE_PATH
+from plantgenie_api.dependencies import backend_config
 from plantgenie_api.api.v1.expression.models import (
     ExpressionRequest,
     ExpressionResponse,
     AvailableExperimentsResponse,
     Experiment,
 )
+
+from shared.db import SafeDuckDbConnection
 
 router = APIRouter(prefix="/expression", tags=["v1", "expression"])
 
@@ -20,7 +21,11 @@ router = APIRouter(prefix="/expression", tags=["v1", "expression"])
 async def get_expression_data(
     request: ExpressionRequest,
 ) -> ExpressionResponse:
-    with SafeDuckDbConnection(DATABASE_PATH) as connection:
+    with SafeDuckDbConnection(
+        f"{backend_config.get("DATA_PATH")}/{backend_config.get("DATABASE_NAME")}",
+        allowed_directories=[backend_config.get("DATA_PATH")],
+        read_only=True,
+    ) as connection:
         experiment = connection.sql(
             "SELECT relation_name, expression_units FROM experiments WHERE id = ?",
             params=[request.experiment_id],
@@ -132,7 +137,11 @@ async def get_expression_data(
 
 @router.get(path="/available-experiments")
 async def get_available_experiments() -> AvailableExperimentsResponse:
-    with SafeDuckDbConnection(DATABASE_PATH) as connection:
+    with SafeDuckDbConnection(
+        f"{backend_config.get("DATA_PATH")}/{backend_config.get("DATABASE_NAME")}",
+        allowed_directories=[backend_config.get("DATA_PATH")],
+        read_only=True,
+    ) as connection:
         experiments: List[Tuple[int, int, int, str, str, str]] = (
             connection.sql(
                 """

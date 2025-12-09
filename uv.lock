@@ -1685,7 +1685,7 @@ name = "task-queue"
 version = "0.1.0"
 source = { editable = "packages/task-queue" }
 dependencies = [
-    { name = "celery", extra = ["pydantic"] },
+    { name = "celery", extra = ["pydantic", "redis"] },
     { name = "networkx" },
     { name = "py-fasta-validator" },
     { name = "pydantic" },
@@ -1707,7 +1707,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "celery", extras = ["pydantic"], specifier = ">=5.5.3" },
+    { name = "celery", extras = ["pydantic", "redis", "rabbitmq"], specifier = ">=5.5.3" },
     { name = "networkx", specifier = ">=3.6" },
     { name = "py-fasta-validator", specifier = ">=0.6" },
     { name = "pydantic", specifier = ">=2.10.6" },

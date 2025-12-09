@@ -21,7 +21,7 @@ RUN touch /app/packages/task-queue/README.md
 WORKDIR /app/packages/task-queue
 # installs only packages from the above package (task-queue)
 # task-queue depends on the `shared` package, so its deps too
-RUN uv sync --frozen
+RUN uv sync --locked --no-group dev
 
 FROM python:3.13-bookworm
 

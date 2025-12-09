@@ -52,8 +52,6 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    pass
-
 
 app = FastAPI(
     root_path="/api",
@@ -106,22 +104,6 @@ async def get_available_species() -> AvailableSpeciesResponse:
                 for result in query_relation.fetchall()
             ]
         )
-    # with duckdb.connect(DATABASE_PATH, read_only=True) as connection:
-    #     query_relation = connection.sql("select * from species;")
-
-    #     return AvailableSpeciesResponse(
-    #         species=[
-    #             AvailableSpecies(
-    #                 **{
-    #                     k: v
-    #                     for k, v in zip(
-    #                         AvailableSpecies.model_fields.keys(), result
-    #                     )
-    #                 }
-    #             )
-    #             for result in query_relation.fetchall()
-    #         ]
-    #     )
 
 
 @app.get("/available-genomes")
@@ -141,7 +123,6 @@ async def get_available_genomes() -> AvailableGenomesResponse:
             "publication_date",
             "doi",
         )
-        print(query_relation)
 
         return AvailableGenomesResponse(
             genomes=[

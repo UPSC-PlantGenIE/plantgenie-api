@@ -4,13 +4,13 @@ from httpx import ASGITransport, AsyncClient
 from plantgenie_api.main import app
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="module", autouse=True)
 def anyio_backend():
     return "asyncio"
 
 
 @pytest.mark.anyio
-async def test_root(anyio_backend):
+async def test_root():
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as ac:

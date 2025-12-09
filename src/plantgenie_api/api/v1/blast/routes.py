@@ -8,7 +8,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile, Form
 from fastapi.responses import StreamingResponse
 from loguru import logger
 
-from plantgenie_api import SafeDuckDbConnection
+# from plantgenie_api import SafeDuckDbConnection
 from plantgenie_api.dependencies import backend_config
 
 # from plantgenie_api import DUCKDB_DATABASE_PATH, ENV_DATA_PATH
@@ -31,6 +31,7 @@ from plantgenie_api.api.v1.blast.tasks import (
 )
 from plantgenie_api.dependencies import get_swift_service
 
+from shared.db import SafeDuckDbConnection
 
 router = APIRouter(prefix="/blast", tags=["v1", "blast"])
 
@@ -50,7 +51,11 @@ async def get_blast_package_version() -> BlastVersion:
 
 @router.get(path="/available-databases")
 async def get_available_databases() -> List[AvailableDatabase]:
-    with SafeDuckDbConnection(DATABASE_PATH) as connection:
+    with SafeDuckDbConnection(
+        f"{backend_config.get("DATA_PATH")}/{backend_config.get("DATABASE_NAME")}",
+        allowed_directories=[backend_config.get("DATA_PATH")],
+        read_only=True,
+    ) as connection:
         sql = connection.sql(
             """
                 SELECT

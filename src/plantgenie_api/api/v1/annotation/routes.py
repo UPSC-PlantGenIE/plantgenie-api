@@ -3,13 +3,14 @@ from duckdb import DuckDBPyRelation
 from fastapi import APIRouter
 from loguru import logger
 
-from plantgenie_api import SafeDuckDbConnection
-from plantgenie_api.api.v1 import DATABASE_PATH
+from plantgenie_api.dependencies import backend_config
 from plantgenie_api.api.v1.annotation.models import (
     AnnotationsRequest,
     AnnotationsResponse,
     GeneAnnotation,
 )
+
+from shared.db import SafeDuckDbConnection
 
 router = APIRouter(prefix="/annotations", tags=["v1", "annotations"])
 
@@ -43,8 +44,11 @@ async def get_annotations(
             LEFT JOIN annotations ON (annotations.gene_id = genes_from_gff.gene_id)
         ORDER BY genes_from_gff.gene_order;
     """
-
-    with SafeDuckDbConnection(DATABASE_PATH) as connection:
+    with SafeDuckDbConnection(
+        f"{backend_config.get("DATA_PATH")}/{backend_config.get("DATABASE_NAME")}",
+        allowed_directories=[backend_config.get("DATA_PATH")],
+        read_only=True,
+    ) as connection:
         logger.debug(query)
         query_relation: DuckDBPyRelation = connection.sql(
             query=query,
