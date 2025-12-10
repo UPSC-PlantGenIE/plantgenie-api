@@ -7,7 +7,8 @@ from shared.constants import OBJECT_STORE_URL
 
 FIXTURES_BUCKET = "pg-testing-fixtures"
 
-@pytest.fixture(scope="module")
+
+@pytest.fixture(scope="package")
 def module_data_directory(host_data_directory: Path):
     p = host_data_directory / "test_integrations"
     p.mkdir(exist_ok=True, parents=True)
@@ -15,14 +16,16 @@ def module_data_directory(host_data_directory: Path):
     p.rmdir()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="package")
 def docker_data_directory():
     p = Path("/tests/test_integrations")
     yield p
 
 
 @pytest.fixture(scope="package")
-def example_blast_database(module_data_directory: Path):
+def example_blast_database(
+    module_data_directory: Path, docker_data_directory: Path
+):
     response = requests.get(f"{OBJECT_STORE_URL}/{FIXTURES_BUCKET}")
 
     available_files = [
@@ -44,14 +47,18 @@ def example_blast_database(module_data_directory: Path):
             for chunk in response.iter_content(chunk_size=100):
                 out.write(chunk)
 
-    yield available_file_paths
+    yield docker_data_directory / "Potra02_CDS.fa"
+
+    # yield [docker_data_directory / x.name for x in available_file_paths]
 
     for fpath in available_file_paths:
         fpath.unlink()
 
 
 @pytest.fixture(scope="package")
-def example_fasta_file(module_data_directory: Path):
+def example_fasta_file(
+    module_data_directory: Path, docker_data_directory: Path
+):
     response = requests.get(
         f"{OBJECT_STORE_URL}/{FIXTURES_BUCKET}/test_single_sequence_blast.fasta",
         stream=True,
@@ -62,6 +69,6 @@ def example_fasta_file(module_data_directory: Path):
         for chunk in response.iter_content(chunk_size=100):
             fasta_handle.write(chunk)
 
-    yield fasta_path
+    yield docker_data_directory / fasta_path.name
 
     fasta_path.unlink()

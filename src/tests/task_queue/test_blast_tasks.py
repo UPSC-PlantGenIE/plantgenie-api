@@ -4,8 +4,6 @@ from subprocess import CalledProcessError
 import pytest
 from celery import Celery
 from testcontainers.core.container import DockerContainer
-from testcontainers.rabbitmq import RabbitMqContainer
-from testcontainers.redis import RedisContainer
 
 from task_queue.blast.tasks import (
     verify_blast_is_installed,
@@ -79,8 +77,6 @@ def good_fasta_file(
 
 
 def test_blast_installed(
-    # rabbitmq_container: RabbitMqContainer,
-    # redis_container: RedisContainer,
     celery_container: DockerContainer,
     configured_celery_test_app: Celery,
 ):
@@ -93,8 +89,6 @@ def test_blast_installed(
 
 def test_query_exists(
     good_fasta_file: Path,
-    # rabbitmq_container: RabbitMqContainer,
-    # redis_container: RedisContainer,
     celery_container: DockerContainer,
     configured_celery_test_app: Celery,
 ):
@@ -108,8 +102,6 @@ def test_query_exists(
 
 
 def test_error_if_bad_args_to_blast(
-    # rabbitmq_container: RabbitMqContainer,
-    # redis_container: RedisContainer,
     celery_container: DockerContainer,
     configured_celery_test_app: Celery,
 ):
@@ -121,8 +113,6 @@ def test_error_if_bad_args_to_blast(
 
 def test_fasta_validation_fails_if_not_startswith_caret(
     fasta_file_no_first_caret: Path,
-    # rabbitmq_container: RabbitMqContainer,
-    # redis_container: RedisContainer,
     celery_container: DockerContainer,
     configured_celery_test_app: Celery,
 ):
@@ -135,8 +125,6 @@ def test_fasta_validation_fails_if_not_startswith_caret(
 
 def test_fasta_validation_fails_with_duplicate_ids(
     fasta_file_duplicate_ids: Path,
-    # rabbitmq_container: RabbitMqContainer,
-    # redis_container: RedisContainer,
     celery_container: DockerContainer,
     configured_celery_test_app: Celery,
 ):
@@ -152,8 +140,6 @@ def test_fasta_validation_fails_with_duplicate_ids(
 
 def test_fasta_validation_passes(
     good_fasta_file: Path,
-    # rabbitmq_container: RabbitMqContainer,
-    # redis_container: RedisContainer,
     celery_container: DockerContainer,
     configured_celery_test_app: Celery,
 ):

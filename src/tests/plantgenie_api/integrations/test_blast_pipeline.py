@@ -1,57 +1,37 @@
 from pathlib import Path
 
-import requests
-import pytest
 from testcontainers.core.container import DockerContainer
-from testcontainers.core.image import DockerImage
-
-# from task_queue.blast.tasks import execute_blast
-from shared.constants import OBJECT_STORE_URL
-
-FIXTURES_BUCKET = "pg-testing-fixtures"
+from testcontainers.core.container import ExecResult
 
 
-@pytest.fixture(scope="package")
-def example_blast_database():
-    response = requests.get(f"{OBJECT_STORE_URL}/{FIXTURES_BUCKET}")
+def test_can_execute_blast(
+    celery_container: DockerContainer,
+):
 
-    available_files = [
-        x
-        for x in response.text.split("\n")
-        if x.startswith("Potra02_CDS.fa")
-    ]
+    result: ExecResult = celery_container.exec(["blastn", "-help"])
 
-    available_file_paths = [
-        Path(__file__).parent / f for f in available_files
-    ]
-
-    for f, fpath in zip(available_files, available_file_paths):
-        response = requests.get(
-            f"{OBJECT_STORE_URL}/{FIXTURES_BUCKET}/{f}", stream=True
-        )
-
-        with fpath.open("ab") as out:
-            for chunk in response.iter_content(chunk_size=100):
-                out.write(chunk)
-
-    yield available_file_paths
-
-    for fpath in available_file_paths:
-        fpath.unlink()
+    assert result.exit_code == 0
 
 
-@pytest.fixture(scope="package")
-def example_fasta_file():
-    response = requests.get(
-        f"{OBJECT_STORE_URL}/{FIXTURES_BUCKET}/test_single_sequence_blast.fasta",
-        stream=True,
+def test_execute_simple_blast(
+    example_blast_database: Path,
+    example_fasta_file: Path,
+    celery_container: DockerContainer,
+):
+    result: ExecResult = celery_container.exec(
+        [
+            "blastn",
+            "-query",
+            example_fasta_file.as_posix(),
+            "-db",
+            example_blast_database.as_posix(),
+            "-outfmt",
+            "6",
+            "-evalue",
+            "0.01",
+            "-max_target_seqs",
+            "10",
+        ],
     )
-    fasta_path = Path(__file__).parent / "test_single_sequence_blast.fasta"
 
-    with fasta_path.open("ab") as fasta_handle:
-        for chunk in response.iter_content(chunk_size=100):
-            fasta_handle.write(chunk)
-
-    yield fasta_path
-
-    fasta_path.unlink()
+    assert result.exit_code == 0

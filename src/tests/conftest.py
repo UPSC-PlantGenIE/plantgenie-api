@@ -90,7 +90,7 @@ def celery_container(
         "redis://redis-service:6379/0",
     )
     container.with_volume_mapping(
-        host=host_data_directory, container="/tests", mode="ro"
+        host=host_data_directory, container="/tests", mode="rw"
     )
 
     container.start()
