@@ -9,10 +9,10 @@ COPY uv.lock /app/
 
 # this is the main celery application code
 COPY packages/task-queue/pyproject.toml /app/packages/task-queue/pyproject.toml
-COPY packages/task-queue/src /app/packages/task-queue/src
+COPY packages/task-queue/src/task_queue /app/packages/task-queue/src/task_queue
 # and its dependency on the shared library
 COPY packages/shared/pyproject.toml /app/packages/shared/pyproject.toml
-COPY packages/shared/src /app/packages/shared/src
+COPY packages/shared/src/shared /app/packages/shared/src/shared
 
 # packages need a README.md or the install fails
 RUN touch /app/packages/shared/README.md

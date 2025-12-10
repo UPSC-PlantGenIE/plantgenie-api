@@ -74,6 +74,10 @@ module = ["swiftclient", "swiftclient.*"]
 ignore_errors = true
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["FastaValidator", "FastaValidator.*"]
+ignore_errors = true
+ignore_missing_imports = true
 
 [tool.black]
 line-length = 75

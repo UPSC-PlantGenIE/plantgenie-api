@@ -3,9 +3,9 @@ from subprocess import CalledProcessError
 
 import pytest
 from celery import Celery
-from testcontainers.core.container import DockerContainer  # type: ignore
-from testcontainers.rabbitmq import RabbitMqContainer  # type: ignore
-from testcontainers.redis import RedisContainer  # type: ignore
+from testcontainers.core.container import DockerContainer
+from testcontainers.rabbitmq import RabbitMqContainer
+from testcontainers.redis import RedisContainer
 
 from task_queue.blast.tasks import (
     verify_blast_is_installed,
@@ -19,16 +19,36 @@ from task_queue.blast.exceptions import (
 
 
 @pytest.fixture(scope="module")
-def fasta_file_no_first_caret():
-    fasta_path = Path(__file__).parent / "test_no_caret.fa"
+def module_data_directory(host_data_directory: Path):
+    p = host_data_directory / "test_blast_tasks"
+    p.mkdir(exist_ok=True, parents=True)
+    yield p
+    p.rmdir()
+
+
+@pytest.fixture(scope="module")
+def docker_data_directory():
+    p = Path("/tests/test_blast_tasks")
+    yield p
+
+
+@pytest.fixture(scope="module")
+def fasta_file_no_first_caret(
+    module_data_directory: Path, docker_data_directory: Path
+):
+    fasta_path = module_data_directory / "test_no_caret.fa"
     fasta_path.write_text("test_sequence\nACGTACAGTCGATCGATCAGCTA")
-    yield fasta_path
+
+    yield docker_data_directory / fasta_path.name
+
     fasta_path.unlink()
 
 
 @pytest.fixture(scope="module")
-def fasta_file_duplicate_ids():
-    fasta_path = Path(__file__).parent / "test_duplicates.fa"
+def fasta_file_duplicate_ids(
+    module_data_directory: Path, docker_data_directory: Path
+):
+    fasta_path = module_data_directory / "test_duplicates.fa"
     fasta_path.write_text(
         (
             ">test_sequence\n"
@@ -37,13 +57,15 @@ def fasta_file_duplicate_ids():
             "ACGTACAGTCGATCGATCAGCTAATCGCTAGCATCG"
         )
     )
-    yield fasta_path
+    yield docker_data_directory / fasta_path.name
     fasta_path.unlink()
 
 
 @pytest.fixture(scope="module")
-def good_fasta_file():
-    fasta_path = Path(__file__).parent / "test_good.fa"
+def good_fasta_file(
+    module_data_directory: Path, docker_data_directory: Path
+):
+    fasta_path = module_data_directory / "test_good.fa"
     fasta_path.write_text(
         (
             ">test_sequence_0\n"
@@ -52,13 +74,13 @@ def good_fasta_file():
             "ACGTACAGTCGATCGATCAGCTAATCGCTAGCATCG"
         )
     )
-    yield fasta_path
+    yield docker_data_directory / fasta_path.name
     fasta_path.unlink()
 
 
 def test_blast_installed(
-    rabbitmq_container: RabbitMqContainer,
-    redis_container: RedisContainer,
+    # rabbitmq_container: RabbitMqContainer,
+    # redis_container: RedisContainer,
     celery_container: DockerContainer,
     configured_celery_test_app: Celery,
 ):
@@ -71,23 +93,23 @@ def test_blast_installed(
 
 def test_query_exists(
     good_fasta_file: Path,
-    rabbitmq_container: RabbitMqContainer,
-    redis_container: RedisContainer,
+    # rabbitmq_container: RabbitMqContainer,
+    # redis_container: RedisContainer,
     celery_container: DockerContainer,
     configured_celery_test_app: Celery,
 ):
     result = verify_query_file_exists.delay(
-        query_path=f"/tests/{good_fasta_file.name}"
+        query_path=good_fasta_file.as_posix()
     )
     value = result.get(timeout=10)
 
-    assert value == f"/tests/{good_fasta_file.name}"
+    assert value == good_fasta_file.as_posix()
     result.forget()
 
 
 def test_error_if_bad_args_to_blast(
-    rabbitmq_container: RabbitMqContainer,
-    redis_container: RedisContainer,
+    # rabbitmq_container: RabbitMqContainer,
+    # redis_container: RedisContainer,
     celery_container: DockerContainer,
     configured_celery_test_app: Celery,
 ):
@@ -99,29 +121,30 @@ def test_error_if_bad_args_to_blast(
 
 def test_fasta_validation_fails_if_not_startswith_caret(
     fasta_file_no_first_caret: Path,
-    rabbitmq_container: RabbitMqContainer,
-    redis_container: RedisContainer,
+    # rabbitmq_container: RabbitMqContainer,
+    # redis_container: RedisContainer,
     celery_container: DockerContainer,
     configured_celery_test_app: Celery,
 ):
     with pytest.raises(NoFirstCaretError):
         verify_query_is_fasta.delay(
             blast_program="blastn",
-            query_path=f"/tests/{fasta_file_no_first_caret.name}",
+            query_path=fasta_file_no_first_caret.as_posix(),
         ).get(timeout=10)
 
 
 def test_fasta_validation_fails_with_duplicate_ids(
     fasta_file_duplicate_ids: Path,
-    rabbitmq_container: RabbitMqContainer,
-    redis_container: RedisContainer,
+    # rabbitmq_container: RabbitMqContainer,
+    # redis_container: RedisContainer,
     celery_container: DockerContainer,
     configured_celery_test_app: Celery,
 ):
     with pytest.raises(DuplicateSequenceIdentifiersError):
         result = verify_query_is_fasta.delay(
             blast_program="blastn",
-            query_path=f"/tests/{fasta_file_duplicate_ids.name}",
+            # query_path=f"/tests/{fasta_file_duplicate_ids.name}",
+            query_path=fasta_file_duplicate_ids.as_posix(),
         )
         result.get(timeout=10)
         result.forget()
@@ -135,8 +158,9 @@ def test_fasta_validation_passes(
     configured_celery_test_app: Celery,
 ):
     result = verify_query_is_fasta.delay(
-        blast_program="blastn", query_path=f"/tests/{good_fasta_file.name}"
+        blast_program="blastn",
+        query_path=good_fasta_file.as_posix(),
     )
     value = result.get(timeout=10)
 
-    assert value == f"/tests/{good_fasta_file.name}"
+    assert value == good_fasta_file.as_posix()

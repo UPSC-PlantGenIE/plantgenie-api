@@ -18,6 +18,9 @@ class SwiftNotFoundException(Exception):
 class SwiftClient:
     def __init__(
         self,
+        openstack_auth_type: Optional[str] = os.environ.get(
+            "OS_AUTH_TYPE"
+        ),
         openstack_auth_url: Optional[str] = os.environ.get("OS_AUTH_URL"),
         application_credential_id: Optional[str] = os.environ.get(
             "OS_APPLICATION_CREDENTIAL_ID"
@@ -27,7 +30,8 @@ class SwiftClient:
         ),
     ):
         if not (
-            openstack_auth_url
+            openstack_auth_type
+            and openstack_auth_url
             and application_credential_id
             and application_credential_secret
         ):
@@ -56,7 +60,10 @@ class SwiftClient:
 
 class AsyncSwiftClient:
     def __init__(
-        self, auth_token: str, session: aiohttp.ClientSession, swift_public_url: str
+        self,
+        auth_token: str,
+        session: aiohttp.ClientSession,
+        swift_public_url: str,
     ) -> None:
         self.auth_token = auth_token
         self.session = session
@@ -138,21 +145,29 @@ class AsyncSwiftClient:
         timeout = aiohttp.ClientTimeout(total=60)
         connector = aiohttp.TCPConnector(limit=100)
         session = aiohttp.ClientSession(
-            timeout=timeout, connector=connector, headers={"X-Auth-Token": token}
+            timeout=timeout,
+            connector=connector,
+            headers={"X-Auth-Token": token},
         )
         return cls(
-            auth_token=token, session=session, swift_public_url=swift_service_url
+            auth_token=token,
+            session=session,
+            swift_public_url=swift_service_url,
         )
 
     async def close(self):
         await self.session.close()
 
     async def container_exists(self, container_name: str) -> bool:
-        async with self.session.head(f"{self.public_url}/{container_name}") as response:
+        async with self.session.head(
+            f"{self.public_url}/{container_name}"
+        ) as response:
             if response.status == 204:
                 return True
             elif response.status == 404:
                 return False
             else:
                 text = await response.text()
-                raise Exception(f"Unexpected response: {response.status} - {text}")
+                raise Exception(
+                    f"Unexpected response: {response.status} - {text}"
+                )

@@ -2,7 +2,9 @@ import subprocess
 from pathlib import Path
 from typing import List, Literal
 
-from FastaValidator import fasta_validator  # type: ignore
+from celery import chain, group
+from FastaValidator import fasta_validator
+from swiftclient.service import SwiftUploadObject
 
 from task_queue.celery import app
 from task_queue.blast.models import (
@@ -14,8 +16,9 @@ from task_queue.blast.exceptions import (
     DuplicateSequenceIdentifiersError,
 )
 
-from shared.services import get_swift_service
 from shared.config import backend_config
+from shared.constants import BLAST_SERVICE_BUCKET_NAME
+from shared.services import get_swift_service
 
 NUCLEOTIDES = "ACGTUNRYKMSWBDHV"
 AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWY"
@@ -170,11 +173,36 @@ def blast_result_format_html(input_asn_path: str) -> str:
 
 @app.task(name="blast.upload_results_to_object_store")
 def upload_results_to_object_store(query_path: str) -> List[str]:
-    # input_query_path = Path(query_path).resolve(strict=True)
-    # output_html_path = f"{query_path.parent}/{query_path.stem}.html"
-    # output_tsv_path = f"{query_path.parent}/{query_path.stem}.tsv"
-    # output_asn_path = f"{query_path.parent}/{query_path.stem}.asn"
+    input_query_path = Path(query_path).resolve(strict=True)
+    blast_files_glob = input_query_path.glob(f"{input_query_path.stem}.*")
 
-    swift = get_swift_service(backend_config)
-    pass
+    swift_service = get_swift_service(backend_config)
 
+    upload_objects = [
+        SwiftUploadObject(source=f.as_posix(), object_name=f.name)
+        for f in blast_files_glob
+    ]
+
+    results = swift_service.upload(
+        BLAST_SERVICE_BUCKET_NAME, objects=upload_objects
+    )
+
+    # tries to create bucket everytime instead of just checking existence
+    next(results)
+
+    for res in results:
+        pass
+
+    return [obj.source for obj in upload_objects]
+
+
+@app.task(name="blast.purge_results")
+def purge_blast_data(query_path: str) -> List[str]:
+    # raises FileNotFoundError
+    input_query_path = Path(query_path).resolve(strict=True)
+    blast_files_glob = input_query_path.glob(f"{input_query_path.stem}.*")
+
+    for f in blast_files_glob:
+        f.unlink()
+
+    return [f.as_posix() for f in blast_files_glob]

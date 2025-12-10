@@ -1,14 +1,11 @@
-import os
-from pathlib import Path
-
 DATABASE_FILENAME = "plantgenie-backend.db"
-ENV_DATA_PATH = os.environ.get("DATA_PATH")
-DATA_PATH = Path(ENV_DATA_PATH) if ENV_DATA_PATH else None
-
-OS_AUTH_TYPE = os.environ.get("OS_AUTH_TYPE")
-OS_AUTH_URL = os.environ.get("OS_AUTH_URL")
-OS_IDENTITY_API_VERSION = os.environ.get("OS_IDENTITY_API_VERSION")
-OS_REGION_NAME = os.environ.get("OS_REGION_NAME")
-OS_INTERFACE = os.environ.get("OS_INTERFACE")
-OS_APPLICATION_CREDENTIAL_ID = os.environ.get("OS_APPLICATION_CREDENTIAL_ID")
-OS_APPLICATION_CREDENTIAL_SECRET = os.environ.get("OS_APPLICATION_CREDENTIAL_SECRET")
+OBJECT_STORE_URL = (
+    "https://north-1.cloud.snic.se:8080"
+    "/swift/v1/AUTH_d9d5ac98cb2b4a3091b60040077e8efc"
+)
+BLAST_SERVICE_BUCKET_NAME = "pg-service-blast"
+BLAST_DATABASE_CONTAINER_URL = (
+    "https://north-1.cloud.snic.se:8080"
+    "/swift/v1/AUTH_d9d5ac98cb2b4a3091b60040077e8efc"
+    f"/{BLAST_SERVICE_BUCKET_NAME}"
+)

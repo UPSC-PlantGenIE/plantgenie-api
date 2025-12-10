@@ -1,15 +1,11 @@
 import pytest
 
-from plantgenie_api.dependencies import backend_config, get_swift_service
+from shared.config import backend_config
+from shared.services import get_swift_service
+from shared.constants import BLAST_DATABASE_CONTAINER_URL
 
 from task_queue.celery import app
 from task_queue.blast.tasks import execute_blast
-
-BLAST_DATABASE_CONTAINER_URL = (
-    "https://north-1.cloud.snic.se:8080"
-    "/swift/v1/AUTH_d9d5ac98cb2b4a3091b60040077e8efc"
-    "/plantgenie-blast"
-)
 
 
 @pytest.fixture(autouse=True)
