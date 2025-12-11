@@ -2,7 +2,6 @@ import subprocess
 from pathlib import Path
 from typing import List, Literal
 
-from celery import chain, group
 from FastaValidator import fasta_validator
 from swiftclient.service import SwiftUploadObject
 
@@ -22,7 +21,7 @@ from shared.services import get_swift_service
 
 NUCLEOTIDES = "ACGTUNRYKMSWBDHV"
 AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWY"
-NUCLEOTIDES_SET = set(NUCLEOTIDES)  # IUPAC codes for nucleotides
+NUCLEOTIDES_SET = set(NUCLEOTIDES)
 AMINO_ACIDS_SET = set(AMINO_ACIDS)
 
 

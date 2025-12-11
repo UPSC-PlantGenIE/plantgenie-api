@@ -77,7 +77,11 @@ def celery_image():
 
 @pytest.fixture(scope="package")
 def celery_container(
-    network: Network, celery_image: DockerImage, host_data_directory: Path
+    network: Network,
+    celery_image: DockerImage,
+    host_data_directory: Path,
+    rabbitmq_container: RabbitMqContainer,
+    redis_container: RedisContainer
 ):
     container = DockerContainer(str(celery_image))
     container.with_network(network)

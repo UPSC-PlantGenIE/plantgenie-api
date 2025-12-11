@@ -1,15 +1,12 @@
 from pathlib import Path
 
-from testcontainers.core.container import DockerContainer
-from testcontainers.core.container import ExecResult
+from testcontainers.core.container import DockerContainer, ExecResult
 
 
 def test_can_execute_blast(
     celery_container: DockerContainer,
 ):
-
     result: ExecResult = celery_container.exec(["blastn", "-help"])
-
     assert result.exit_code == 0
 
 
