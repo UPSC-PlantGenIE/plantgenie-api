@@ -59,9 +59,9 @@ def rabbitmq_container(network: Network):
 @pytest.fixture(scope="package")
 def celery_image():
     image = DockerImage(
-        path=Path(__file__).parent.parent.parent.parent,
+        path=Path(__file__).parent.parent.parent,
         dockerfile_path=(
-            Path(__file__).parent.parent.parent.parent
+            Path(__file__).parent.parent.parent
             / "packages"
             / "task-queue"
             / "Dockerfile"
@@ -69,6 +69,7 @@ def celery_image():
         tag="celery-worker:testing",
         clean_up=False,
     )
+    image.build()
 
     yield image
 
