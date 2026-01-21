@@ -5,7 +5,6 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: pg-local-fastapi
-    # command: ["fastapi", "dev", "/app/src/plantgenie_api/main.py", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     entrypoint:
       - "fastapi"
       - "dev"
@@ -15,6 +14,8 @@ services:
       - "--port"
       - "8000"
       - "--reload"
+    env_file:
+      - .env.shared
     ports:
       - "8000:8000"
     environment:
@@ -42,7 +43,6 @@ services:
       dockerfile: packages/task-queue/Dockerfile
     image: pg-task-queue:local-latest
     container_name: pg-local-celery
-    # command: ["celery", "-A", "task_queue.celery.app", "worker", "--loglevel=debug"]
     entrypoint:
       - "celery"
       - "-A"

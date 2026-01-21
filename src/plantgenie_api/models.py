@@ -33,8 +33,8 @@ class AnnotationsResponse(PlantGenieModel):
 
 
 class GeneInfo(PlantGenieModel):
-    chromosome_id: str = Field(alias="chromosomeId")
-    gene_id: str = Field(alias="geneId")
+    chromosome_id: str
+    gene_id: str
 
     @staticmethod
     def split_from_request(gene_id_request: str) -> GeneInfo:
@@ -114,15 +114,6 @@ class GenomeSequenceRequest(PlantGenieModel):
 class GenomeSequenceResponse(PlantGenieModel):
     name: str
     sequence: str
-
-
-# class AvailableGenome(PlantGenieModel):
-#     species: str
-#     version: str
-
-
-# class AvailableGenomesResponse(PlantGenieModel):
-#     genomes: List[AvailableGenome]
 
 
 class AvailableChromosomesRequest(PlantGenieModel):

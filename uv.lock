@@ -65,6 +65,15 @@ wheels = [
 ]
 
 [[package]]
+name = "aiosqlite"
+version = "0.22.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4e/8a/64761f4005f17809769d23e518d915db74e6310474e733e3593cfc854ef1/aiosqlite-0.22.1.tar.gz", hash = "sha256:043e0bd78d32888c0a9ca90fc788b38796843360c855a7262a532813133a0650", size = 14821, upload-time = "2025-12-23T19:25:43.997Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/00/b7/e3bf5133d697a08128598c8d0abc5e16377b51465a33756de24fa7dee953/aiosqlite-0.22.1-py3-none-any.whl", hash = "sha256:21c002eb13823fad740196c5a2e9d8e62f6243bd9e7e4a1f87fb5e44ecb4fceb", size = 17405, upload-time = "2025-12-23T19:25:42.139Z" },
+]
+
+[[package]]
 name = "amqp"
 version = "5.3.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1112,6 +1121,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
+    { name = "aiosqlite" },
     { name = "celery", extra = ["pydantic", "redis"] },
     { name = "duckdb" },
     { name = "fastapi", extra = ["standard"] },
@@ -1145,6 +1155,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.12.13" },
+    { name = "aiosqlite", specifier = ">=0.22.1" },
     { name = "celery", extras = ["pydantic", "redis"], specifier = ">=5.5.0" },
     { name = "duckdb", specifier = ">=1.2.0" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115.11" },
@@ -1602,6 +1613,7 @@ version = "0.1.0"
 source = { editable = "packages/shared" }
 dependencies = [
     { name = "duckdb" },
+    { name = "pendulum" },
     { name = "python-dotenv" },
     { name = "python-swiftclient" },
 ]
@@ -1614,6 +1626,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "duckdb", specifier = ">=1.2.0" },
+    { name = "pendulum", specifier = ">=3.1.0" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "python-swiftclient", specifier = ">=4.8.0" },
 ]
@@ -1695,6 +1708,8 @@ dependencies = [
     { name = "networkx" },
     { name = "py-fasta-validator" },
     { name = "pydantic" },
+    { name = "python-keystoneclient" },
+    { name = "python-swiftclient" },
     { name = "shared" },
 ]
 
@@ -1713,10 +1728,12 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "celery", extras = ["pydantic", "redis", "rabbitmq"], specifier = ">=5.5.3" },
+    { name = "celery", extras = ["pydantic", "redis"], specifier = ">=5.5.3" },
     { name = "networkx", specifier = ">=3.6" },
     { name = "py-fasta-validator", specifier = ">=0.6" },
     { name = "pydantic", specifier = ">=2.10.6" },
+    { name = "python-keystoneclient", specifier = ">=5.6.0" },
+    { name = "python-swiftclient", specifier = ">=4.8.0" },
     { name = "shared", editable = "packages/shared" },
 ]
 

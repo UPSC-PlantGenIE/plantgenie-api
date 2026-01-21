@@ -1,27 +1,19 @@
 from pathlib import Path
 from typing import Literal
 
-from shared.db import SafeDuckDbConnection
 from task_queue.celery import app
+from task_queue.tasks import PathValidationTask
+
+from shared.services.database import SafeDuckDbConnection
 
 
-@app.task(name="enrichment.verify_target")
-def verify_target_genes_file(target_path: Path) -> Path:
-    if not target_path.exists():
-        raise FileNotFoundError(
-            f"{target_path.resolve().as_posix()} was not found"
-        )
-
+@app.task(name="enrichment.verify_target", base=PathValidationTask)
+def verify_target_genes_file(target_path: str) -> str:
     return target_path
 
 
-@app.task(name="enrichment.verify_background")
-def verify_background_genes_file(background_path: Path) -> Path:
-    if not background_path.exists():
-        raise FileNotFoundError(
-            f"{background_path.resolve().as_posix()} was not found"
-        )
-
+@app.task(name="enrichment.verify_background", base=PathValidationTask)
+def verify_background_genes_file(background_path: str) -> str:
     return background_path
 
 

@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import pytest
@@ -8,7 +9,10 @@ from testcontainers.core.network import Network
 from testcontainers.rabbitmq import RabbitMqContainer
 from testcontainers.redis import RedisContainer
 
+from testcontainers.core.wait_strategies import LogMessageWaitStrategy
+
 from task_queue.celery import app
+from shared.config import backend_config
 
 
 @pytest.fixture(scope="package")
@@ -82,7 +86,7 @@ def celery_container(
     celery_image: DockerImage,
     host_data_directory: Path,
     rabbitmq_container: RabbitMqContainer,
-    redis_container: RedisContainer
+    redis_container: RedisContainer,
 ):
     container = DockerContainer(str(celery_image))
     container.with_network(network)
@@ -94,11 +98,36 @@ def celery_container(
         "CELERY_RESULT_BACKEND",
         "redis://redis-service:6379/0",
     )
+
+    for k,v in backend_config.items():
+        if isinstance(v, str):
+            container.with_env(k, v)
+
     container.with_volume_mapping(
         host=host_data_directory, container="/tests", mode="rw"
     )
 
-    container.start()
+    waiting_strategy = LogMessageWaitStrategy(
+        re.compile(r"celery@.* ready\.")
+    ).with_startup_timeout(15).with_poll_interval(1)
+
+    container.waiting_for(waiting_strategy)
+
+    try:
+        container.start()
+    except RuntimeError:
+        stdout, stderr = container.get_logs()
+        print("\n--- CELERY STARTUP FAILURE LOGS ---")
+        print(stderr.decode("utf-8") or stdout.decode("utf-8"))
+        print("-----------------------------------\n")
+        raise
+    except TimeoutError:
+        stdout, stderr = container.get_logs()
+        print("\n--- CELERY STARTUP TIMEOUT LOGS ---")
+        print(stderr.decode("utf-8") or stdout.decode("utf-8"))
+        print("-----------------------------------\n")
+        raise
+
     yield container
     container.stop()
 

@@ -1,25 +1,24 @@
 import os
 from contextlib import asynccontextmanager
+from typing import Optional
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from shared.config import backend_config
+from shared.services.database import SafeDuckDbConnection
 
+from plantgenie_api.api.v1.annotation.routes import (
+    router as annotation_router,
+)
+from plantgenie_api.api.v1.blast.routes import router as blast_router
+from plantgenie_api.api.v1.expression.routes import (
+    router as expression_router,
+)
+from plantgenie_api.api.v1.genome.routes import router as genome_router
 from plantgenie_api.models import (
     AvailableSpecies,
     AvailableSpeciesResponse,
 )
 
-from plantgenie_api.api.v1.blast.routes import router as blast_router
-from plantgenie_api.api.v1.genome.routes import router as genome_router
-from plantgenie_api.api.v1.expression.routes import (
-    router as expression_router,
-)
-from plantgenie_api.api.v1.annotation.routes import (
-    router as annotation_router,
-)
-
-from shared.db import SafeDuckDbConnection
-from shared.config import backend_config
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -58,16 +57,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(  # type: ignore[bad-argument-type]
-    CORSMiddleware,
-    allow_origins=[
-        "*"
-    ],  # Allow all origins (change this to specific origins in production)
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-# app.include_router(router=genome_router, prefix="/api")
+# app.add_middleware(  # type: ignore[bad-argument-type]
+#     CORSMiddleware,
+#     allow_origins=[
+#         "*"
+#     ],  # Allow all origins (change this to specific origins in production)
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
 app.include_router(router=blast_router, prefix="/v1")
 app.include_router(router=genome_router, prefix="/v1")
 app.include_router(router=expression_router, prefix="/v1")
@@ -81,9 +79,11 @@ async def root():
 
 @app.get("/available-species")
 async def get_available_species() -> AvailableSpeciesResponse:
+    DATA_DIRECTORY: Optional[str] = backend_config.get("DATA_PATH")
+
     with SafeDuckDbConnection(
         f"{backend_config.get("DATA_PATH")}/{backend_config.get("DATABASE_NAME")}",
-        allowed_directories=[backend_config.get("DATA_PATH")],
+        allowed_directories=[DATA_DIRECTORY] if DATA_DIRECTORY else None,
         read_only=True,
     ) as connection:
         query_relation = connection.sql("select * from species;")

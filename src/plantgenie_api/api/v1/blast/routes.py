@@ -1,38 +1,28 @@
+import requests
 import uuid
 from pathlib import Path
-from typing import Annotated, Any, Dict, List, Literal, Optional, Tuple
+from typing import Annotated, List, Literal, Optional, Tuple
 
-from celery import chain
 from celery.result import AsyncResult
-from fastapi import APIRouter, File, HTTPException, UploadFile, Form
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from loguru import logger
+from shared.config import backend_config
+from shared.constants import BLAST_SERVICE_BUCKET_NAME
+from shared.services.database import SafeDuckDbConnection
+from shared.services.openstack import SwiftClient
+from task_queue.blast.models import ExecuteBlastPipelineArgs
+from task_queue.blast.tasks import execute_blast_pipeline
 
-# from plantgenie_api import SafeDuckDbConnection
-# from plantgenie_api.dependencies import backend_config
-
-# from plantgenie_api import DUCKDB_DATABASE_PATH, ENV_DATA_PATH
-from plantgenie_api.api.v1 import BACKEND_DATA_PATH, DATABASE_PATH
+from plantgenie_api.api.v1 import BACKEND_DATA_PATH
 from plantgenie_api.api.v1.blast.models import (
     AvailableDatabase,
-    BlastVersion,
-    BlastSubmitResponse,
     BlastPollResponse,
-)
-from plantgenie_api.api.v1.blast.tasks import (
-    # handle_query_file_not_found,
-    verify_query_file_exists,
-    validate_fasta_query,
-    execute_blast_search,
-    format_blast_result_tsv,
-    format_blast_result_html,
-    upload_blast_data_to_storage_bucket,
-    delete_blast_data,
+    BlastSubmitResponse,
+    BlastVersion,
 )
 
-from shared.config import backend_config
-from shared.db import SafeDuckDbConnection
-from shared.services import get_swift_service
+MAX_FILE_SIZE = 2**20  # 1 Megabyte
 
 router = APIRouter(prefix="/blast", tags=["v1", "blast"])
 
@@ -52,9 +42,11 @@ async def get_blast_package_version() -> BlastVersion:
 
 @router.get(path="/available-databases")
 async def get_available_databases() -> List[AvailableDatabase]:
+    DATA_DIRECTORY: Optional[str] = backend_config.get("DATA_PATH")
+
     with SafeDuckDbConnection(
         f"{backend_config.get("DATA_PATH")}/{backend_config.get("DATABASE_NAME")}",
-        allowed_directories=[backend_config.get("DATA_PATH")],
+        allowed_directories=[DATA_DIRECTORY] if DATA_DIRECTORY else None,
         read_only=True,
     ) as connection:
         sql = connection.sql(
@@ -73,7 +65,7 @@ async def get_available_databases() -> List[AvailableDatabase]:
                     genomes g ON bd.genome_id = g.id;
             """
         )
-        results = sql.fetchall()
+        results: List[Tuple[str, str, str, str, str]] = sql.fetchall()
 
     return [
         AvailableDatabase(
@@ -93,9 +85,17 @@ async def submit_blast(
     genome_id: Annotated[int, Form()],
     program: Literal["blastn", "blastp", "blastx"],
     database_type: Literal["cds", "mrna", "prot", "genome"],
-    file: UploadFile = File(...),
+    file: UploadFile = File(
+        description="Fasta-formatted sequences to use as blast query."
+    ),
 ) -> BlastSubmitResponse:
-    with SafeDuckDbConnection(DATABASE_PATH) as connection:
+    DATA_DIRECTORY: Optional[str] = backend_config.get("DATA_PATH")
+
+    with SafeDuckDbConnection(
+        f"{backend_config.get("DATA_PATH")}/{backend_config.get("DATABASE_NAME")}",
+        allowed_directories=[DATA_DIRECTORY] if DATA_DIRECTORY else None,
+        read_only=True,
+    ) as connection:
         query = f"""
                 SELECT
                     database_path
@@ -120,12 +120,13 @@ async def submit_blast(
                     f" database_type={database_type} was not found"
                 ),
             )
-        (blast_path,) = blast_path_result
+
+        blast_path: str = blast_path_result[0]
 
         logger.debug(sql.fetchone())
         logger.debug(BACKEND_DATA_PATH / blast_path)
 
-    if file.size and (file.size > 2**20):
+    if file.size and (file.size > MAX_FILE_SIZE):
         raise HTTPException(
             status_code=413,
             detail=f"Size of your uploaded file - {file.size} > 1MB",
@@ -141,30 +142,21 @@ async def submit_blast(
     with open(host_file_path, "wb") as host_file:
         host_file.write(file_content)
 
-    chain(
-        verify_query_file_exists.s(
-            {
-                "query_path": host_file_path.as_posix(),
-                "program": program,
-                "database_path": (
-                    BACKEND_DATA_PATH / blast_path
-                ).as_posix(),
-                "evalue": 0.0001,
-                "max_hits": 10,
-            }
-        ),
-        validate_fasta_query.s(),
-        execute_blast_search.s(),
-        format_blast_result_tsv.s(),
-        format_blast_result_html.s(),
-        upload_blast_data_to_storage_bucket.s(),
-    ).apply_async(task_id=job_id)
+    blast_pipeline_args = ExecuteBlastPipelineArgs(
+        job_id=job_id,
+        blast_program=program,
+        query_path=host_file_path.as_posix(),
+        database_path=(BACKEND_DATA_PATH / blast_path).as_posix(),
+    )
+    execute_blast_pipeline.apply_async(
+        args=(blast_pipeline_args.model_dump(),), task_id=job_id
+    )
 
-    delete_blast_data.s({"job_id": job_id}).apply_async(countdown=15 * 60)
+    # delete_blast_data.s({"job_id": job_id}).apply_async(countdown=15 * 60)
 
     return BlastSubmitResponse(
         job_id=job_id,
-        file_size=file.size,
+        file_size=file.size or 0,
         program=program,
         database_type=database_type,
     )
@@ -199,13 +191,8 @@ def retrieve_blast_result(
 
     if job_result.state == "FAILURE":
         raise HTTPException(
-            status_code=404,
+            status_code=422,
             detail="The job failed, no results to retrieve",
-        )
-
-    if job_result.state != "SUCCESS":
-        raise HTTPException(
-            status_code=404, detail="The job is not complete"
         )
 
     nfs_storage_location = Path(
@@ -227,25 +214,17 @@ def retrieve_blast_result(
             ),
         )
 
-    swift_output_path = (
-        BACKEND_DATA_PATH
-        / "blast_object_store_downloads"
-        / f"{job_id}.{output_format}"
+    swift_client = SwiftClient()
+
+    result: requests.Response | None = swift_client.download_object(
+        container=BLAST_SERVICE_BUCKET_NAME,
+        object=f"{job_id}.{output_format}",
+        output_path=nfs_storage_location
     )
 
-    swift_service = get_swift_service(backend_config)
-
-    result: Dict[str, Any] = next(
-        swift_service.download(
-            container="plantgenie-share",
-            objects=[f"blast_results/{job_id}.{output_format}"],
-            options={"out_file": swift_output_path.as_posix()},
-        )
-    )
-
-    if result.get("success", False):
+    if result and result.status_code == 200:
         return StreamingResponse(
-            file_iterator_and_cleanup(swift_output_path),
+            file_iterator_and_cleanup(nfs_storage_location),
             media_type=(
                 "text/tab-separated-values"
                 if output_format == "tsv"
@@ -257,3 +236,62 @@ def retrieve_blast_result(
         status_code=404,
         detail=f"{output_format} result for job_id = {job_id} was not found",
     )
+
+# @router.get(path="/retrieve/{job_id}/{output_format}")
+# def retrieve_blast_result(
+#     job_id: str, output_format: Literal["tsv", "html"]
+# ) -> StreamingResponse:
+#     job_result: AsyncResult = AsyncResult(job_id)
+
+#     if job_result.state == "FAILURE":
+#         raise HTTPException(
+#             status_code=404,
+#             detail="The job failed, no results to retrieve",
+#         )
+
+#     if job_result.state != "SUCCESS":
+#         raise HTTPException(
+#             status_code=404, detail="The job is not complete"
+#         )
+
+#     nfs_storage_location = Path(
+#         BACKEND_DATA_PATH / "blast_results" / f"{job_id}.{output_format}"
+#     )
+
+#     if nfs_storage_location.exists():
+
+#         def iter_file():
+#             with open(nfs_storage_location, mode="rb") as file_like:
+#                 yield from file_like
+
+#         return StreamingResponse(
+#             iter_file(),
+#             media_type=(
+#                 "text/tab-separated-values"
+#                 if format == "tsv"
+#                 else "text/html"
+#             ),
+#         )
+
+#     swift_client = SwiftClient()
+
+#     result: requests.Response | None = swift_client.download_object(
+#         container=BLAST_SERVICE_BUCKET_NAME,
+#         object=f"{job_id}.{output_format}",
+#         output_path=nfs_storage_location
+#     )
+
+#     if result and result.status_code == 200:
+#         return StreamingResponse(
+#             file_iterator_and_cleanup(nfs_storage_location),
+#             media_type=(
+#                 "text/tab-separated-values"
+#                 if output_format == "tsv"
+#                 else "text/html"
+#             ),
+#         )
+
+#     raise HTTPException(
+#         status_code=404,
+#         detail=f"{output_format} result for job_id = {job_id} was not found",
+#     )

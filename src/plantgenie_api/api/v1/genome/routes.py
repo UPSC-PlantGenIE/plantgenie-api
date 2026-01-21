@@ -8,7 +8,7 @@ from plantgenie_api.api.v1.genome.models import (
     AvailableGenomesResponse,
 )
 
-from shared.db import SafeDuckDbConnection
+from shared.services.database import SafeDuckDbConnection
 from shared.config import backend_config
 DATA_PATH = (
     Path(ENV_DATA_PATH)

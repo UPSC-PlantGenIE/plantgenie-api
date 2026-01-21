@@ -1,7 +1,11 @@
+import os
+
 import pika
 import redis
 
 from task_queue.tasks import add
+# from task_queue.blast.tasks import verify_backend_config
+from shared.config import backend_config
 
 
 def test_redis_container_running(redis_container):
@@ -43,3 +47,16 @@ def test_celery_add_task(
     result = async_result.get(timeout=10)
 
     assert result == 10
+
+
+# def test_backend_config(
+#     rabbitmq_container,
+#     redis_container,
+#     celery_container,
+#     configured_celery_test_app,
+# ):
+#     print(backend_config)
+#     async_result = verify_backend_config.delay()
+#     result = async_result.get(timeout=10)
+#     print(result)
+#     # assert backend_config == result

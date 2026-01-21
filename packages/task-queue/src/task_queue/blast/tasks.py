@@ -1,53 +1,69 @@
+import mimetypes
 import subprocess
 from pathlib import Path
-from typing import List, Literal
+from typing import List
 
-from FastaValidator import fasta_validator
-from swiftclient.service import SwiftUploadObject
-
-from task_queue.celery import app
-from task_queue.blast.models import (
-    ExecuteBlastArgs,
-)
-
-from task_queue.blast.exceptions import (
-    NoFirstCaretError,
-    DuplicateSequenceIdentifiersError,
-)
-
-from shared.config import backend_config
+from celery import Task, chain
+from FastaValidator import fasta_validator  # type: ignore
 from shared.constants import BLAST_SERVICE_BUCKET_NAME
-from shared.services import get_swift_service
+from shared.services.openstack import (
+    SwiftClient,
+    SwiftUploadableObject,
+)
+
+from task_queue.blast import BlastProgram
+from task_queue.blast.exceptions import (
+    DuplicateSequenceIdentifiersError,
+    NoFirstCaretError,
+)
+from task_queue.blast.models import (
+    ExecuteBlastPipelineArgs,
+)
+from task_queue.celery import app
+from task_queue.tasks import (
+    PathValidationTask,
+    SubprocessPathValidationTask,
+    SubprocessTask,
+)
 
 NUCLEOTIDES = "ACGTUNRYKMSWBDHV"
 AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWY"
 NUCLEOTIDES_SET = set(NUCLEOTIDES)
 AMINO_ACIDS_SET = set(AMINO_ACIDS)
+mimetypes.add_type("application/octet-stream", ".asn")
 
 
-@app.task(name="blast.verify_installation")
+@app.task(
+    name="blast.verify_installation",
+    typing=True,
+    bind=True,
+    base=SubprocessTask,
+)
 def verify_blast_is_installed(
+    self: Task,
+    blast_program: BlastProgram = "blastn",
     blast_args: List[str] = ["-version"],
-) -> bool:
+) -> None:
     subprocess.run(
-        ["blastn"] + blast_args, check=True, capture_output=True, text=True
+        args=[blast_program, *blast_args],
+        check=False,
+        capture_output=True,
+        text=True,
     )
-    return True
 
 
-@app.task(name="blast.verify_query_exists")
+@app.task(
+    name="blast.verify_query_exists",
+    base=PathValidationTask,
+    files_to_validate={"query_path": "Query file"},
+)
 def verify_query_file_exists(query_path: str) -> str:
-    query_as_path = Path(query_path)
-    if not Path(query_as_path).exists():
-        raise FileNotFoundError(
-            f"{query_as_path.resolve().as_posix()} was not found"
-        )
     return query_path
 
 
 @app.task(name="blast.verify_query_is_fasta")
 def verify_query_is_fasta(
-    query_path: str, blast_program: Literal["blastn", "blastx", "blastp"]
+    query_path: str, blast_program: BlastProgram
 ) -> str:
     return_code = fasta_validator(query_path)
 
@@ -89,31 +105,42 @@ def verify_query_is_fasta(
                     not in expected_sequence_characters_set
                 ):
                     raise ValueError(
-                        f"{character} found on line {i} not in {",".join(expected_sequence_characters.split())}"
+                        f"{character} found on line {i} not in {','.join(expected_sequence_characters.split())}"
                     )
     return query_path
 
 
-@app.task(name="blast.execute_search", pydantic=True)
-def execute_blast(args: ExecuteBlastArgs) -> str:
-    # raises FileNotFoundError if file doesn't exist
-    query_path = Path(args.query_path).resolve(strict=True)
-    # raises FileNotFoundError if file doesn't exist
-    database_path = Path(args.database_path).resolve(strict=True)
-    result_path = f"{query_path.parent}/{query_path.stem}.asn"
+@app.task(
+    name="blast.execute_search",
+    base=SubprocessPathValidationTask,
+    files_to_validate={
+        "query_path": "Query file",
+        # "database_path": "Blast database",
+    },
+)
+def execute_blast(
+    blast_program: BlastProgram,
+    query_path: str,
+    database_path: str,
+    evalue: float = 0.0001,
+    max_hits: int = 10,
+) -> str:
+    resolved_query_path = Path(query_path).resolve()
+    resolved_database_path = Path(database_path).resolve()
+    result_path = resolved_query_path.with_suffix(".asn").as_posix()
 
     blast_cmd = [
-        args.program_name,
+        blast_program,
         "-query",
-        query_path.as_posix(),
+        resolved_query_path.as_posix(),
         "-db",
-        database_path.as_posix(),
+        resolved_database_path.as_posix(),
         "-outfmt",
         "11",  # 11 = BLAST archive (ASN.1),
         "-evalue",
-        str(args.evalue),
+        str(evalue),
         "-max_target_seqs",
-        str(args.max_hits),
+        str(max_hits),
         "-out",
         result_path,
     ]
@@ -123,85 +150,106 @@ def execute_blast(args: ExecuteBlastArgs) -> str:
     return result_path
 
 
-@app.task(name="blast.format_result_tsv")
+# @requires_executable("blast_formatter")
+@app.task(
+    name="blast.format_result_tsv",
+    base=SubprocessPathValidationTask,
+    files_to_validate={"input_asn_path": "Input ASN file"},
+)
 def blast_result_format_tsv(input_asn_path: str) -> str:
-    # raises FileNotFoundError if file doesn't exist
-    input_path = Path(input_asn_path).resolve(strict=True)
-    output_path = f"{input_path.parent}/{input_path.stem}.tsv"
+    resolved_input_path = Path(input_asn_path).resolve()
+    output_path = resolved_input_path.with_suffix(".tsv").as_posix()
 
     blast_format_tsv = [
         "blast_formatter",
         "-archive",
-        input_asn_path,
+        resolved_input_path.as_posix(),
         "-outfmt",
         "6",
         "-out",
         output_path,
     ]
 
-    # raises CalledProcessError
+    # raises CalledProcessError if the command fails
+    # raises FileNotFoundError if the program is not installed
     subprocess.run(
         blast_format_tsv, capture_output=True, text=True, check=True
     )
 
-    return output_path
+    return input_asn_path
 
 
-@app.task(name="blast.format_result_html")
+@app.task(
+    name="blast.format_result_html",
+    base=SubprocessPathValidationTask,
+    files_to_validate={"input_asn_path": "Input ASN file"},
+)
 def blast_result_format_html(input_asn_path: str) -> str:
-    # raises FileNotFoundError if file doesn't exist
-    input_path = Path(input_asn_path).resolve(strict=True)
-    output_path = f"{input_path.parent}/{input_path.stem}.html"
+    resolved_input_path = Path(input_asn_path).resolve()
+    output_path = resolved_input_path.with_suffix(".html").as_posix()
 
     blast_format_html = [
         "blast_formatter",
         "-archive",
-        input_asn_path,
+        resolved_input_path.as_posix(),
         "-out",
         output_path,
         "-html",
     ]
 
-    # raises CalledProcessError
     subprocess.run(
         blast_format_html, capture_output=True, text=True, check=True
     )
 
-    return output_path
+    return input_asn_path
 
 
-@app.task(name="blast.upload_results_to_object_store")
+@app.task(
+    name="blast.upload_results_to_object_store",
+    base=PathValidationTask,
+    files_to_validate={"query_path": "Query file"},
+)
 def upload_results_to_object_store(query_path: str) -> List[str]:
-    input_query_path = Path(query_path).resolve(strict=True)
-    blast_files_glob = input_query_path.glob(f"{input_query_path.stem}.*")
+    resolved_query_path = Path(query_path).resolve()
+    blast_files_glob = resolved_query_path.parent.glob(
+        f"{resolved_query_path.stem}.*"
+    )
 
-    swift_service = get_swift_service(backend_config)
+    swift_client = SwiftClient()
 
-    upload_objects = [
-        SwiftUploadObject(source=f.as_posix(), object_name=f.name)
+    uploadables = [
+        SwiftUploadableObject(
+            local_path=f.as_posix(),
+            object_name=f.name,
+            content_type=mimetypes.guess_type(f.name)[0],
+        )
         for f in blast_files_glob
     ]
 
-    results = swift_service.upload(
-        BLAST_SERVICE_BUCKET_NAME, objects=upload_objects
+    swift_client.upload_objects(
+        container=BLAST_SERVICE_BUCKET_NAME, objects=uploadables
     )
 
-    # tries to create bucket everytime instead of just checking existence
-    next(results)
-
-    for res in results:
-        pass
-
-    return [obj.source for obj in upload_objects]
+    return [obj.local_path for obj in uploadables]
 
 
-@app.task(name="blast.purge_results")
-def purge_blast_data(query_path: str) -> List[str]:
-    # raises FileNotFoundError
-    input_query_path = Path(query_path).resolve(strict=True)
-    blast_files_glob = input_query_path.glob(f"{input_query_path.stem}.*")
+@app.task(name="blast.execute_blast_pipeline", pydantic=True)
+def execute_blast_pipeline(args: ExecuteBlastPipelineArgs):
+    workflow = chain(
+        verify_blast_is_installed.si(
+            blast_program=args.blast_program, blast_args=["-version"]
+        ),
+        verify_query_file_exists.si(query_path=args.query_path),
+        execute_blast.si(
+            blast_program=args.blast_program,
+            query_path=args.query_path,
+            database_path=args.database_path,
+            evalue=args.evalue,
+            max_hits=args.max_hits,
+        ),
+        blast_result_format_html.s(),
+        blast_result_format_tsv.s(),
+        upload_results_to_object_store.si(query_path=args.query_path),
+    )
 
-    for f in blast_files_glob:
-        f.unlink()
-
-    return [f.as_posix() for f in blast_files_glob]
+    return workflow()

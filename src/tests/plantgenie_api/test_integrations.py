@@ -1,7 +1,7 @@
 import pytest
 
 from shared.config import backend_config
-from shared.services import get_swift_service
+from shared.services.openstack import get_swift_service
 from shared.constants import BLAST_DATABASE_CONTAINER_URL
 
 from task_queue.celery import app

@@ -12,7 +12,7 @@ from plantgenie_api.api.v1.expression.models import (
 )
 
 from shared.config import backend_config
-from shared.db import SafeDuckDbConnection
+from shared.services.database import SafeDuckDbConnection
 
 router = APIRouter(prefix="/expression", tags=["v1", "expression"])
 

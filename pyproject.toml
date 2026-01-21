@@ -20,6 +20,7 @@ dependencies = [
     "python-swiftclient>=4.8.0",
     "redis>=5.2.1",
     "python-dotenv>=1.0.1",
+    "aiosqlite>=0.22.1",
     "shared",
     "task-queue",
 ]
@@ -50,34 +51,6 @@ dev = [
     "python-dotenv[cli]>=1.0.1",
     "ruff>=0.9.5",
 ]
-
-[tool.mypy]
-plugins = ['pydantic.mypy']
-
-[[tool.mypy.overrides]]
-module = ["task_queue", "task_queue.*"]
-ignore_errors = true
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["shared", "shared.*"]
-ignore_errors = true
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["testcontainers", "testcontainers.*"]
-ignore_errors = true
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["swiftclient", "swiftclient.*"]
-ignore_errors = true
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["FastaValidator", "FastaValidator.*"]
-ignore_errors = true
-ignore_missing_imports = true
 
 [tool.black]
 line-length = 75
