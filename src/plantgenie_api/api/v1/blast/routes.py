@@ -1,19 +1,24 @@
-import requests
 import uuid
 from pathlib import Path
 from typing import Annotated, List, Literal, Optional, Tuple
 
+import requests
 from celery.result import AsyncResult
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import (
+    APIRouter,
+    File,
+    Form,
+    HTTPException,
+    UploadFile,
+)
 from fastapi.responses import StreamingResponse
 from loguru import logger
-from shared.config import backend_config
 from shared.constants import BLAST_SERVICE_BUCKET_NAME
-from shared.services.database import SafeDuckDbConnection
 from shared.services.openstack import SwiftClient
 from task_queue.blast.models import ExecuteBlastPipelineArgs
 from task_queue.blast.tasks import execute_blast_pipeline
 
+from plantgenie_api.dependencies import BlastPathDep
 from plantgenie_api.api.v1 import BACKEND_DATA_PATH
 from plantgenie_api.api.v1.blast.models import (
     AvailableDatabase,
@@ -21,6 +26,7 @@ from plantgenie_api.api.v1.blast.models import (
     BlastSubmitResponse,
     BlastVersion,
 )
+from plantgenie_api.dependencies import DatabaseDep
 
 MAX_FILE_SIZE = 2**20  # 1 Megabyte
 
@@ -31,7 +37,6 @@ router = APIRouter(prefix="/blast", tags=["v1", "blast"])
 async def get_program_version(
     program: Literal["blastn", "blastp", "blastx"],
 ) -> BlastVersion:
-    logger.debug(f"received {program}")
     return BlastVersion(program=program, version="2.16.0+")
 
 
@@ -41,31 +46,28 @@ async def get_blast_package_version() -> BlastVersion:
 
 
 @router.get(path="/available-databases")
-async def get_available_databases() -> List[AvailableDatabase]:
-    DATA_DIRECTORY: Optional[str] = backend_config.get("DATA_PATH")
-
-    with SafeDuckDbConnection(
-        f"{backend_config.get("DATA_PATH")}/{backend_config.get("DATABASE_NAME")}",
-        allowed_directories=[DATA_DIRECTORY] if DATA_DIRECTORY else None,
-        read_only=True,
-    ) as connection:
-        sql = connection.sql(
-            """
-                SELECT
-                    s.species_name,
-                    g.version as genome_version,
-                    bd.sequence_type,
-                    bd.program,
-                    bd.database_path,
-                  FROM
-                    blast_databases bd
-                  JOIN
-                    species s ON bd.species_id = s.id
-                  JOIN
-                    genomes g ON bd.genome_id = g.id;
-            """
-        )
-        results: List[Tuple[str, str, str, str, str]] = sql.fetchall()
+async def get_available_databases(
+    db_connection: DatabaseDep,
+) -> List[AvailableDatabase]:
+    query_relation = db_connection.sql(
+        """
+            SELECT
+                s.species_name,
+                g.version as genome_version,
+                bd.sequence_type,
+                bd.program,
+                bd.database_path,
+              FROM
+                blast_databases bd
+              JOIN
+                species s ON bd.species_id = s.id
+              JOIN
+                genomes g ON bd.genome_id = g.id;
+        """
+    )
+    results: List[Tuple[str, str, str, str, str]] = (
+        query_relation.fetchall()
+    )
 
     return [
         AvailableDatabase(
@@ -81,6 +83,8 @@ async def get_available_databases() -> List[AvailableDatabase]:
 
 @router.post(path="/{program}/submit")
 async def submit_blast(
+    db_connection: DatabaseDep,
+    blast_output_path: BlastPathDep,
     species_id: Annotated[int, Form()],
     genome_id: Annotated[int, Form()],
     program: Literal["blastn", "blastp", "blastx"],
@@ -89,42 +93,35 @@ async def submit_blast(
         description="Fasta-formatted sequences to use as blast query."
     ),
 ) -> BlastSubmitResponse:
-    DATA_DIRECTORY: Optional[str] = backend_config.get("DATA_PATH")
+    query = f"""
+            SELECT
+                database_path
+            FROM
+                blast_databases
+            WHERE
+                species_id = {species_id} AND
+                genome_id = {genome_id} AND
+                \"program\" = '{program}' AND
+                sequence_type = '{database_type}'
+        """
+    logger.debug(query)
+    sql = db_connection.sql(query=query)
+    blast_path_result: Optional[Tuple[str]] = sql.fetchone()
 
-    with SafeDuckDbConnection(
-        f"{backend_config.get("DATA_PATH")}/{backend_config.get("DATABASE_NAME")}",
-        allowed_directories=[DATA_DIRECTORY] if DATA_DIRECTORY else None,
-        read_only=True,
-    ) as connection:
-        query = f"""
-                SELECT
-                    database_path
-                FROM
-                    blast_databases
-                WHERE
-                    species_id = {species_id} AND
-                    genome_id = {genome_id} AND
-                    \"program\" = '{program}' AND
-                    sequence_type = '{database_type}'
-            """
-        logger.debug(query)
-        sql = connection.sql(query=query)
-        blast_path_result: Optional[Tuple[str]] = sql.fetchone()
+    if blast_path_result is None:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Blast configuration species_id={species_id},"
+                f" genome_id={genome_id}, program={program},"
+                f" database_type={database_type} was not found"
+            ),
+        )
 
-        if blast_path_result is None:
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    f"Blast configuration species_id={species_id},"
-                    f" genome_id={genome_id}, program={program},"
-                    f" database_type={database_type} was not found"
-                ),
-            )
+    blast_path: str = blast_path_result[0]
 
-        blast_path: str = blast_path_result[0]
-
-        logger.debug(sql.fetchone())
-        logger.debug(BACKEND_DATA_PATH / blast_path)
+    logger.debug(sql.fetchone())
+    logger.debug(BACKEND_DATA_PATH / blast_path)
 
     if file.size and (file.size > MAX_FILE_SIZE):
         raise HTTPException(
@@ -135,9 +132,7 @@ async def submit_blast(
     file_content = await file.read()
 
     job_id = str(uuid.uuid4())
-    host_file_path = (
-        BACKEND_DATA_PATH / "blast_queries" / f"{job_id}.fa"
-    ).resolve()
+    host_file_path = (blast_output_path / f"{job_id}.fa").resolve()
 
     with open(host_file_path, "wb") as host_file:
         host_file.write(file_content)
@@ -185,7 +180,9 @@ def file_iterator_and_cleanup(path: Path):
 
 @router.get(path="/retrieve/{job_id}/{output_format}")
 def retrieve_blast_result(
-    job_id: str, output_format: Literal["tsv", "html"]
+    blast_output_path: BlastPathDep,
+    job_id: str,
+    output_format: Literal["tsv", "html"],
 ) -> StreamingResponse:
     job_result: AsyncResult = AsyncResult(job_id)
 
@@ -195,11 +192,10 @@ def retrieve_blast_result(
             detail="The job failed, no results to retrieve",
         )
 
-    nfs_storage_location = Path(
-        BACKEND_DATA_PATH / "blast_results" / f"{job_id}.{output_format}"
-    )
+    nfs_storage_location = blast_output_path / f"{job_id}.{output_format}"
 
     if nfs_storage_location.exists():
+        logger.debug(f"HERE IS OUR LOCATION - {nfs_storage_location}")
 
         def iter_file():
             with open(nfs_storage_location, mode="rb") as file_like:
@@ -219,7 +215,7 @@ def retrieve_blast_result(
     result: requests.Response | None = swift_client.download_object(
         container=BLAST_SERVICE_BUCKET_NAME,
         object=f"{job_id}.{output_format}",
-        output_path=nfs_storage_location
+        output_path=nfs_storage_location,
     )
 
     if result and result.status_code == 200:
@@ -236,62 +232,3 @@ def retrieve_blast_result(
         status_code=404,
         detail=f"{output_format} result for job_id = {job_id} was not found",
     )
-
-# @router.get(path="/retrieve/{job_id}/{output_format}")
-# def retrieve_blast_result(
-#     job_id: str, output_format: Literal["tsv", "html"]
-# ) -> StreamingResponse:
-#     job_result: AsyncResult = AsyncResult(job_id)
-
-#     if job_result.state == "FAILURE":
-#         raise HTTPException(
-#             status_code=404,
-#             detail="The job failed, no results to retrieve",
-#         )
-
-#     if job_result.state != "SUCCESS":
-#         raise HTTPException(
-#             status_code=404, detail="The job is not complete"
-#         )
-
-#     nfs_storage_location = Path(
-#         BACKEND_DATA_PATH / "blast_results" / f"{job_id}.{output_format}"
-#     )
-
-#     if nfs_storage_location.exists():
-
-#         def iter_file():
-#             with open(nfs_storage_location, mode="rb") as file_like:
-#                 yield from file_like
-
-#         return StreamingResponse(
-#             iter_file(),
-#             media_type=(
-#                 "text/tab-separated-values"
-#                 if format == "tsv"
-#                 else "text/html"
-#             ),
-#         )
-
-#     swift_client = SwiftClient()
-
-#     result: requests.Response | None = swift_client.download_object(
-#         container=BLAST_SERVICE_BUCKET_NAME,
-#         object=f"{job_id}.{output_format}",
-#         output_path=nfs_storage_location
-#     )
-
-#     if result and result.status_code == 200:
-#         return StreamingResponse(
-#             file_iterator_and_cleanup(nfs_storage_location),
-#             media_type=(
-#                 "text/tab-separated-values"
-#                 if output_format == "tsv"
-#                 else "text/html"
-#             ),
-#         )
-
-#     raise HTTPException(
-#         status_code=404,
-#         detail=f"{output_format} result for job_id = {job_id} was not found",
-#     )

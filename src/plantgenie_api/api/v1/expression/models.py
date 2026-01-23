@@ -9,15 +9,15 @@ from plantgenie_api.models import PlantGenieModel
 
 class ExpressionRequest(PlantGenieModel):
     experiment_id: int
-    gene_ids: List[str] = Field(min_length=1, alias="geneIds")
+    gene_ids: List[str] = Field(min_length=1)
 
 
 class ExpressionResponse(PlantGenieModel):
-    gene_ids: List[str] = Field(alias="geneIds")
+    gene_ids: List[str]
     samples: List[str]
     values: List[float]
     units: Optional[Literal["tpm", "vst"]] = Field(default=None)
-    missing_gene_ids: List[str] = Field(default=[], alias="missingGeneIds")
+    missing_gene_ids: List[str] = Field(default=[])
 
 
 class Experiment(PlantGenieModel):
