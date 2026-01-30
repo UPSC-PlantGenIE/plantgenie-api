@@ -9,3 +9,4 @@ BLAST_DATABASE_CONTAINER_URL = (
     "/swift/v1/AUTH_d9d5ac98cb2b4a3091b60040077e8efc"
     f"/{BLAST_SERVICE_BUCKET_NAME}"
 )
+GO_ENRICH_BUCKET_NAME = "pg-service-go-enrich"

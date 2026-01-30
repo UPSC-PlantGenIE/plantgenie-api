@@ -23,14 +23,20 @@ dependencies = [
     "aiosqlite>=0.22.1",
     "shared",
     "task-queue",
+    "go-enrich"
 ]
 
 [tool.uv.workspace]
-members = ["packages/task-queue", "packages/shared"]
+members = [
+    "packages/task-queue",
+    "packages/shared",
+    "packages/go-enrich",
+]
 
 [tool.uv.sources]
 task-queue = { workspace = true }
 shared = { workspace = true }
+go-enrich = { workspace = true }
 
 [project.scripts]
 plantgenie-api = "plantgenie_api.main:start"
@@ -46,7 +52,6 @@ dev = [
     "celery-types>=0.23.0",
     "ipython>=9.3.0",
     "mypy>=1.15.0",
-    "pyrefly>=0.18.0",
     "pytest>=9.0.1",
     "python-dotenv[cli]>=1.0.1",
     "ruff>=0.9.5",

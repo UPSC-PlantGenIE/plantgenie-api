@@ -150,7 +150,6 @@ def execute_blast(
     return result_path
 
 
-# @requires_executable("blast_formatter")
 @app.task(
     name="blast.format_result_tsv",
     base=SubprocessPathValidationTask,
@@ -170,8 +169,6 @@ def blast_result_format_tsv(input_asn_path: str) -> str:
         output_path,
     ]
 
-    # raises CalledProcessError if the command fails
-    # raises FileNotFoundError if the program is not installed
     subprocess.run(
         blast_format_tsv, capture_output=True, text=True, check=True
     )

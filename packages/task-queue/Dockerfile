@@ -13,9 +13,13 @@ COPY packages/task-queue/src/task_queue /app/packages/task-queue/src/task_queue
 # and its dependency on the shared library
 COPY packages/shared/pyproject.toml /app/packages/shared/pyproject.toml
 COPY packages/shared/src/shared /app/packages/shared/src/shared
+# and its dependency on the go-enrich library
+COPY packages/go-enrich/pyproject.toml /app/packages/go-enrich/pyproject.toml
+COPY packages/go-enrich/src/go_enrich /app/packages/go-enrich/src/go_enrich
 
 # packages need a README.md or the install fails
 RUN touch /app/packages/shared/README.md
+RUN touch /app/packages/go-enrich/README.md
 RUN touch /app/packages/task-queue/README.md
 
 WORKDIR /app/packages/task-queue
@@ -43,6 +47,10 @@ COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/packages/task-queue/src/task_queue /app/src/task_queue
 # We also need the source of the shared dependency package (shared)
 COPY --from=builder /app/packages/shared/src /app/packages/shared/src
+# We also need the source of the go-enrich dependency package
+COPY --from=builder /app/packages/go-enrich/src /app/packages/go-enrich/src
+
+
 
 # task-queue is copied into the src directory, so needs to be added to path
 ENV PYTHONPATH="/app/src"
