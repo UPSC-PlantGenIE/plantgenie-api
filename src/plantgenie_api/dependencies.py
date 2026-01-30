@@ -47,15 +47,15 @@ async def lifespan(app: FastAPI):
         strict=True
     ).as_posix()
 
-    connection = duckdb.connect(APP_ENVIRONMENT["DATABASE_PATH"])
+    # connection = duckdb.connect(APP_ENVIRONMENT["DATABASE_PATH"])
 
-    connection.execute(
-        f"SET allowed_directories = ['{APP_ENVIRONMENT["DATA_PATH"]}'];"
-    )
+    with duckdb.connect(APP_ENVIRONMENT["DATABASE_PATH"]) as connection:
+        connection.execute(
+            f"SET allowed_directories = ['{APP_ENVIRONMENT["DATA_PATH"]}'];"
+        )
 
-    connection.execute("SET enable_external_access = false;")
-
-    connection.execute("SET lock_configuration = true")
+        connection.execute("SET enable_external_access = false;")
+        connection.execute("SET lock_configuration = true")
 
     app.state.APP_ENVIRONMENT = APP_ENVIRONMENT
 
@@ -82,7 +82,7 @@ def get_db_connection(
     """
 
     with duckdb.connect(
-        request.app.state.APP_ENVIRONMENT["DATABASE_PATH"]
+        request.app.state.APP_ENVIRONMENT["DATABASE_PATH"], read_only=True
     ) as connection:
         yield connection
 
