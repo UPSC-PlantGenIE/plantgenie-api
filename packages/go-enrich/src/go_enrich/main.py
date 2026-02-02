@@ -1,121 +1,28 @@
 from __future__ import annotations
 
-from enum import Enum
 import sys
 from math import nan
 from pathlib import Path
-from typing import Annotated, Dict, List, Set, TextIO, cast, Literal
+from typing import (
+    Annotated,
+    Dict,
+    Set,
+    TextIO,
+    cast,
+)
 
 import networkx
 import typer
-from scipy.stats import fisher_exact
 
+from go_enrich.methods import EnrichmentMethod, enrichment_methods
 from go_enrich.utils import (
     background_genes_file,
     gene_to_go_term_mapping_file,
     go_edges_file,
     go_terms_file,
     target_genes_file,
+    benjamini_hochberg_fdr
 )
-
-
-class CorrectionMethod(str, Enum):
-    classic = "classic"
-    parent_child = "parent-child"
-
-
-def classic_enrichment_test(
-    node_id: str,
-    go_graph: networkx.DiGraph,
-    significant_genes: Set[str],
-    all_genes: Set[str],
-) -> float:
-    node_genes: Set[str] = go_graph.nodes[node_id]["genes"]
-    non_significant_genes = all_genes - significant_genes
-
-    contingency_table = [
-        [
-            len(significant_genes & node_genes),
-            len(non_significant_genes & node_genes),
-        ],
-        [
-            len(significant_genes - node_genes),
-            len(non_significant_genes - node_genes),
-        ],
-    ]
-
-    _, pvalue = fisher_exact(contingency_table, alternative="greater")
-    return pvalue
-
-
-def parent_child_enrichment_test(
-    node_id: str,
-    go_graph: networkx.DiGraph,
-    significant_genes: Set[str],
-    all_genes: Set[str],
-) -> float:
-    parents = list(go_graph.successors(node_id))
-    if not parents:
-        return 1.0
-
-    # Union of parent gene sets
-    parent_genes: Set[str] = set()
-    for p in parents:
-        parent_genes |= go_graph.nodes[p]["genes"]
-
-    parent_genes &= all_genes
-    if not parent_genes:
-        return 1.0
-
-    sig_in_parent = significant_genes & parent_genes
-    if not sig_in_parent:
-        return 1.0
-
-    child_genes = go_graph.nodes[node_id]["genes"] & parent_genes
-
-    contingency_table = [
-        [
-            len(sig_in_parent & child_genes),
-            len(sig_in_parent - child_genes),
-        ],
-        [
-            len(parent_genes - sig_in_parent & child_genes),
-            len(parent_genes - sig_in_parent - child_genes),
-        ],
-    ]
-
-    _, pvalue = fisher_exact(contingency_table, alternative="greater")
-    return pvalue
-
-
-def benjamini_hochberg_fdr(
-    node_p_values: Dict[str, float], fdr: float = 0.01
-) -> List[str]:
-    ranks: Dict[str, float] = {
-        key: rank
-        for (rank, key) in enumerate(
-            sorted(node_p_values, key=lambda x: node_p_values[x]), start=1
-        )
-    }
-
-    imq = {
-        key: (ranks[key] / len(node_p_values)) * fdr
-        for key in node_p_values
-    }
-
-    smaller_pvalues = dict(
-        filter(lambda item: item[1] < imq[item[0]], node_p_values.items())
-    )
-
-    # max_key, max_value = max(smaller_pvalues.items(), key=lambda x: x[1])
-    max_key = max(smaller_pvalues.keys(), key=lambda x: node_p_values[x])
-
-    max_rank = ranks[max_key]
-
-    return sorted(
-        (x for x in node_p_values if ranks[x] <= max_rank),
-        key=lambda x: node_p_values[x],
-    )
 
 
 def propagate_genes_towards_roots(graph: networkx.DiGraph) -> None:
@@ -161,9 +68,11 @@ def main(
         ),
     ],
     method: Annotated[
-        CorrectionMethod,
-        typer.Option(help="Method to be used for testing GO enrichment"),
-    ] = CorrectionMethod.classic,
+        EnrichmentMethod,
+        typer.Option(
+            help="Method to be used for testing GO enrichment, default GO term independence"
+        ),
+    ] = EnrichmentMethod.independent,
     base_fdr: Annotated[
         float,
         typer.Option(
@@ -191,7 +100,7 @@ def main(
     significant_genes: Set[str] = {g for g in target_genes_file(target)}
     all_genes: Set[str] = {g for g in background_genes_file(background)}
 
-    non_significant_genes = all_genes - significant_genes
+    # non_significant_genes = all_genes - significant_genes
 
     # --- build GO graph ---
     go_graph: networkx.DiGraph[str] = networkx.DiGraph()
@@ -229,25 +138,13 @@ def main(
     for node in nodes_to_remove:
         go_graph.remove_node(node)
 
-    # --- Fisher exact test ---
+    enrichment_test = enrichment_methods[method]
     node_pvalues: Dict[str, float] = {node: nan for node in go_graph.nodes}
 
     for node_id in go_graph.nodes:
-        node_genes: Set[str] = go_graph.nodes[node_id]["genes"]
-
-        contingency_table = [
-            [
-                len(significant_genes & node_genes),
-                len(non_significant_genes & node_genes),
-            ],
-            [
-                len(significant_genes - node_genes),
-                len(non_significant_genes - node_genes),
-            ],
-        ]
-
-        _, pvalue = fisher_exact(contingency_table, alternative="greater")
-        node_pvalues[node_id] = pvalue
+        node_pvalues[node_id] = enrichment_test(
+            node_id, go_graph, significant_genes, all_genes
+        )
 
     significant_go_terms = benjamini_hochberg_fdr(
         node_pvalues, fdr=base_fdr

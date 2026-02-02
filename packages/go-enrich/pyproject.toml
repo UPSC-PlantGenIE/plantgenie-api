@@ -22,5 +22,6 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "scipy-stubs>=1.17.0.2",
     "types-networkx>=3.6.0.20251127",
 ]
