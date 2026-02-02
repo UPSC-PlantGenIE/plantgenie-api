@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from enum import Enum
 import sys
 from math import nan
 from pathlib import Path
-from typing import Annotated, Dict, List, Set, TextIO, cast
+from typing import Annotated, Dict, List, Set, TextIO, cast, Literal
 
 import networkx
 import typer
@@ -18,10 +19,79 @@ from go_enrich.utils import (
 )
 
 
+class CorrectionMethod(str, Enum):
+    classic = "classic"
+    parent_child = "parent-child"
+
+
+def classic_enrichment_test(
+    node_id: str,
+    go_graph: networkx.DiGraph,
+    significant_genes: Set[str],
+    all_genes: Set[str],
+) -> float:
+    node_genes: Set[str] = go_graph.nodes[node_id]["genes"]
+    non_significant_genes = all_genes - significant_genes
+
+    contingency_table = [
+        [
+            len(significant_genes & node_genes),
+            len(non_significant_genes & node_genes),
+        ],
+        [
+            len(significant_genes - node_genes),
+            len(non_significant_genes - node_genes),
+        ],
+    ]
+
+    _, pvalue = fisher_exact(contingency_table, alternative="greater")
+    return pvalue
+
+
+def parent_child_enrichment_test(
+    node_id: str,
+    go_graph: networkx.DiGraph,
+    significant_genes: Set[str],
+    all_genes: Set[str],
+) -> float:
+    parents = list(go_graph.successors(node_id))
+    if not parents:
+        return 1.0
+
+    # Union of parent gene sets
+    parent_genes: Set[str] = set()
+    for p in parents:
+        parent_genes |= go_graph.nodes[p]["genes"]
+
+    parent_genes &= all_genes
+    if not parent_genes:
+        return 1.0
+
+    sig_in_parent = significant_genes & parent_genes
+    if not sig_in_parent:
+        return 1.0
+
+    child_genes = go_graph.nodes[node_id]["genes"] & parent_genes
+
+    contingency_table = [
+        [
+            len(sig_in_parent & child_genes),
+            len(sig_in_parent - child_genes),
+        ],
+        [
+            len(parent_genes - sig_in_parent & child_genes),
+            len(parent_genes - sig_in_parent - child_genes),
+        ],
+    ]
+
+    _, pvalue = fisher_exact(contingency_table, alternative="greater")
+    return pvalue
+
+
 def benjamini_hochberg_fdr(
     node_p_values: Dict[str, float], fdr: float = 0.01
 ) -> List[str]:
-    ranks = {
+    ranks: Dict[str, float] = {
         key: rank
         for (rank, key) in enumerate(
             sorted(node_p_values, key=lambda x: node_p_values[x]), start=1
@@ -42,7 +112,6 @@ def benjamini_hochberg_fdr(
 
     max_rank = ranks[max_key]
 
-    # return [x for x in node_p_values if ranks[x] <= max_rank]
     return sorted(
         (x for x in node_p_values if ranks[x] <= max_rank),
         key=lambda x: node_p_values[x],
@@ -53,11 +122,6 @@ def propagate_genes_towards_roots(graph: networkx.DiGraph) -> None:
     for node in networkx.topological_sort(graph):  # type: ignore
         for parent in graph.successors(node):
             graph.nodes[parent]["genes"] |= graph.nodes[node]["genes"]
-
-
-def read_gene_set(path: Path) -> Set[str]:
-    with path.open() as f:
-        return {line.strip() for line in f if line.strip()}
 
 
 def main(
@@ -96,6 +160,10 @@ def main(
             help="Path to the file containing a single-line mapping of gene IDs to GO terms",
         ),
     ],
+    method: Annotated[
+        CorrectionMethod,
+        typer.Option(help="Method to be used for testing GO enrichment"),
+    ] = CorrectionMethod.classic,
     base_fdr: Annotated[
         float,
         typer.Option(
@@ -119,21 +187,9 @@ def main(
         open(output, "w") if isinstance(output, Path) else sys.stdout
     )
 
-    # with output_handler:
-    #     print(
-    #         f"target path = {target.as_posix()} exists? {target.exists()}",
-    #         file=output_handler,
-    #     )
-    #     print(
-    #         f"background path = {background.as_posix()} exists? {background.exists()}",
-    #         file=output_handler,
-    #     )
-
     # --- load gene sets ---
     significant_genes: Set[str] = {g for g in target_genes_file(target)}
     all_genes: Set[str] = {g for g in background_genes_file(background)}
-    # significant_genes = read_gene_set(target)
-    # all_genes = read_gene_set(background)
 
     non_significant_genes = all_genes - significant_genes
 
