@@ -1,17 +1,23 @@
-from loguru import logger
-from task_queue.enrichment.tasks import run_go_enrichment_pipeline
-from go_enrich.methods import EnrichmentMethod
-from task_queue.enrichment.models import GoEnrichPipelineArgs
 import uuid
 from typing import Annotated
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 
+import requests
+from celery.result import AsyncResult
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
+from go_enrich.methods import EnrichmentMethod
+from loguru import logger
+from shared.constants import GO_ENRICH_BUCKET_NAME
+from shared.services.openstack import SwiftClient
+from task_queue.enrichment.models import GoEnrichPipelineArgs
+from task_queue.enrichment.tasks import run_go_enrichment_pipeline
 
+from plantgenie_api.api.v1.enrichment.models import EnrichmentPollResponse
 from plantgenie_api.dependencies import DatabaseDep, GoEnrichmentPathDep
 
-router = APIRouter(prefix="/go-enrichment", tags=["v1", "go-enrichment"])
-
 MAX_FILE_SIZE = 2**20
+
+router = APIRouter(prefix="/go-enrichment", tags=["v1", "go-enrichment"])
 
 
 @router.post(path="/submit")
@@ -85,3 +91,63 @@ async def submit_go_enrichment_job(
     )
 
     return {"job_id": go_enrich_job_id}
+
+
+@router.get(path="/poll/{job_id}")
+def poll_blast_job(job_id: str):
+    job_result: AsyncResult = AsyncResult(job_id)
+
+    return EnrichmentPollResponse(
+        job_id=job_id,
+        status=job_result.state,
+        completed_at=(
+            job_result.date_done.isoformat()
+            if job_result.date_done is not None
+            else None
+        ),
+    )
+
+
+@router.get("/retrieve/{job_id}")
+def retrieve_go_enrichment_result(
+    go_enrichment_output_path: GoEnrichmentPathDep, job_id: str
+) -> FileResponse:
+    job_result: AsyncResult = AsyncResult(job_id)
+
+    if job_result.state == "FAILURE":
+        raise HTTPException(
+            status_code=422,
+            detail="The job failed, no results to retrieve",
+        )
+
+    nfs_storage_location = (
+        go_enrichment_output_path / f"{job_id}-go-enrichment-results.tsv"
+    )
+
+    if nfs_storage_location.exists():
+        return FileResponse(
+            nfs_storage_location, media_type="text/tab-separated-values"
+        )
+
+    swift_client = SwiftClient()
+
+    retrieve_object_response: requests.Response | None = (
+        swift_client.download_object(
+            container=GO_ENRICH_BUCKET_NAME,
+            object=f"{job_id}-go-enrichment-results.tsv",
+            output_path=nfs_storage_location,
+        )
+    )
+
+    if (
+        retrieve_object_response
+        and retrieve_object_response.status_code == 200
+    ):
+        return FileResponse(
+            nfs_storage_location, media_type="text/tab-separated-values"
+        )
+
+    raise HTTPException(
+        status_code=404,
+        detail=f"Result for job_id = {job_id} was not found",
+    )

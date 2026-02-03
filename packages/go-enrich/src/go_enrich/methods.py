@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Callable, Set, Dict, TYPE_CHECKING
 
 import networkx
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     TypedGraph = networkx.DiGraph[str]
 
 
-class EnrichmentMethod(str, Enum):
+class EnrichmentMethod(StrEnum):
     independent = "independent"
     parent_child_union = "parent-child-union"
     parent_child_intersection = "parent-child-intersection"

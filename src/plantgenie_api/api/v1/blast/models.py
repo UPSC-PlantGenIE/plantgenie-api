@@ -1,7 +1,7 @@
-from pydantic.alias_generators import to_camel
 from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic.alias_generators import to_camel
 
 
 class BlastBaseModel(BaseModel):
@@ -32,13 +32,6 @@ class BlastSubmitResponse(BlastBaseModel):
         default="genome"
     )
     file_size: int
-
-
-# class BlastPollResponse(BlastBaseModel):
-#     job_id: str = Field(alias="jobId")
-#     status: Literal["PENDING", "SUCCESS", "FAILURE", "STARTED", "RETRY"]
-#     result: Optional[str]
-#     completed_at: Optional[str] = Field(alias="completedAt")
 
 
 class BlastPollResponse(BlastBaseModel):
