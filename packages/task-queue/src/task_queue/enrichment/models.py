@@ -1,3 +1,4 @@
+from go_enrich.methods import EnrichmentMethod
 from typing import Literal, List
 
 from pydantic import BaseModel, Field
@@ -8,14 +9,16 @@ GoNodeType = Literal[
     "cellular_component",
 ]
 
+# EnrichmentMethod
 
 class GoEnrichPipelineArgs(BaseModel):
     target_path: str
     background_path: str
     genome_id: int
-    method: Literal["classic"] = Field(
-        default="classic"
-    )  # ... others to be added ... #
+    # method: Literal["classic"] = Field(
+    #     default="classic"
+    # )  # ... others to be added ... #
+    method: EnrichmentMethod
     node_types: List[GoNodeType] = Field(
         min_length=1, default=["biological_process"]
     )

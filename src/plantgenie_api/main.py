@@ -8,6 +8,9 @@ from plantgenie_api.api.v1.blast.routes import router as blast_router
 from plantgenie_api.api.v1.expression.routes import (
     router as expression_router,
 )
+from plantgenie_api.api.v1.enrichment.routes import (
+    router as enrichment_router,
+)
 from plantgenie_api.api.v1.genome.routes import router as genome_router
 from plantgenie_api.dependencies import DatabaseDep, lifespan
 from plantgenie_api.models import (
@@ -25,7 +28,7 @@ app = FastAPI(
 
 
 app.add_middleware(
-    CORSMiddleware, # type: ignore
+    CORSMiddleware,  # type: ignore
     allow_origins=[
         "*"
     ],  # Allow all origins (change this to specific origins in production)
@@ -37,6 +40,7 @@ app.include_router(router=blast_router, prefix="/v1")
 app.include_router(router=genome_router, prefix="/v1")
 app.include_router(router=expression_router, prefix="/v1")
 app.include_router(router=annotation_router, prefix="/v1")
+app.include_router(router=enrichment_router, prefix="/v1")
 
 
 @app.get("/")
@@ -58,6 +62,8 @@ async def get_available_species(
                     )
                 }
             )
-            for result in db_connection.sql("SELECT * FROM species;").fetchall()
+            for result in db_connection.sql(
+                "SELECT * FROM species;"
+            ).fetchall()
         ]
     )

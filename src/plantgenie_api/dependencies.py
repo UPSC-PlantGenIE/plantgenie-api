@@ -73,6 +73,13 @@ def get_blast_path(request: Request) -> Path:
     )
 
 
+def get_go_enrichment_path(request: Request) -> Path:
+    return (
+        Path(request.app.state.APP_ENVIRONMENT["DATA_PATH"])
+        / "pg-service-go-enrichment"
+    )
+
+
 def get_db_connection(
     request: Request,
 ) -> Generator[DuckDBPyConnection, None, None]:
@@ -90,3 +97,4 @@ def get_db_connection(
 DatabaseDep = Annotated[DuckDBPyConnection, Depends(get_db_connection)]
 EnvironmentDep = Annotated[Dict[str, str], Depends(get_environment)]
 BlastPathDep = Annotated[Path, Depends(get_blast_path)]
+GoEnrichmentPathDep = Annotated[Path, Depends(get_go_enrichment_path)]
