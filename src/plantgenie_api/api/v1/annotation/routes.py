@@ -1,22 +1,22 @@
 from typing import List, Tuple
+
 from duckdb import DuckDBPyRelation
 from fastapi import APIRouter
 from loguru import logger
 
-from plantgenie_api import SafeDuckDbConnection
-from plantgenie_api.api.v1 import DATABASE_PATH
 from plantgenie_api.api.v1.annotation.models import (
     AnnotationsRequest,
     AnnotationsResponse,
     GeneAnnotation,
 )
+from plantgenie_api.dependencies import DatabaseDep
 
-router = APIRouter(prefix="/annotations")
+router = APIRouter(prefix="/annotations", tags=["v1", "annotations"])
 
 
 @router.post("")
 async def get_annotations(
-    request: AnnotationsRequest,
+    request: AnnotationsRequest, db_connection: DatabaseDep
 ) -> AnnotationsResponse:
     if len(request.gene_ids) == 0:
         return AnnotationsResponse(results=[])
@@ -43,20 +43,18 @@ async def get_annotations(
             LEFT JOIN annotations ON (annotations.gene_id = genes_from_gff.gene_id)
         ORDER BY genes_from_gff.gene_order;
     """
+    logger.debug(query)
+    query_relation: DuckDBPyRelation = db_connection.sql(
+        query=query,
+    )
+    logger.debug("\n" + query_relation.__str__())
+    results: List[Tuple[int, str, str]] = query_relation.fetchall()
 
-    with SafeDuckDbConnection(DATABASE_PATH) as connection:
-        logger.debug(query)
-        query_relation: DuckDBPyRelation = connection.sql(
-            query=query,
-        )
-        logger.debug("\n" + query_relation.__str__())
-        results: List[Tuple[int, str, str]] = query_relation.fetchall()
-
-        return AnnotationsResponse(
-            results=[
-                GeneAnnotation(
-                    gene_id=r[0], gene_name=r[1], description=r[2]
-                )
-                for r in results
-            ]
-        )
+    return AnnotationsResponse(
+        results=[
+            GeneAnnotation(
+                gene_id=r[0], gene_name=r[1], description=r[2]
+            )
+            for r in results
+        ]
+    )

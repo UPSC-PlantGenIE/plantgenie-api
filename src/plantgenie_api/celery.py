@@ -1,5 +1,7 @@
 from celery import Celery
 
+from shared.config import backend_config
+
 # Initialize Celery with the broker and backend URLs.
 celery_app = Celery(
     "plantgenie_api",

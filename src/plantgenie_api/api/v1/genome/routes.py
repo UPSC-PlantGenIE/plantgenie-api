@@ -1,6 +1,5 @@
 from pathlib import Path
 
-import duckdb
 from fastapi import APIRouter
 
 from plantgenie_api import ENV_DATA_PATH
@@ -9,6 +8,8 @@ from plantgenie_api.api.v1.genome.models import (
     AvailableGenomesResponse,
 )
 
+from shared.services.database import SafeDuckDbConnection
+from shared.config import backend_config
 DATA_PATH = (
     Path(ENV_DATA_PATH)
     if ENV_DATA_PATH
@@ -21,27 +22,13 @@ DATABASE_PATH = DATA_PATH / "plantgenie-backend.db"
 router = APIRouter(prefix="/genome")
 
 
-@router.get(path="/available-genomes")
+@router.get(path="/available-genomes", tags=["v1", "genome"])
 async def get_available_genomes() -> AvailableGenomesResponse:
-    # CREATE TABLE
-    # species (
-    #   id INT64 PRIMARY KEY,
-    #   species_name VARCHAR NOT NULL,
-	# 	species_alias VARCHAR,
-	# 	species_abbreviation VARCHAR,
-	# 	avatar_path VARCHAR
-	# );
-    # CREATE TABLE
-    # genomes (
-    #     id INT64 PRIMARY KEY,
-    #     species_id INT64 REFERENCES species (id),
-    #     version VARCHAR NOT NULL,
-    #     version_name VARCHAR,
-    #     published BOOLEAN,
-    #     publication_date DATE,
-    #     doi VARCHAR
-    # );
-    with duckdb.connect(DATABASE_PATH, read_only=True) as connection:
+    with SafeDuckDbConnection(
+        f"{backend_config.get("DATA_PATH")}/{backend_config.get("DATABASE_NAME")}",
+        allowed_directories=[backend_config.get("DATA_PATH")],
+        read_only=True,
+    ) as connection:
         query_relation = connection.sql(
             "SELECT * FROM genomes JOIN species ON (genomes.species_id = species.id);"
         ).project(

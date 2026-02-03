@@ -1,7 +1,5 @@
 from typing import List, Optional
 
-from pydantic import Field
-
 from plantgenie_api.models import PlantGenieModel
 
 
@@ -17,14 +15,14 @@ from plantgenie_api.models import PlantGenieModel
 
 
 class GeneAnnotation(PlantGenieModel):
-    gene_id: str = Field(alias="geneId")
-    gene_name: Optional[str] = Field(alias="geneName")
+    gene_id: str
+    gene_name: Optional[str]
     description: Optional[str]
 
 
 class AnnotationsRequest(PlantGenieModel):
     species: str
-    gene_ids: List[str] = Field(alias="geneIds")
+    gene_ids: List[str]
 
 
 class AnnotationsResponse(PlantGenieModel):

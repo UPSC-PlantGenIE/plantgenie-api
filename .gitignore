@@ -1,3 +1,5 @@
+.env
+
 # Python-generated files
 __pycache__/
 *.py[oc]
@@ -6,8 +8,13 @@ dist/
 wheels/
 *.egg-info
 
+# IDEs
+.vscode/
+
 # Virtual environments
 .venv
 
 # Alternative environment variable files
 .env.*
+
+.DS_STORE

@@ -6,7 +6,7 @@ from typing import List, Optional
 
 import pendulum
 from celery import Task
-from FastaValidator import fasta_validator  # type: ignore
+from FastaValidator import fasta_validator
 from loguru import logger
 from pydantic import BaseModel, Field
 from swiftclient.service import (

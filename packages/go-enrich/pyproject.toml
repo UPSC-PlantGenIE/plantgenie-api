@@ -1,0 +1,27 @@
+[project]
+name = "go-enrich"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Jamie McCann", email = "jamie.mccann@umu.se" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "networkx>=3.6",
+    "scipy>=1.17.0",
+    "typer>=0.15.2",
+]
+
+[project.scripts]
+go-enrich = "go_enrich:main"
+
+[build-system]
+requires = ["uv_build>=0.9.15,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "scipy-stubs>=1.17.0.2",
+    "types-networkx>=3.6.0.20251127",
+]
