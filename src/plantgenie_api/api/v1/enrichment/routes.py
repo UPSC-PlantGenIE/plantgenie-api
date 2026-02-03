@@ -12,7 +12,10 @@ from shared.services.openstack import SwiftClient
 from task_queue.enrichment.models import GoEnrichPipelineArgs
 from task_queue.enrichment.tasks import run_go_enrichment_pipeline
 
-from plantgenie_api.api.v1.enrichment.models import EnrichmentPollResponse
+from plantgenie_api.api.v1.enrichment.models import (
+    EnrichmentPollResponse,
+    EnrichmentSubmissionResponse,
+)
 from plantgenie_api.dependencies import DatabaseDep, GoEnrichmentPathDep
 
 MAX_FILE_SIZE = 2**20
@@ -20,7 +23,10 @@ MAX_FILE_SIZE = 2**20
 router = APIRouter(prefix="/go-enrichment", tags=["v1", "go-enrichment"])
 
 
-@router.post(path="/submit")
+@router.post(
+    path="/submit",
+    description="Provide a set of target genes and background genes to perform a GO Enrichment analysis",
+)
 async def submit_go_enrichment_job(
     db_connection: DatabaseDep,
     go_enrichment_output_path: GoEnrichmentPathDep,
@@ -43,7 +49,7 @@ async def submit_go_enrichment_job(
     background_genes: UploadFile = File(
         description="Line-delimited list of background genes, maximum size of 1MB"
     ),
-):
+) -> EnrichmentSubmissionResponse:
     if target_genes.size and (target_genes.size > MAX_FILE_SIZE):
         raise HTTPException(
             status_code=413,
@@ -90,11 +96,14 @@ async def submit_go_enrichment_job(
         args=(pipeline_args.model_dump(),), task_id=go_enrich_job_id
     )
 
-    return {"job_id": go_enrich_job_id}
+    return EnrichmentSubmissionResponse(job_id=go_enrich_job_id)
 
 
-@router.get(path="/poll/{job_id}")
-def poll_blast_job(job_id: str):
+@router.get(
+    path="/poll/{job_id}",
+    description="Use the job id you received from your submission to check if your job has finished.",
+)
+def poll_go_enrichment_job(job_id: str) -> EnrichmentPollResponse:
     job_result: AsyncResult = AsyncResult(job_id)
 
     return EnrichmentPollResponse(
@@ -108,7 +117,11 @@ def poll_blast_job(job_id: str):
     )
 
 
-@router.get("/retrieve/{job_id}")
+@router.get(
+    "/retrieve/{job_id}",
+    description="Use the job id you received from your submission to retrieve a result file with your enriched GO terms.",
+    response_class=FileResponse,
+)
 def retrieve_go_enrichment_result(
     go_enrichment_output_path: GoEnrichmentPathDep, job_id: str
 ) -> FileResponse:
