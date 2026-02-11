@@ -39,7 +39,11 @@ def verify_background_genes_file(background_path: str) -> str:
 
 
 @app.task(
-    name="enrichment.run_pipeline", typing=True, pydantic=True, bind=True
+    name="enrichment.run_pipeline",
+    typing=True,
+    pydantic=True,
+    bind=True,
+    rate_limit="10/m",
 )
 def run_go_enrichment_pipeline(self: Task, args: GoEnrichPipelineArgs):
     resolved_parent_path = (

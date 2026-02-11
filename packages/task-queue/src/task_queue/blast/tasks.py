@@ -230,7 +230,9 @@ def upload_results_to_object_store(query_path: str) -> List[str]:
     return [obj.local_path for obj in uploadables]
 
 
-@app.task(name="blast.execute_blast_pipeline", pydantic=True)
+@app.task(
+    name="blast.execute_blast_pipeline", pydantic=True, rate_limit="10/m"
+)
 def execute_blast_pipeline(args: ExecuteBlastPipelineArgs):
     workflow = chain(
         verify_blast_is_installed.si(

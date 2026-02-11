@@ -34,7 +34,7 @@ async def submit_go_enrichment_job(
     method: Annotated[
         EnrichmentMethod,
         Form(
-            description="enrichment method to use: independent, parent-child-intersection, parent_child_union"
+            description="enrichment method to use: independent, parent-child-intersection, parent-child-union"
         ),
     ] = EnrichmentMethod.independent,
     base_fdr: Annotated[

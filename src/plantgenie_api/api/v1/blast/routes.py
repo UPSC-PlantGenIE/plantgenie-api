@@ -18,15 +18,16 @@ from shared.services.openstack import SwiftClient
 from task_queue.blast.models import ExecuteBlastPipelineArgs
 from task_queue.blast.tasks import execute_blast_pipeline
 
-from plantgenie_api.dependencies import BlastPathDep
 from plantgenie_api.api.v1 import BACKEND_DATA_PATH
 from plantgenie_api.api.v1.blast.models import (
     AvailableDatabase,
+    BlastDatabaseType,
     BlastPollResponse,
+    BlastProgramName,
     BlastSubmitResponse,
     BlastVersion,
 )
-from plantgenie_api.dependencies import DatabaseDep
+from plantgenie_api.dependencies import BlastPathDep, DatabaseDep
 
 MAX_FILE_SIZE = 2**20  # 1 Megabyte
 
@@ -35,7 +36,7 @@ router = APIRouter(prefix="/blast", tags=["v1", "blast"])
 
 @router.get(path="/{program}/version")
 async def get_program_version(
-    program: Literal["blastn", "blastp", "blastx"],
+    program: BlastProgramName,
 ) -> BlastVersion:
     return BlastVersion(program=program, version="2.16.0+")
 
@@ -87,8 +88,8 @@ async def submit_blast(
     blast_output_path: BlastPathDep,
     species_id: Annotated[int, Form()],
     genome_id: Annotated[int, Form()],
-    program: Literal["blastn", "blastp", "blastx"],
-    database_type: Literal["cds", "mrna", "prot", "genome"],
+    program: BlastProgramName,
+    database_type: BlastDatabaseType,
     file: UploadFile = File(
         description="Fasta-formatted sequences to use as blast query."
     ),
@@ -139,7 +140,7 @@ async def submit_blast(
 
     blast_pipeline_args = ExecuteBlastPipelineArgs(
         job_id=job_id,
-        blast_program=program,
+        blast_program=program.value,
         query_path=host_file_path.as_posix(),
         database_path=(BACKEND_DATA_PATH / blast_path).as_posix(),
     )
@@ -152,7 +153,7 @@ async def submit_blast(
     return BlastSubmitResponse(
         job_id=job_id,
         file_size=file.size or 0,
-        program=program,
+        program=program.value,
         database_type=database_type,
     )
 

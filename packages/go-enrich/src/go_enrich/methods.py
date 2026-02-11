@@ -1,16 +1,10 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Callable, Set, Dict, TYPE_CHECKING
+from typing import Callable, Set, Dict
 
 import networkx
 from scipy.stats import fisher_exact
-
-TypedGraph = networkx.DiGraph
-
-if TYPE_CHECKING:
-    TypedGraph = networkx.DiGraph[str]
-
 
 class EnrichmentMethod(StrEnum):
     independent = "independent"
@@ -19,7 +13,7 @@ class EnrichmentMethod(StrEnum):
 
 
 EnrichmentFunction = Callable[
-    [str, TypedGraph, Set[str], Set[str]],
+    [str, networkx.DiGraph, Set[str], Set[str]],
     float,
 ]
 

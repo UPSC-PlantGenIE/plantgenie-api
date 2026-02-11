@@ -1,7 +1,21 @@
+from enum import StrEnum
 from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
+
+
+class BlastProgramName(StrEnum):
+    blastn = "blastn"
+    blastp = "blastp"
+    blastx = "blastx"
+
+
+class BlastDatabaseType(StrEnum):
+    cds = "cds"
+    mrna = "mrna"
+    prot = "prot"
+    genome = "genome"
 
 
 class BlastBaseModel(BaseModel):
@@ -25,11 +39,9 @@ class AvailableDatabase(BlastBaseModel):
 
 class BlastSubmitResponse(BlastBaseModel):
     job_id: str
-    program: Literal["blastn", "blastx", "blastp"] = Field(
-        default="blastn"
-    )
-    database_type: Literal["cds", "mrna", "prot", "genome"] = Field(
-        default="genome"
+    program: BlastProgramName = Field(default=BlastProgramName.blastn)
+    database_type: BlastDatabaseType = Field(
+        default=BlastDatabaseType.genome
     )
     file_size: int
 
@@ -37,5 +49,4 @@ class BlastSubmitResponse(BlastBaseModel):
 class BlastPollResponse(BlastBaseModel):
     job_id: str
     status: Literal["PENDING", "SUCCESS", "FAILURE", "STARTED", "RETRY"]
-    # result: Optional[str]
     completed_at: Optional[str]
