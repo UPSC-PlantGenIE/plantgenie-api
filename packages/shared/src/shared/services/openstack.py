@@ -8,7 +8,7 @@ from typing import Dict, List, Literal, Optional
 import pendulum
 import requests
 from pendulum import DateTime
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, ValidationError
 from swiftclient.service import SwiftService
 
 
@@ -191,7 +191,11 @@ class SwiftClient:
             headers={"Content-Type": "application/json"},
         )
 
-        self.token_response = KeystoneTokenResponse(**response.json())
+        try:
+            json_response = response.json()
+            self.token_response = KeystoneTokenResponse(**json_response)
+        except ValidationError:
+            raise NoAuthException(f"Authentication failed with response\n{json_response}")
 
         self.token = response.headers.get("x-subject-token")
         self.token_expiration_time = self.token_response.token.expires_at
@@ -230,7 +234,7 @@ class SwiftClient:
 
         self.token_response = KeystoneTokenResponse(**response.json())
 
-        self.token = response.headers.get("x-subject-token")
+        self.token: str | None = response.headers.get("x-subject-token")
         self.token_expiration_time = self.token_response.token.expires_at
         self.is_authenticated = self.token is not None
 
