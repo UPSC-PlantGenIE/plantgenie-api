@@ -1,5 +1,5 @@
 FROM python:3.13-bookworm AS builder
-COPY --from=ghcr.io/astral-sh/uv:0.9.15 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.3 /uv /uvx /bin/
 
 WORKDIR /app
 
@@ -52,10 +52,9 @@ COPY --from=builder /app/packages/go-enrich/src /app/packages/go-enrich/src
 
 
 
-# task-queue is copied into the src directory, so needs to be added to path
+# task-queue is copied into /app/src directory, so needs to be added to path
 ENV PYTHONPATH="/app/src"
 # obviates the need to do something like `source /app/.venv/bin/activate`
 ENV PATH="/app/.venv/bin:$PATH"
 
-# CMD ["celery", "-A", "task_queue.celery.app", "worker", "--loglevel=info"]
 ENTRYPOINT ["celery", "-A", "task_queue.celery.app", "worker", "--loglevel=info"]
