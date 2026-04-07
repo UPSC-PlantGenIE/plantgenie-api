@@ -1,6 +1,5 @@
 services:
   api:
-    # image: plantgenie-api:local-latest
     image: ghcr.io/upsc-plantgenie/plantgenie-api/fastapi-backend:v0.4.0
     build:
       context: .
@@ -42,7 +41,6 @@ services:
     build:
       context: .
       dockerfile: packages/task-queue/Dockerfile
-    # image: pg-task-queue:local-latest
     image: ghcr.io/upsc-plantgenie/plantgenie-api/celery-worker:v0.4.0
     container_name: pg-local-celery
     entrypoint:
