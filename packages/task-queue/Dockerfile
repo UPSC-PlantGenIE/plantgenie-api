@@ -35,7 +35,7 @@ WORKDIR /app/packages/task-queue
 # task-queue depends on the `shared` and `go-enrich` packages, so its deps too
 RUN uv sync --locked --no-group dev
 
-FROM python:3.13-bookworm
+FROM python:3.13-slim-bookworm
 
 RUN useradd --no-create-home appuser
 
