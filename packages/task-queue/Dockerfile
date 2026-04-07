@@ -1,4 +1,12 @@
-FROM python:3.13-bookworm AS builder
+FROM python:3.13-slim-bookworm AS builder
+
+RUN apt-get update && \
+    apt-get install -y \
+        gcc \
+        zlib1g-dev \
+        && \
+    rm -rf /var/lib/apt/lists/*
+
 COPY --from=ghcr.io/astral-sh/uv:0.11.3 /uv /uvx /bin/
 
 WORKDIR /app
