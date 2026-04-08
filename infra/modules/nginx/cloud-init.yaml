@@ -6,6 +6,24 @@ packages:
   - ufw
   - fail2ban
 
+device_aliases:
+  app_data: /dev/vdb
+
+disk_setup:
+  app_data:
+    layout: true
+    overwrite: false
+    table_type: gpt
+
+fs_setup:
+  - device: app_data
+    label: application_data
+    filesystem: ext4
+    overwrite: false
+
+mounts:
+  - [app_data, /srv/shared, "auto", "defaults", "0", "2"]
+
 users:
   - name: ${server_username}
     lock_passwd: true
