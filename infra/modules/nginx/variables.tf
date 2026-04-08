@@ -47,3 +47,8 @@ variable "server_username" {
   type        = string
   description = "Username for the non-root user account on the VM"
 }
+
+variable "internal_subnet_cidr" {
+  type        = string
+  description = "CIDR range of the internal subnet, used for NFS export rules"
+}

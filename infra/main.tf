@@ -193,4 +193,5 @@ module "nginx" {
   internal_port_id      = openstack_networking_port_v2.web_proxy.id
   external_network_name = data.openstack_networking_network_v2.external.name
   storage_size          = var.nfs_storage_size
+  internal_subnet_cidr  = data.openstack_networking_subnet_v2.internal.cidr
 }

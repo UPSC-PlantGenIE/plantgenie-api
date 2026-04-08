@@ -22,8 +22,9 @@ resource "openstack_compute_instance_v2" "nginx" {
   }
 
   user_data = templatefile("${path.module}/cloud-init.yaml", {
-    server_username = var.server_username
-    public_ssh_key  = var.ssh_public_key
+    server_username      = var.server_username
+    public_ssh_key       = var.ssh_public_key
+    internal_subnet_cidr = var.internal_subnet_cidr
   })
 }
 
