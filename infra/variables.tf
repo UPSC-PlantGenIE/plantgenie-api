@@ -12,3 +12,18 @@ variable "external_network_name" {
   description = "Name of the external IPv4 network"
   type        = string
 }
+
+variable "base_image_name" {
+  description = "Name of the base OS image for VMs"
+  type        = string
+}
+
+variable "server_username" {
+  description = "Username for the non-root user account on VMs"
+  type        = string
+}
+
+variable "nfs_storage_size" {
+  description = "Size of the nginx NFS block storage volume in GB"
+  type        = number
+}

@@ -3,3 +3,8 @@ output "private_key_pem" {
   value       = tls_private_key.ssh.private_key_pem
   sensitive   = true
 }
+
+output "nginx_floating_ip" {
+  description = "Public floating IP address of the nginx VM"
+  value       = module.nginx.floating_ip
+}

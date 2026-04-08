@@ -179,3 +179,18 @@ resource "openstack_networking_port_v2" "neo4j" {
     subnet_id = data.openstack_networking_subnet_v2.internal.id
   }
 }
+
+module "nginx" {
+  source = "./modules/nginx"
+
+  workspace             = terraform.workspace
+  application_name      = var.application_name
+  base_image_name       = var.base_image_name
+  flavor_name           = "ssc.medium"
+  server_username       = var.server_username
+  ssh_keypair_name      = openstack_compute_keypair_v2.ssh.name
+  ssh_public_key        = tls_private_key.ssh.public_key_openssh
+  internal_port_id      = openstack_networking_port_v2.web_proxy.id
+  external_network_name = data.openstack_networking_network_v2.external.name
+  storage_size          = var.nfs_storage_size
+}

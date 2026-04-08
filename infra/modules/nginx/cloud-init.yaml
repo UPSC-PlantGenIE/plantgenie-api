@@ -1,0 +1,59 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+packages:
+  - nginx
+  - ufw
+  - fail2ban
+
+users:
+  - name: ${server_username}
+    lock_passwd: true
+    shell: /bin/bash
+    ssh-authorized-keys:
+      - ${public_ssh_key}
+    sudo:
+      - ALL=(ALL) NOPASSWD:ALL
+
+write_files:
+  - path: /etc/ssh/sshd_config
+    content: |
+      Port 22
+      Protocol 2
+      HostKey /etc/ssh/ssh_host_rsa_key
+      HostKey /etc/ssh/ssh_host_ecdsa_key
+      HostKey /etc/ssh/ssh_host_ed25519_key
+      SyslogFacility AUTH
+      LogLevel INFO
+      LoginGraceTime 120
+      PermitRootLogin no
+      PermitEmptyPasswords no
+      PermitUserEnvironment yes
+      PasswordAuthentication no
+      StrictModes yes
+      DebianBanner no
+      PubkeyAuthentication yes
+      IgnoreRhosts yes
+      HostbasedAuthentication no
+      ChallengeResponseAuthentication no
+      X11Forwarding no
+      PrintMotd no
+      PrintLastLog yes
+      TCPKeepAlive yes
+      AcceptEnv LANG LC_*
+      Subsystem sftp /usr/lib/openssh/sftp-server
+      UsePAM yes
+      MaxAuthTries 3
+      MaxStartups 2:30:10
+      AllowAgentForwarding no
+      AllowUsers ${server_username}
+
+runcmd:
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp comment 'SSH'
+  - ufw allow 80/tcp comment 'HTTP'
+  - ufw allow 443/tcp comment 'HTTPS'
+  - ufw enable
+  - systemctl enable nginx
+  - systemctl start nginx
