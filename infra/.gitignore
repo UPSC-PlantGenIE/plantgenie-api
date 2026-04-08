@@ -1,0 +1,9 @@
+# Local variable overrides (contain secrets)
+*.local.tfvars
+
+# Terraform working directory
+.terraform/
+.terraform.lock.hcl
+
+crash.log
+north.tfvars
