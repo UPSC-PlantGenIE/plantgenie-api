@@ -94,3 +94,88 @@ resource "openstack_compute_keypair_v2" "ssh" {
   name       = "${terraform.workspace}-${var.application_name}-keypair"
   public_key = tls_private_key.ssh.public_key_openssh
 }
+
+resource "openstack_networking_port_v2" "web_proxy" {
+  name           = "${terraform.workspace}-${var.application_name}-web-proxy-port"
+  network_id     = data.openstack_networking_network_v2.internal.id
+  admin_state_up = true
+
+  security_group_ids = [
+    openstack_networking_secgroup_v2.external_traffic.id,
+    openstack_networking_secgroup_v2.internal_traffic.id,
+  ]
+
+  fixed_ip {
+    subnet_id = data.openstack_networking_subnet_v2.internal.id
+  }
+}
+
+resource "openstack_networking_port_v2" "application" {
+  name           = "${terraform.workspace}-${var.application_name}-application-port"
+  network_id     = data.openstack_networking_network_v2.internal.id
+  admin_state_up = true
+
+  security_group_ids = [
+    openstack_networking_secgroup_v2.internal_traffic.id,
+  ]
+
+  fixed_ip {
+    subnet_id = data.openstack_networking_subnet_v2.internal.id
+  }
+}
+
+resource "openstack_networking_port_v2" "queue" {
+  name           = "${terraform.workspace}-${var.application_name}-queue-port"
+  network_id     = data.openstack_networking_network_v2.internal.id
+  admin_state_up = true
+
+  security_group_ids = [
+    openstack_networking_secgroup_v2.internal_traffic.id,
+  ]
+
+  fixed_ip {
+    subnet_id = data.openstack_networking_subnet_v2.internal.id
+  }
+}
+
+resource "openstack_networking_port_v2" "rabbitmq" {
+  name           = "${terraform.workspace}-${var.application_name}-rabbitmq-port"
+  network_id     = data.openstack_networking_network_v2.internal.id
+  admin_state_up = true
+
+  security_group_ids = [
+    openstack_networking_secgroup_v2.internal_traffic.id,
+  ]
+
+  fixed_ip {
+    subnet_id = data.openstack_networking_subnet_v2.internal.id
+  }
+}
+
+resource "openstack_networking_port_v2" "redis" {
+  name           = "${terraform.workspace}-${var.application_name}-redis-port"
+  network_id     = data.openstack_networking_network_v2.internal.id
+  admin_state_up = true
+
+  security_group_ids = [
+    openstack_networking_secgroup_v2.internal_traffic.id,
+  ]
+
+  fixed_ip {
+    subnet_id = data.openstack_networking_subnet_v2.internal.id
+  }
+}
+
+resource "openstack_networking_port_v2" "neo4j" {
+  name           = "${terraform.workspace}-${var.application_name}-neo4j-port"
+  network_id     = data.openstack_networking_network_v2.internal.id
+  admin_state_up = true
+
+  security_group_ids = [
+    openstack_networking_secgroup_v2.internal_traffic.id,
+  ]
+
+  fixed_ip {
+    subnet_id = data.openstack_networking_subnet_v2.internal.id
+  }
+}
