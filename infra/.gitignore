@@ -6,4 +6,4 @@
 .terraform.lock.hcl
 
 crash.log
-north.tfvars
+*.tfvars
