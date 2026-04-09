@@ -32,10 +32,6 @@ fs_setup:
     filesystem: ext4
     overwrite: false
 
-mounts:
-  - [app_data, /opt/neo4j-data, "auto", "defaults", "0", "2"]
-  - [${nfs_internal_ip}:/srv/shared, /opt/shared, "nfs", "defaults,nfsvers=4", "0", "0"]
-
 users:
   - name: ${server_username}
     lock_passwd: true
@@ -46,6 +42,10 @@ users:
       - ${public_ssh_key}
     sudo:
       - ALL=(ALL) NOPASSWD:ALL
+
+mounts:
+  - [app_data, /opt/neo4j, "ext4", "defaults", "0", "2"]
+  - [${nfs_internal_ip}:/srv/shared, /opt/shared, "nfs", "defaults,nfsvers=4,nofail", "0", "0"]
 
 write_files:
   - path: /etc/ssh/sshd_config
@@ -89,3 +89,19 @@ runcmd:
   - ufw enable
   - systemctl enable docker
   - systemctl start docker
+  - mkdir -p /opt/neo4j/logs /opt/neo4j/data /opt/neo4j/import
+  - chown -R ${server_username}:${server_username} /opt/neo4j
+  - mount -a
+  - |
+    docker run -d \
+      --restart unless-stopped \
+      --name neo4j \
+      -p 7474:7474 \
+      -p 7687:7687 \
+      -v /opt/neo4j/logs:/logs \
+      -v /opt/neo4j/data:/data \
+      -v /opt/neo4j/import:/import \
+      --user $(id -u):$(id -g) \
+      -e NEO4J_PLUGINS='["graph-data-science"]' \
+      -e NEO4J_AUTH=${neo4j_username}/${neo4j_password} \
+      neo4j:2026.01.4-community-trixie

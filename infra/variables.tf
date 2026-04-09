@@ -33,6 +33,17 @@ variable "neo4j_storage_size" {
   type        = number
 }
 
+variable "neo4j_username" {
+  description = "Neo4j database username"
+  type        = string
+}
+
+variable "neo4j_password" {
+  description = "Neo4j database password"
+  type        = string
+  sensitive   = true
+}
+
 variable "github_pat" {
   description = "GitHub personal access token for pulling images from GHCR"
   type        = string

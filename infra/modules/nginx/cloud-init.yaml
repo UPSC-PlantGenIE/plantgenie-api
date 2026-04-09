@@ -39,6 +39,19 @@ write_files:
     content: /srv/shared ${internal_subnet_cidr}(rw,sync,no_subtree_check)
     append: true
 
+  - path: /etc/nginx/sites-available/neo4j
+    content: |
+      server {
+          listen 7474;
+
+          location / {
+              proxy_pass http://${neo4j_internal_ip}:7474;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          }
+      }
+
   - path: /etc/ssh/sshd_config
     content: |
       Port 22
@@ -77,10 +90,14 @@ runcmd:
   - ufw allow 22/tcp comment 'SSH'
   - ufw allow 80/tcp comment 'HTTP'
   - ufw allow 443/tcp comment 'HTTPS'
+  - ufw allow 7474/tcp comment 'Neo4j Browser'
   - ufw allow proto tcp from ${internal_subnet_cidr} to any port 2049 comment 'NFS'
   - ufw enable
+  - chown -R ${server_username}:${server_username} /srv/shared
   - systemctl enable nfs-kernel-server
   - systemctl start nfs-kernel-server
   - exportfs -a
   - systemctl enable nginx
   - systemctl start nginx
+  - ln -s /etc/nginx/sites-available/neo4j /etc/nginx/sites-enabled/neo4j
+  - systemctl reload nginx

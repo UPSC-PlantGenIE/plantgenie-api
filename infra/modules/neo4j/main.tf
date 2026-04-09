@@ -21,6 +21,8 @@ resource "openstack_compute_instance_v2" "neo4j" {
     server_username = var.server_username
     public_ssh_key  = var.ssh_public_key
     nfs_internal_ip = var.nfs_server_ip
+    neo4j_username  = var.neo4j_username
+    neo4j_password  = var.neo4j_password
   })
 }
 

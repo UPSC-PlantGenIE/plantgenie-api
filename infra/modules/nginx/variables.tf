@@ -52,3 +52,8 @@ variable "internal_subnet_cidr" {
   type        = string
   description = "CIDR range of the internal subnet, used for NFS export rules"
 }
+
+variable "neo4j_internal_ip" {
+  type        = string
+  description = "Internal IP of the neo4j VM, used for nginx proxy config"
+}

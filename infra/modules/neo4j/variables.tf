@@ -47,3 +47,14 @@ variable "storage_size" {
   type        = number
   description = "Size of the neo4j block storage volume in GB"
 }
+
+variable "neo4j_username" {
+  type        = string
+  description = "Neo4j database username"
+}
+
+variable "neo4j_password" {
+  type        = string
+  sensitive   = true
+  description = "Neo4j database password"
+}
