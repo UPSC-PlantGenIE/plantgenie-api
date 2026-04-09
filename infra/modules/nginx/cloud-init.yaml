@@ -5,6 +5,7 @@ packages:
   - ufw
   - fail2ban
   - nginx
+  - libnginx-mod-stream
   - nfs-kernel-server
 
 device_aliases:
@@ -38,6 +39,47 @@ write_files:
   - path: /etc/exports
     content: /srv/shared ${internal_subnet_cidr}(rw,sync,no_subtree_check)
     append: true
+
+  - path: /etc/nginx/stream.conf.d/neo4j-bolt.conf
+    content: |
+      server {
+          listen 7687;
+          proxy_pass ${neo4j_internal_ip}:7687;
+      }
+
+  - path: /etc/nginx/nginx.conf
+    content: |
+      include /etc/nginx/modules-enabled/*.conf;
+
+      worker_processes 1;
+
+      events {
+          worker_connections 1024;
+      }
+
+      http {
+          include      mime.types;
+          default_type application/octet-stream;
+          sendfile     on;
+          keepalive_timeout 65;
+
+          server {
+              listen      80;
+              server_name localhost;
+
+              location / {
+                  root  html;
+                  index index.html index.htm;
+              }
+
+              error_page  500 502 503 504 /50x.html;
+              location = /50x.html {
+                  root html;
+              }
+          }
+
+          include /etc/nginx/sites-enabled/*;
+      }
 
   - path: /etc/nginx/sites-available/neo4j
     content: |
@@ -91,6 +133,7 @@ runcmd:
   - ufw allow 80/tcp comment 'HTTP'
   - ufw allow 443/tcp comment 'HTTPS'
   - ufw allow 7474/tcp comment 'Neo4j Browser'
+  - ufw allow 7687/tcp comment 'Neo4j Bolt'
   - ufw allow proto tcp from ${internal_subnet_cidr} to any port 2049 comment 'NFS'
   - ufw enable
   - chown -R ${server_username}:${server_username} /srv/shared
@@ -99,5 +142,6 @@ runcmd:
   - exportfs -a
   - systemctl enable nginx
   - systemctl start nginx
+  - echo "stream { include /etc/nginx/stream.conf.d/*.conf; }" >> /etc/nginx/nginx.conf
   - ln -s /etc/nginx/sites-available/neo4j /etc/nginx/sites-enabled/neo4j
   - systemctl reload nginx
