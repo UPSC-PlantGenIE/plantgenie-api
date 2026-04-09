@@ -28,6 +28,11 @@ variable "nfs_storage_size" {
   type        = number
 }
 
+variable "neo4j_storage_size" {
+  description = "Size of the neo4j block storage volume in GB"
+  type        = number
+}
+
 variable "github_pat" {
   description = "GitHub personal access token for pulling images from GHCR"
   type        = string

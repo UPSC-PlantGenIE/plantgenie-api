@@ -18,3 +18,8 @@ output "application_internal_ip" {
   description = "Internal IP address of the application VM"
   value       = module.application.internal_ip
 }
+
+output "neo4j_internal_ip" {
+  description = "Internal IP address of the neo4j VM"
+  value       = module.neo4j.internal_ip
+}

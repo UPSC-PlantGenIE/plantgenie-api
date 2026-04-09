@@ -229,6 +229,21 @@ module "nginx" {
   internal_subnet_cidr  = data.openstack_networking_subnet_v2.internal.cidr
 }
 
+module "neo4j" {
+  source = "./modules/neo4j"
+
+  workspace        = terraform.workspace
+  application_name = var.application_name
+  base_image_name  = var.base_image_name
+  flavor_name      = "ssc.small"
+  server_username  = var.server_username
+  ssh_keypair_name = openstack_compute_keypair_v2.ssh.name
+  ssh_public_key   = tls_private_key.ssh.public_key_openssh
+  internal_port_id = openstack_networking_port_v2.neo4j.id
+  nfs_server_ip    = openstack_networking_port_v2.web_proxy.all_fixed_ips[0]
+  storage_size     = var.neo4j_storage_size
+}
+
 module "application" {
   source = "./modules/application"
 
