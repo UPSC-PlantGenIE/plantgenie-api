@@ -80,6 +80,26 @@ resource "openstack_networking_secgroup_rule_v2" "external_https_traffic" {
   security_group_id = openstack_networking_secgroup_v2.external_traffic.id
 }
 
+resource "openstack_networking_secgroup_rule_v2" "neo4j_browser" {
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 7474
+  port_range_max    = 7474
+  remote_ip_prefix  = "130.239.0.0/16"
+  security_group_id = openstack_networking_secgroup_v2.external_traffic.id
+}
+
+resource "openstack_networking_secgroup_rule_v2" "neo4j_bolt" {
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 7687
+  port_range_max    = 7687
+  remote_ip_prefix  = "130.239.0.0/16"
+  security_group_id = openstack_networking_secgroup_v2.external_traffic.id
+}
+
 resource "openstack_networking_secgroup_v2" "internal_traffic" {
   name        = "${terraform.workspace}-${var.application_name}-internal"
   description = "security group for ssh and private network access"
@@ -184,6 +204,7 @@ resource "openstack_networking_port_v2" "neo4j" {
   admin_state_up = true
 
   security_group_ids = [
+    openstack_networking_secgroup_v2.external_traffic.id,
     openstack_networking_secgroup_v2.internal_traffic.id,
   ]
 
