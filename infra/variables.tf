@@ -27,3 +27,14 @@ variable "nfs_storage_size" {
   description = "Size of the nginx NFS block storage volume in GB"
   type        = number
 }
+
+variable "github_pat" {
+  description = "GitHub personal access token for pulling images from GHCR"
+  type        = string
+  sensitive   = true
+}
+
+variable "github_username" {
+  description = "GitHub username associated with the PAT"
+  type        = string
+}

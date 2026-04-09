@@ -1,0 +1,76 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+
+apt:
+  sources:
+    docker.list:
+      source: deb https://download.docker.com/linux/ubuntu noble stable
+      keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+      arches: [ amd64 ]
+
+packages:
+  - ufw
+  - fail2ban
+  - nfs-common
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+
+users:
+  - name: ${server_username}
+    lock_passwd: true
+    shell: /bin/bash
+    groups:
+      - docker
+    ssh-authorized-keys:
+      - ${public_ssh_key}
+    sudo:
+      - ALL=(ALL) NOPASSWD:ALL
+
+mounts:
+  - [${nfs_internal_ip}:/srv/shared, /opt/app-data, "nfs", "defaults,nfsvers=4", "0", "0"]
+
+write_files:
+  - path: /etc/ssh/sshd_config
+    content: |
+      Port 22
+      Protocol 2
+      HostKey /etc/ssh/ssh_host_rsa_key
+      HostKey /etc/ssh/ssh_host_ecdsa_key
+      HostKey /etc/ssh/ssh_host_ed25519_key
+      SyslogFacility AUTH
+      LogLevel INFO
+      LoginGraceTime 120
+      PermitRootLogin no
+      PermitEmptyPasswords no
+      PermitUserEnvironment yes
+      PasswordAuthentication no
+      StrictModes yes
+      DebianBanner no
+      PubkeyAuthentication yes
+      IgnoreRhosts yes
+      HostbasedAuthentication no
+      ChallengeResponseAuthentication no
+      X11Forwarding no
+      PrintMotd no
+      PrintLastLog yes
+      TCPKeepAlive yes
+      AcceptEnv LANG LC_*
+      Subsystem sftp /usr/lib/openssh/sftp-server
+      UsePAM yes
+      MaxAuthTries 3
+      MaxStartups 2:30:10
+      AllowAgentForwarding no
+      AllowUsers ${server_username}
+
+runcmd:
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp comment 'SSH'
+  - ufw enable
+  - systemctl enable docker
+  - systemctl start docker
+  - |
+    echo "${github_pat}" |\
+    docker login ghcr.io -u "${github_username}" --password-stdin

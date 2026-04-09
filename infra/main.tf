@@ -85,6 +85,18 @@ resource "openstack_networking_secgroup_v2" "internal_traffic" {
   description = "security group for ssh and private network access"
 }
 
+resource "openstack_networking_secgroup_rule_v2" "allow_internal" {
+  direction = "ingress"
+  ethertype = "IPv4"
+  protocol  = "tcp"
+  # 0 allows all ports and doesn't cause destroy+recreate on new apply
+  port_range_min    = 0
+  port_range_max    = 0
+  security_group_id = openstack_networking_secgroup_v2.internal_traffic.id
+  # all VMs with this security group attached will be able to talk to one another
+  remote_group_id = openstack_networking_secgroup_v2.internal_traffic.id
+}
+
 resource "tls_private_key" "ssh" {
   algorithm = "RSA"
   rsa_bits  = 4096
@@ -186,7 +198,7 @@ module "nginx" {
   workspace             = terraform.workspace
   application_name      = var.application_name
   base_image_name       = var.base_image_name
-  flavor_name           = "ssc.medium"
+  flavor_name           = "ssc.small"
   server_username       = var.server_username
   ssh_keypair_name      = openstack_compute_keypair_v2.ssh.name
   ssh_public_key        = tls_private_key.ssh.public_key_openssh
@@ -194,4 +206,20 @@ module "nginx" {
   external_network_name = data.openstack_networking_network_v2.external.name
   storage_size          = var.nfs_storage_size
   internal_subnet_cidr  = data.openstack_networking_subnet_v2.internal.cidr
+}
+
+module "application" {
+  source = "./modules/application"
+
+  workspace        = terraform.workspace
+  application_name = var.application_name
+  base_image_name  = var.base_image_name
+  flavor_name      = "ssc.xsmall"
+  server_username  = var.server_username
+  ssh_keypair_name = openstack_compute_keypair_v2.ssh.name
+  ssh_public_key   = tls_private_key.ssh.public_key_openssh
+  internal_port_id = openstack_networking_port_v2.application.id
+  nfs_server_ip    = openstack_networking_port_v2.web_proxy.all_fixed_ips[0]
+  github_pat       = var.github_pat
+  github_username  = var.github_username
 }
