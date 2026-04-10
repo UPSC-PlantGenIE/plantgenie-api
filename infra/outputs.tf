@@ -23,3 +23,13 @@ output "neo4j_internal_ip" {
   description = "Internal IP address of the neo4j VM"
   value       = module.neo4j.internal_ip
 }
+
+output "rabbitmq_internal_ip" {
+  description = "Internal IP address of the rabbitmq VM"
+  value       = module.rabbitmq.internal_ip
+}
+
+output "redis_internal_ip" {
+  description = "Internal IP address of the redis VM"
+  value       = module.redis.internal_ip
+}

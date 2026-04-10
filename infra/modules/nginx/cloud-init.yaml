@@ -94,6 +94,19 @@ write_files:
           }
       }
 
+  - path: /etc/nginx/sites-available/rabbitmq
+    content: |
+      server {
+          listen 15672;
+
+          location / {
+              proxy_pass http://${rabbitmq_internal_ip}:15672;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          }
+      }
+
   - path: /etc/ssh/sshd_config
     content: |
       Port 22
@@ -134,6 +147,7 @@ runcmd:
   - ufw allow 443/tcp comment 'HTTPS'
   - ufw allow 7474/tcp comment 'Neo4j Browser'
   - ufw allow 7687/tcp comment 'Neo4j Bolt'
+  - ufw allow 15672/tcp comment 'RabbitMQ Management'
   - ufw allow proto tcp from ${internal_subnet_cidr} to any port 2049 comment 'NFS'
   - ufw enable
   - chown -R ${server_username}:${server_username} /srv/shared
@@ -144,4 +158,5 @@ runcmd:
   - systemctl start nginx
   - echo "stream { include /etc/nginx/stream.conf.d/*.conf; }" >> /etc/nginx/nginx.conf
   - ln -s /etc/nginx/sites-available/neo4j /etc/nginx/sites-enabled/neo4j
+  - ln -s /etc/nginx/sites-available/rabbitmq /etc/nginx/sites-enabled/rabbitmq
   - systemctl reload nginx

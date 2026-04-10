@@ -100,6 +100,16 @@ resource "openstack_networking_secgroup_rule_v2" "neo4j_bolt" {
   security_group_id = openstack_networking_secgroup_v2.external_traffic.id
 }
 
+resource "openstack_networking_secgroup_rule_v2" "rabbitmq_management" {
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 15672
+  port_range_max    = 15672
+  remote_ip_prefix  = "130.239.0.0/16"
+  security_group_id = openstack_networking_secgroup_v2.external_traffic.id
+}
+
 resource "openstack_networking_secgroup_v2" "internal_traffic" {
   name        = "${terraform.workspace}-${var.application_name}-internal"
   description = "security group for ssh and private network access"
@@ -228,6 +238,7 @@ module "nginx" {
   storage_size          = var.nfs_storage_size
   internal_subnet_cidr  = data.openstack_networking_subnet_v2.internal.cidr
   neo4j_internal_ip     = openstack_networking_port_v2.neo4j.all_fixed_ips[0]
+  rabbitmq_internal_ip  = openstack_networking_port_v2.rabbitmq.all_fixed_ips[0]
 }
 
 module "neo4j" {
@@ -261,4 +272,32 @@ module "application" {
   nfs_server_ip    = openstack_networking_port_v2.web_proxy.all_fixed_ips[0]
   github_pat       = var.github_pat
   github_username  = var.github_username
+}
+
+module "rabbitmq" {
+  source = "./modules/rabbitmq"
+
+  workspace         = terraform.workspace
+  application_name  = var.application_name
+  base_image_name   = var.base_image_name
+  flavor_name       = "ssc.xsmall"
+  server_username   = var.server_username
+  ssh_keypair_name  = openstack_compute_keypair_v2.ssh.name
+  ssh_public_key    = tls_private_key.ssh.public_key_openssh
+  internal_port_id  = openstack_networking_port_v2.rabbitmq.id
+  rabbitmq_username = var.rabbitmq_username
+  rabbitmq_password = var.rabbitmq_password
+}
+
+module "redis" {
+  source = "./modules/redis"
+
+  workspace        = terraform.workspace
+  application_name = var.application_name
+  base_image_name  = var.base_image_name
+  flavor_name      = "ssc.xsmall"
+  server_username  = var.server_username
+  ssh_keypair_name = openstack_compute_keypair_v2.ssh.name
+  ssh_public_key   = tls_private_key.ssh.public_key_openssh
+  internal_port_id = openstack_networking_port_v2.redis.id
 }

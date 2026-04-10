@@ -54,3 +54,14 @@ variable "github_username" {
   description = "GitHub username associated with the PAT"
   type        = string
 }
+
+variable "rabbitmq_username" {
+  description = "RabbitMQ default username"
+  type        = string
+}
+
+variable "rabbitmq_password" {
+  description = "RabbitMQ default password"
+  type        = string
+  sensitive   = true
+}
