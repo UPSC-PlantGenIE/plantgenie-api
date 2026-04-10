@@ -71,6 +71,25 @@ runcmd:
   - ufw enable
   - systemctl enable docker
   - systemctl start docker
+  - mount -a
   - |
     echo "${github_pat}" |\
     docker login ghcr.io -u "${github_username}" --password-stdin
+  - |
+    docker run -d \
+      --name fastapi \
+      --restart unless-stopped \
+      -e CELERY_BROKER_URL=amqp://${rabbitmq_username}:${rabbitmq_password}@${rabbitmq_internal_ip}:5672// \
+      -e CELERY_RESULT_BACKEND=redis://${redis_internal_ip}:6379/0 \
+      -e DATA_PATH=/opt/app-data \
+      -e DATABASE_NAME=plantgenie-backend.db \
+      -e OS_AUTH_TYPE=v3applicationcredential \
+      -e OS_AUTH_URL=${os_auth_url} \
+      -e OS_IDENTITY_API_VERSION=3 \
+      -e OS_REGION_NAME=${os_region_name} \
+      -e OS_INTERFACE=public \
+      -e OS_APPLICATION_CREDENTIAL_ID=${os_application_credential_id} \
+      -e OS_APPLICATION_CREDENTIAL_SECRET=${os_application_credential_secret} \
+      -p 8000:8000 \
+      -v /opt/app-data:/opt/app-data \
+      ghcr.io/upsc-plantgenie/plantgenie-api/fastapi-backend:${fastapi_image_tag}

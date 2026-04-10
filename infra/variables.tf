@@ -80,3 +80,8 @@ variable "celery_worker_image_tag" {
   description = "Docker image tag for the celery worker (e.g. v0.4.0)"
   type        = string
 }
+
+variable "fastapi_image_tag" {
+  description = "Docker image tag for the FastAPI backend (e.g. v0.4.0)"
+  type        = string
+}

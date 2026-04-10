@@ -53,3 +53,51 @@ variable "github_username" {
   type        = string
   description = "GitHub username associated with the PAT"
 }
+
+variable "rabbitmq_username" {
+  type        = string
+  description = "RabbitMQ username for the Celery broker URL"
+}
+
+variable "rabbitmq_password" {
+  type        = string
+  sensitive   = true
+  description = "RabbitMQ password for the Celery broker URL"
+}
+
+variable "rabbitmq_internal_ip" {
+  type        = string
+  description = "Internal IP of the rabbitmq VM"
+}
+
+variable "redis_internal_ip" {
+  type        = string
+  description = "Internal IP of the redis VM"
+}
+
+variable "os_auth_url" {
+  type        = string
+  description = "OpenStack identity service URL"
+}
+
+variable "os_region_name" {
+  type        = string
+  description = "OpenStack region name"
+}
+
+variable "os_application_credential_id" {
+  type        = string
+  sensitive   = true
+  description = "OpenStack application credential ID, created by Terraform"
+}
+
+variable "os_application_credential_secret" {
+  type        = string
+  sensitive   = true
+  description = "OpenStack application credential secret, created by Terraform"
+}
+
+variable "fastapi_image_tag" {
+  type        = string
+  description = "Docker image tag for the FastAPI backend (e.g. v0.4.0)"
+}

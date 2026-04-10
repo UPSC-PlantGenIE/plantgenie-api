@@ -127,6 +127,29 @@ resource "openstack_networking_secgroup_rule_v2" "allow_internal" {
   remote_group_id = openstack_networking_secgroup_v2.internal_traffic.id
 }
 
+resource "openstack_identity_application_credential_v3" "api" {
+  name        = "${terraform.workspace}-${var.application_name}-api"
+  description = "Read-only application credential for the FastAPI backend"
+
+  dynamic "access_rules" {
+    for_each = toset(["GET", "HEAD"])
+    content {
+      service = "object-store"
+      method  = access_rules.key
+      path    = "/v1/AUTH_*"
+    }
+  }
+
+  dynamic "access_rules" {
+    for_each = toset(["GET", "HEAD"])
+    content {
+      service = "object-store"
+      method  = access_rules.key
+      path    = "/v1/AUTH_*/**"
+    }
+  }
+}
+
 resource "openstack_identity_application_credential_v3" "celery" {
   name        = "${terraform.workspace}-${var.application_name}-celery"
   description = "Application credential for the celery worker"
@@ -284,17 +307,26 @@ module "neo4j" {
 module "application" {
   source = "./modules/application"
 
-  workspace        = terraform.workspace
-  application_name = var.application_name
-  base_image_name  = var.base_image_name
-  flavor_name      = "ssc.xsmall"
-  server_username  = var.server_username
-  ssh_keypair_name = openstack_compute_keypair_v2.ssh.name
-  ssh_public_key   = tls_private_key.ssh.public_key_openssh
-  internal_port_id = openstack_networking_port_v2.application.id
-  nfs_server_ip    = openstack_networking_port_v2.web_proxy.all_fixed_ips[0]
-  github_pat       = var.github_pat
-  github_username  = var.github_username
+  workspace                        = terraform.workspace
+  application_name                 = var.application_name
+  base_image_name                  = var.base_image_name
+  flavor_name                      = "ssc.xsmall"
+  server_username                  = var.server_username
+  ssh_keypair_name                 = openstack_compute_keypair_v2.ssh.name
+  ssh_public_key                   = tls_private_key.ssh.public_key_openssh
+  internal_port_id                 = openstack_networking_port_v2.application.id
+  nfs_server_ip                    = openstack_networking_port_v2.web_proxy.all_fixed_ips[0]
+  github_pat                       = var.github_pat
+  github_username                  = var.github_username
+  rabbitmq_username                = var.rabbitmq_username
+  rabbitmq_password                = var.rabbitmq_password
+  rabbitmq_internal_ip             = openstack_networking_port_v2.rabbitmq.all_fixed_ips[0]
+  redis_internal_ip                = openstack_networking_port_v2.redis.all_fixed_ips[0]
+  os_auth_url                      = var.os_auth_url
+  os_region_name                   = var.os_region_name
+  os_application_credential_id     = openstack_identity_application_credential_v3.api.id
+  os_application_credential_secret = openstack_identity_application_credential_v3.api.secret
+  fastapi_image_tag                = var.fastapi_image_tag
 }
 
 module "rabbitmq" {
