@@ -65,3 +65,18 @@ variable "rabbitmq_password" {
   type        = string
   sensitive   = true
 }
+
+variable "os_auth_url" {
+  description = "OpenStack identity service URL"
+  type        = string
+}
+
+variable "os_region_name" {
+  description = "OpenStack region name"
+  type        = string
+}
+
+variable "celery_worker_image_tag" {
+  description = "Docker image tag for the celery worker (e.g. v0.4.0)"
+  type        = string
+}

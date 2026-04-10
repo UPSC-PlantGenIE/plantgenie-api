@@ -33,3 +33,8 @@ output "redis_internal_ip" {
   description = "Internal IP address of the redis VM"
   value       = module.redis.internal_ip
 }
+
+output "queue_internal_ip" {
+  description = "Internal IP address of the queue VM"
+  value       = module.queue.internal_ip
+}
