@@ -26,7 +26,8 @@ resource "openstack_compute_instance_v2" "nginx" {
     public_ssh_key       = var.ssh_public_key
     internal_subnet_cidr = var.internal_subnet_cidr
     neo4j_internal_ip    = var.neo4j_internal_ip
-    rabbitmq_internal_ip = var.rabbitmq_internal_ip
+    rabbitmq_internal_ip    = var.rabbitmq_internal_ip
+    application_internal_ip = var.application_internal_ip
   })
 }
 

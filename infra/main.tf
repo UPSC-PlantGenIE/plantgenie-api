@@ -110,6 +110,16 @@ resource "openstack_networking_secgroup_rule_v2" "rabbitmq_management" {
   security_group_id = openstack_networking_secgroup_v2.external_traffic.id
 }
 
+resource "openstack_networking_secgroup_rule_v2" "fastapi" {
+  direction         = "ingress"
+  ethertype         = "IPv4"
+  protocol          = "tcp"
+  port_range_min    = 8000
+  port_range_max    = 8000
+  remote_ip_prefix  = "130.239.0.0/16"
+  security_group_id = openstack_networking_secgroup_v2.external_traffic.id
+}
+
 resource "openstack_networking_secgroup_v2" "internal_traffic" {
   name        = "${terraform.workspace}-${var.application_name}-internal"
   description = "security group for ssh and private network access"
@@ -284,7 +294,8 @@ module "nginx" {
   storage_size          = var.nfs_storage_size
   internal_subnet_cidr  = data.openstack_networking_subnet_v2.internal.cidr
   neo4j_internal_ip     = openstack_networking_port_v2.neo4j.all_fixed_ips[0]
-  rabbitmq_internal_ip  = openstack_networking_port_v2.rabbitmq.all_fixed_ips[0]
+  rabbitmq_internal_ip    = openstack_networking_port_v2.rabbitmq.all_fixed_ips[0]
+  application_internal_ip = openstack_networking_port_v2.application.all_fixed_ips[0]
 }
 
 module "neo4j" {

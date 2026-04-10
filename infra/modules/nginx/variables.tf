@@ -62,3 +62,8 @@ variable "rabbitmq_internal_ip" {
   type        = string
   description = "Internal IP of the rabbitmq VM, used for nginx proxy config"
 }
+
+variable "application_internal_ip" {
+  type        = string
+  description = "Internal IP of the application VM, used for nginx proxy config"
+}
