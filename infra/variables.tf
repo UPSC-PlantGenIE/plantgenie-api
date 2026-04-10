@@ -85,3 +85,8 @@ variable "fastapi_image_tag" {
   description = "Docker image tag for the FastAPI backend (e.g. v0.4.0)"
   type        = string
 }
+
+variable "ui_download_url" {
+  description = "URL to download the React frontend zip from GitHub releases"
+  type        = string
+}

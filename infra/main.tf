@@ -193,8 +193,8 @@ resource "openstack_compute_keypair_v2" "ssh" {
   public_key = tls_private_key.ssh.public_key_openssh
 }
 
-resource "openstack_networking_port_v2" "web_proxy" {
-  name           = "${terraform.workspace}-${var.application_name}-web-proxy-port"
+resource "openstack_networking_port_v2" "nginx" {
+  name           = "${terraform.workspace}-${var.application_name}-nginx-port"
   network_id     = data.openstack_networking_network_v2.internal.id
   admin_state_up = true
 
@@ -289,13 +289,14 @@ module "nginx" {
   server_username       = var.server_username
   ssh_keypair_name      = openstack_compute_keypair_v2.ssh.name
   ssh_public_key        = tls_private_key.ssh.public_key_openssh
-  internal_port_id      = openstack_networking_port_v2.web_proxy.id
+  internal_port_id      = openstack_networking_port_v2.nginx.id
   external_network_name = data.openstack_networking_network_v2.external.name
   storage_size          = var.nfs_storage_size
   internal_subnet_cidr  = data.openstack_networking_subnet_v2.internal.cidr
   neo4j_internal_ip     = openstack_networking_port_v2.neo4j.all_fixed_ips[0]
   rabbitmq_internal_ip    = openstack_networking_port_v2.rabbitmq.all_fixed_ips[0]
   application_internal_ip = openstack_networking_port_v2.application.all_fixed_ips[0]
+  ui_download_url         = var.ui_download_url
 }
 
 module "neo4j" {
@@ -309,7 +310,7 @@ module "neo4j" {
   ssh_keypair_name = openstack_compute_keypair_v2.ssh.name
   ssh_public_key   = tls_private_key.ssh.public_key_openssh
   internal_port_id = openstack_networking_port_v2.neo4j.id
-  nfs_server_ip    = openstack_networking_port_v2.web_proxy.all_fixed_ips[0]
+  nfs_server_ip    = openstack_networking_port_v2.nginx.all_fixed_ips[0]
   storage_size     = var.neo4j_storage_size
   neo4j_username   = var.neo4j_username
   neo4j_password   = var.neo4j_password
@@ -326,7 +327,7 @@ module "application" {
   ssh_keypair_name                 = openstack_compute_keypair_v2.ssh.name
   ssh_public_key                   = tls_private_key.ssh.public_key_openssh
   internal_port_id                 = openstack_networking_port_v2.application.id
-  nfs_server_ip                    = openstack_networking_port_v2.web_proxy.all_fixed_ips[0]
+  nfs_server_ip                    = openstack_networking_port_v2.nginx.all_fixed_ips[0]
   github_pat                       = var.github_pat
   github_username                  = var.github_username
   rabbitmq_username                = var.rabbitmq_username
@@ -379,7 +380,7 @@ module "queue" {
   ssh_keypair_name                 = openstack_compute_keypair_v2.ssh.name
   ssh_public_key                   = tls_private_key.ssh.public_key_openssh
   internal_port_id                 = openstack_networking_port_v2.queue.id
-  nfs_server_ip                    = openstack_networking_port_v2.web_proxy.all_fixed_ips[0]
+  nfs_server_ip                    = openstack_networking_port_v2.nginx.all_fixed_ips[0]
   github_pat                       = var.github_pat
   github_username                  = var.github_username
   rabbitmq_username                = var.rabbitmq_username

@@ -7,6 +7,7 @@ packages:
   - nginx
   - libnginx-mod-stream
   - nfs-kernel-server
+  - unzip
 
 device_aliases:
   app_data: /dev/vdb
@@ -68,8 +69,9 @@ write_files:
               server_name localhost;
 
               location / {
-                  root  html;
+                  root  /var/www/html/dist;
                   index index.html index.htm;
+                  try_files $uri $uri/ /index.html;
               }
 
               error_page  500 502 503 504 /50x.html;
@@ -164,6 +166,10 @@ runcmd:
   - ufw allow 8000/tcp comment 'FastAPI'
   - ufw allow proto tcp from ${internal_subnet_cidr} to any port 2049 comment 'NFS'
   - ufw enable
+  - rm -f /etc/nginx/sites-enabled/default
+  - wget -O /tmp/plantgenie-ui.zip ${ui_download_url}
+  - unzip /tmp/plantgenie-ui.zip -d /var/www/html
+  - rm /tmp/plantgenie-ui.zip
   - chown -R ${server_username}:${server_username} /srv/shared
   - systemctl enable nfs-kernel-server
   - systemctl start nfs-kernel-server

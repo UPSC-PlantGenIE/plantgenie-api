@@ -67,3 +67,8 @@ variable "application_internal_ip" {
   type        = string
   description = "Internal IP of the application VM, used for nginx proxy config"
 }
+
+variable "ui_download_url" {
+  type        = string
+  description = "URL to download the React frontend zip from GitHub releases"
+}

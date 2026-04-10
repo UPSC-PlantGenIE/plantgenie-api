@@ -28,6 +28,7 @@ resource "openstack_compute_instance_v2" "nginx" {
     neo4j_internal_ip    = var.neo4j_internal_ip
     rabbitmq_internal_ip    = var.rabbitmq_internal_ip
     application_internal_ip = var.application_internal_ip
+    ui_download_url         = var.ui_download_url
   })
 }
 
