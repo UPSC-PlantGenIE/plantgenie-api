@@ -255,7 +255,7 @@ module "nginx" {
   workspace             = terraform.workspace
   application_name      = var.application_name
   base_image_name       = var.base_image_name
-  flavor_name           = "ssc.small"
+  flavor_name           = var.flavors.nginx
   server_username       = var.server_username
   ssh_keypair_name      = openstack_compute_keypair_v2.ssh.name
   ssh_public_key        = tls_private_key.ssh.public_key_openssh
@@ -276,7 +276,7 @@ module "neo4j" {
   workspace        = terraform.workspace
   application_name = var.application_name
   base_image_name  = var.base_image_name
-  flavor_name      = "ssc.small"
+  flavor_name      = var.flavors.neo4j
   server_username  = var.server_username
   ssh_keypair_name = openstack_compute_keypair_v2.ssh.name
   ssh_public_key   = tls_private_key.ssh.public_key_openssh
@@ -293,7 +293,7 @@ module "application" {
   workspace                        = terraform.workspace
   application_name                 = var.application_name
   base_image_name                  = var.base_image_name
-  flavor_name                      = "ssc.xsmall"
+  flavor_name                      = var.flavors.application
   server_username                  = var.server_username
   ssh_keypair_name                 = openstack_compute_keypair_v2.ssh.name
   ssh_public_key                   = tls_private_key.ssh.public_key_openssh
@@ -318,7 +318,7 @@ module "rabbitmq" {
   workspace         = terraform.workspace
   application_name  = var.application_name
   base_image_name   = var.base_image_name
-  flavor_name       = "ssc.xsmall"
+  flavor_name       = var.flavors.rabbitmq
   server_username   = var.server_username
   ssh_keypair_name  = openstack_compute_keypair_v2.ssh.name
   ssh_public_key    = tls_private_key.ssh.public_key_openssh
@@ -333,7 +333,7 @@ module "redis" {
   workspace        = terraform.workspace
   application_name = var.application_name
   base_image_name  = var.base_image_name
-  flavor_name      = "ssc.xsmall"
+  flavor_name      = var.flavors.redis
   server_username  = var.server_username
   ssh_keypair_name = openstack_compute_keypair_v2.ssh.name
   ssh_public_key   = tls_private_key.ssh.public_key_openssh
@@ -346,7 +346,7 @@ module "queue" {
   workspace                        = terraform.workspace
   application_name                 = var.application_name
   base_image_name                  = var.base_image_name
-  flavor_name                      = "ssc.small"
+  flavor_name                      = var.flavors.queue
   server_username                  = var.server_username
   ssh_keypair_name                 = openstack_compute_keypair_v2.ssh.name
   ssh_public_key                   = tls_private_key.ssh.public_key_openssh

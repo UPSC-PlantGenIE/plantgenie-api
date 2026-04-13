@@ -95,3 +95,15 @@ variable "domain_names" {
   description = "Domain names for this deployment, used for nginx server_name"
   type        = list(string)
 }
+
+variable "flavors" {
+  description = "OpenStack flavor names per service"
+  type = object({
+    nginx       = string
+    neo4j       = string
+    application = string
+    rabbitmq    = string
+    redis       = string
+    queue       = string
+  })
+}
