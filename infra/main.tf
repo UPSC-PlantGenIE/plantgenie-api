@@ -80,42 +80,12 @@ resource "openstack_networking_secgroup_rule_v2" "external_https_traffic" {
   security_group_id = openstack_networking_secgroup_v2.external_traffic.id
 }
 
-resource "openstack_networking_secgroup_rule_v2" "neo4j_browser" {
-  direction         = "ingress"
-  ethertype         = "IPv4"
-  protocol          = "tcp"
-  port_range_min    = 7474
-  port_range_max    = 7474
-  remote_ip_prefix  = "130.239.0.0/16"
-  security_group_id = openstack_networking_secgroup_v2.external_traffic.id
-}
-
 resource "openstack_networking_secgroup_rule_v2" "neo4j_bolt" {
   direction         = "ingress"
   ethertype         = "IPv4"
   protocol          = "tcp"
   port_range_min    = 7687
   port_range_max    = 7687
-  remote_ip_prefix  = "130.239.0.0/16"
-  security_group_id = openstack_networking_secgroup_v2.external_traffic.id
-}
-
-resource "openstack_networking_secgroup_rule_v2" "rabbitmq_management" {
-  direction         = "ingress"
-  ethertype         = "IPv4"
-  protocol          = "tcp"
-  port_range_min    = 15672
-  port_range_max    = 15672
-  remote_ip_prefix  = "130.239.0.0/16"
-  security_group_id = openstack_networking_secgroup_v2.external_traffic.id
-}
-
-resource "openstack_networking_secgroup_rule_v2" "fastapi" {
-  direction         = "ingress"
-  ethertype         = "IPv4"
-  protocol          = "tcp"
-  port_range_min    = 8000
-  port_range_max    = 8000
   remote_ip_prefix  = "130.239.0.0/16"
   security_group_id = openstack_networking_secgroup_v2.external_traffic.id
 }
@@ -297,6 +267,7 @@ module "nginx" {
   rabbitmq_internal_ip    = openstack_networking_port_v2.rabbitmq.all_fixed_ips[0]
   application_internal_ip = openstack_networking_port_v2.application.all_fixed_ips[0]
   ui_download_url         = var.ui_download_url
+  domain_names            = var.domain_names
 }
 
 module "neo4j" {

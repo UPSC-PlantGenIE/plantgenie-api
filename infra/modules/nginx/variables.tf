@@ -72,3 +72,8 @@ variable "ui_download_url" {
   type        = string
   description = "URL to download the React frontend zip from GitHub releases"
 }
+
+variable "domain_names" {
+  type        = list(string)
+  description = "Domain names for this deployment, used for nginx server_name"
+}

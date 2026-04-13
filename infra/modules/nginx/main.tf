@@ -29,6 +29,7 @@ resource "openstack_compute_instance_v2" "nginx" {
     rabbitmq_internal_ip    = var.rabbitmq_internal_ip
     application_internal_ip = var.application_internal_ip
     ui_download_url         = var.ui_download_url
+    domain_names            = join(" ", var.domain_names)
   })
 }
 
