@@ -153,7 +153,7 @@ async def submit_blast(
     return BlastSubmitResponse(
         job_id=job_id,
         file_size=file.size or 0,
-        program=program.value,
+        program=program,
         database_type=database_type,
     )
 
