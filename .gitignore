@@ -1,5 +1,11 @@
 .env
 
+# possibly temporary
+CLAUDE.md
+neo4j-docker-start.sh
+infra/modules/nginx/scripts/certbot.sh
+infra/plantgenie-north-dev.pem
+
 # Python-generated files
 __pycache__/
 *.py[oc]
