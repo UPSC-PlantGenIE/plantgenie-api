@@ -1,5 +1,5 @@
 import Navbar from './components/Navbar'
-import Wizard from './components/Wizard'
+import Wizard from './components/wizard/Wizard'
 
 function App() {
   return (

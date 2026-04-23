@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { renderWithStore } from '../test-utils'
-import SelectGenome from './SelectGenome'
+import { renderWithStore } from '../../../test-utils'
+import GenomeSelector from './GenomeSelector'
 
 const pinusSylvestrisState = {
   step: 3 as const,
@@ -12,9 +12,9 @@ const pinusSylvestrisState = {
   genomeId: null,
 }
 
-describe('SelectGenome', () => {
+describe('GenomeSelector', () => {
   it('renders only genomes for the current taxon', () => {
-    renderWithStore(<SelectGenome />, {
+    renderWithStore(<GenomeSelector />, {
       preloadedState: { wizard: pinusSylvestrisState },
     })
     const radios = screen.getAllByRole('radio')
@@ -22,7 +22,7 @@ describe('SelectGenome', () => {
   })
 
   it('marks the stored genomeId as checked', () => {
-    renderWithStore(<SelectGenome />, {
+    renderWithStore(<GenomeSelector />, {
       preloadedState: {
         wizard: { ...pinusSylvestrisState, genomeId: 'pinus-sylvestris-v2' },
       },
@@ -34,7 +34,7 @@ describe('SelectGenome', () => {
 
   it('clicking a radio dispatches setGenomeId', async () => {
     const user = userEvent.setup()
-    const { store } = renderWithStore(<SelectGenome />, {
+    const { store } = renderWithStore(<GenomeSelector />, {
       preloadedState: { wizard: pinusSylvestrisState },
     })
     await user.click(
@@ -44,7 +44,7 @@ describe('SelectGenome', () => {
   })
 
   it('filters out genomes for other taxa', () => {
-    renderWithStore(<SelectGenome />, {
+    renderWithStore(<GenomeSelector />, {
       preloadedState: {
         wizard: { ...pinusSylvestrisState, taxonId: 'picea-abies' },
       },

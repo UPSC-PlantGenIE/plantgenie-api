@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { renderWithStore } from '../test-utils'
-import ListDetails from './ListDetails'
+import { renderWithStore } from '../../../test-utils'
+import ListName from './ListName'
 
-describe('ListDetails', () => {
+describe('ListName', () => {
   it('renders the list name input with the Figma placeholder', () => {
-    renderWithStore(<ListDetails />)
+    renderWithStore(<ListName />)
     const input = screen.getByLabelText(/list name/i)
     expect(input).toHaveAttribute(
       'placeholder',
@@ -15,12 +15,12 @@ describe('ListDetails', () => {
   })
 
   it('renders the description textarea', () => {
-    renderWithStore(<ListDetails />)
+    renderWithStore(<ListName />)
     expect(screen.getByLabelText(/description/i)).toBeInTheDocument()
   })
 
   it('reflects initial store state in the inputs', () => {
-    renderWithStore(<ListDetails />, {
+    renderWithStore(<ListName />, {
       preloadedState: {
         wizard: {
           step: 1,
@@ -37,14 +37,14 @@ describe('ListDetails', () => {
 
   it('typing in list name updates the store', async () => {
     const user = userEvent.setup()
-    const { store } = renderWithStore(<ListDetails />)
+    const { store } = renderWithStore(<ListName />)
     await user.type(screen.getByLabelText(/list name/i), 'My list')
     expect(store.getState().wizard.name).toBe('My list')
   })
 
   it('typing in description updates the store', async () => {
     const user = userEvent.setup()
-    const { store } = renderWithStore(<ListDetails />)
+    const { store } = renderWithStore(<ListName />)
     await user.type(
       screen.getByLabelText(/description/i),
       'Notes about the list',
