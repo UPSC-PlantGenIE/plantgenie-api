@@ -24,3 +24,5 @@ wheels/
 .env.*
 
 .DS_STORE
+ui/.pnp.cjs
+ui/.pnp.loader.mjs
