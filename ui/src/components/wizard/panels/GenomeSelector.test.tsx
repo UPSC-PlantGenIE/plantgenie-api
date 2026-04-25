@@ -4,53 +4,60 @@ import userEvent from '@testing-library/user-event'
 import { renderWithStore } from '../../../test-utils'
 import GenomeSelector from './GenomeSelector'
 
-const pinusSylvestrisState = {
+const pinsyState = {
   step: 3 as const,
   name: '',
   description: '',
-  taxonId: 'pinus-sylvestris',
-  genomeId: null,
+  taxonId: 'pinsy',
+  annotationId: null,
 }
 
 describe('GenomeSelector', () => {
-  it('renders only genomes for the current taxon', () => {
+  it('renders only annotations for the current taxon', async () => {
     renderWithStore(<GenomeSelector />, {
-      preloadedState: { wizard: pinusSylvestrisState },
+      preloadedState: { wizard: pinsyState },
     })
-    const radios = screen.getAllByRole('radio')
+    const radios = await screen.findAllByRole('radio')
     expect(radios).toHaveLength(2)
   })
 
-  it('marks the stored genomeId as checked', () => {
+  it('auto-selects the default annotation when none is chosen', async () => {
+    const { store } = renderWithStore(<GenomeSelector />, {
+      preloadedState: { wizard: pinsyState },
+    })
+    await screen.findByRole('radio', { name: /Araport11/i })
+    expect(store.getState().wizard.annotationId).toBe('pinsy-Araport11')
+  })
+
+  it('marks the stored annotationId as checked', async () => {
     renderWithStore(<GenomeSelector />, {
       preloadedState: {
-        wizard: { ...pinusSylvestrisState, genomeId: 'pinus-sylvestris-v2' },
+        wizard: { ...pinsyState, annotationId: 'pinsy-TAIR10' },
       },
     })
     expect(
-      screen.getByRole('radio', { name: /pinus sylvestris v2\.0/i }),
+      await screen.findByRole('radio', { name: /TAIR10/i }),
     ).toBeChecked()
   })
 
-  it('clicking a radio dispatches setGenomeId', async () => {
+  it('clicking a radio dispatches setAnnotationId', async () => {
     const user = userEvent.setup()
     const { store } = renderWithStore(<GenomeSelector />, {
-      preloadedState: { wizard: pinusSylvestrisState },
+      preloadedState: { wizard: pinsyState },
     })
     await user.click(
-      screen.getByRole('radio', { name: /pinus sylvestris v2\.0/i }),
+      await screen.findByRole('radio', { name: /TAIR10/i }),
     )
-    expect(store.getState().wizard.genomeId).toBe('pinus-sylvestris-v2')
+    expect(store.getState().wizard.annotationId).toBe('pinsy-TAIR10')
   })
 
-  it('filters out genomes for other taxa', () => {
+  it('filters out annotations for other taxa', async () => {
     renderWithStore(<GenomeSelector />, {
-      preloadedState: {
-        wizard: { ...pinusSylvestrisState, taxonId: 'picea-abies' },
-      },
+      preloadedState: { wizard: { ...pinsyState, taxonId: 'picab' } },
     })
+    await screen.findAllByRole('radio')
     expect(
-      screen.queryByRole('radio', { name: /pinus sylvestris v2\.0/i }),
+      screen.queryByRole('radio', { name: /Araport11/i }),
     ).not.toBeInTheDocument()
   })
 })

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import reducer, {
   back,
   next,
-  setGenomeId,
+  setAnnotationId,
   setTaxonId,
   type WizardState,
 } from './wizardSlice'
@@ -12,7 +12,7 @@ const baseState: WizardState = {
   name: '',
   description: '',
   taxonId: null,
-  genomeId: null,
+  annotationId: null,
 }
 
 describe('wizardSlice', () => {
@@ -32,32 +32,32 @@ describe('wizardSlice', () => {
     expect(reducer(baseState, back()).step).toBe(1)
   })
 
-  it('clears genomeId when taxon changes', () => {
+  it('clears annotationId when taxon changes', () => {
     const state = {
       ...baseState,
       taxonId: 'pinus-sylvestris',
-      genomeId: 'pinus-sylvestris-v2',
+      annotationId: 'pinus-sylvestris-v2',
     }
     const next = reducer(state, setTaxonId('picea-abies'))
     expect(next.taxonId).toBe('picea-abies')
-    expect(next.genomeId).toBeNull()
+    expect(next.annotationId).toBeNull()
   })
 
-  it('keeps genomeId when taxon is re-selected to the same value', () => {
+  it('keeps annotationId when taxon is re-selected to the same value', () => {
     const state = {
       ...baseState,
       taxonId: 'pinus-sylvestris',
-      genomeId: 'pinus-sylvestris-v2',
+      annotationId: 'pinus-sylvestris-v2',
     }
     const next = reducer(state, setTaxonId('pinus-sylvestris'))
     expect(next.taxonId).toBe('pinus-sylvestris')
-    expect(next.genomeId).toBe('pinus-sylvestris-v2')
+    expect(next.annotationId).toBe('pinus-sylvestris-v2')
   })
 
-  it('setGenomeId updates genomeId only', () => {
+  it('setAnnotationId updates annotationId only', () => {
     const state = { ...baseState, taxonId: 'pinus-sylvestris' }
-    const next = reducer(state, setGenomeId('pinus-sylvestris-v2'))
-    expect(next.genomeId).toBe('pinus-sylvestris-v2')
+    const next = reducer(state, setAnnotationId('pinus-sylvestris-v2'))
+    expect(next.annotationId).toBe('pinus-sylvestris-v2')
     expect(next.taxonId).toBe('pinus-sylvestris')
   })
 })

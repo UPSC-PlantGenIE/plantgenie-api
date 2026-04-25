@@ -7,7 +7,7 @@ export interface WizardState {
   name: string
   description: string
   taxonId: string | null
-  genomeId: string | null
+  annotationId: string | null
 }
 
 const initialState: WizardState = {
@@ -15,7 +15,7 @@ const initialState: WizardState = {
   name: '',
   description: '',
   taxonId: null,
-  genomeId: null,
+  annotationId: null,
 }
 
 const wizardSlice = createSlice({
@@ -40,17 +40,17 @@ const wizardSlice = createSlice({
     },
     setTaxonId(state, action: PayloadAction<string>) {
       if (state.taxonId !== action.payload) {
-        state.genomeId = null
+        state.annotationId = null
       }
       state.taxonId = action.payload
     },
-    setGenomeId(state, action: PayloadAction<string>) {
-      state.genomeId = action.payload
+    setAnnotationId(state, action: PayloadAction<string>) {
+      state.annotationId = action.payload
     },
   },
 })
 
-export const { next, back, setName, setDescription, setTaxonId, setGenomeId } =
+export const { next, back, setName, setDescription, setTaxonId, setAnnotationId } =
   wizardSlice.actions
 
 export default wizardSlice.reducer

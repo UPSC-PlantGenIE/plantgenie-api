@@ -26,7 +26,7 @@ describe('Wizard', () => {
           name: 'My list',
           description: '',
           taxonId: null,
-          genomeId: null,
+          annotationId: null,
         },
       },
     })
@@ -34,7 +34,7 @@ describe('Wizard', () => {
     expect(
       screen.getByRole('heading', { name: /select a taxon/i }),
     ).toBeInTheDocument()
-    expect(screen.getAllByRole('radio')).toHaveLength(7)
+    expect(await screen.findAllByRole('radio')).toHaveLength(2)
   })
 
   it('Back on step 2 returns to step 1 with name preserved', async () => {
@@ -45,8 +45,8 @@ describe('Wizard', () => {
           step: 2,
           name: 'My list',
           description: '',
-          taxonId: 'pinus-sylvestris',
-          genomeId: null,
+          taxonId: 'pinsy',
+          annotationId: null,
         },
       },
     })
@@ -57,20 +57,20 @@ describe('Wizard', () => {
     expect(screen.getByLabelText(/list name/i)).toHaveValue('My list')
   })
 
-  it('step 3 shows the selected taxon and a Create list button', () => {
+  it('step 3 shows the selected taxon and a Create list button', async () => {
     renderWithStore(<Wizard />, {
       preloadedState: {
         wizard: {
           step: 3,
           name: 'My list',
           description: '',
-          taxonId: 'pinus-sylvestris',
-          genomeId: null,
+          taxonId: 'pinsy',
+          annotationId: null,
         },
       },
     })
     expect(
-      screen.getByText(/new gene list.*pinus sylvestris/i),
+      await screen.findByText(/new gene list.*pinus sylvestris/i),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: /create list/i }),
@@ -86,12 +86,14 @@ describe('Wizard', () => {
           name: 'My list',
           description: '',
           taxonId: null,
-          genomeId: null,
+          annotationId: null,
         },
       },
     })
     expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled()
-    await user.click(screen.getByRole('radio', { name: /pinus sylvestris/i }))
+    await user.click(
+      await screen.findByRole('radio', { name: /pinus sylvestris/i }),
+    )
     expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled()
   })
 })

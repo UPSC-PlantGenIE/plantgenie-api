@@ -1,38 +1,64 @@
+import { useEffect } from 'react'
+import {
+  useGetAnnotationsQuery,
+  useGetAssembliesQuery,
+  useGetTaxaQuery,
+} from '../../../api/plantgenieApi'
 import { useAppDispatch, useAppSelector } from '../../../store/hooks'
-import { back, next, setGenomeId } from '../../../store/wizardSlice'
+import { back, next, setAnnotationId } from '../../../store/wizardSlice'
 
-const genomes = [
-  {
-    id: 'pinus-sylvestris-v2',
-    taxonId: 'pinus-sylvestris',
-    name: 'Pinus sylvestris v2.0',
-    subtitle: '4,891 annotated genes  ·  Default',
-  },
-  {
-    id: 'pinus-taeda-v3-shared',
-    taxonId: 'pinus-sylvestris',
-    name: 'Pinus taeda v3.0 (shared)',
-    subtitle: 'Used for annotation only  ·  46,232 genes',
-  },
-  {
-    id: 'picea-abies-v1',
-    taxonId: 'picea-abies',
-    name: 'Picea abies v1',
-    subtitle: 'placeholder',
-  },
-]
+const numberFmt = new Intl.NumberFormat('en-US')
 
 export default function GenomeSelector() {
   const dispatch = useAppDispatch()
   const step = useAppSelector((s) => s.wizard.step)
   const taxonId = useAppSelector((s) => s.wizard.taxonId)
-  const genomeId = useAppSelector((s) => s.wizard.genomeId)
+  const annotationId = useAppSelector((s) => s.wizard.annotationId)
+
+  const { data: taxa } = useGetTaxaQuery()
+  const {
+    data: assemblies,
+    isLoading: assembliesLoading,
+    isError: assembliesError,
+  } = useGetAssembliesQuery(
+    { taxon: taxonId ?? undefined },
+    { skip: !taxonId },
+  )
+  const {
+    data: annotations,
+    isLoading: annotationsLoading,
+    isError: annotationsError,
+  } = useGetAnnotationsQuery(
+    { taxon: taxonId ?? undefined },
+    { skip: !taxonId },
+  )
 
   const active = step === 3
-  const canContinue = genomeId !== null
-  const visible = genomes.filter((g) => g.taxonId === taxonId)
-  const eyebrow = taxonId
-    ? `New gene list  ·  ${taxonLabel(taxonId)}`
+  const isLoading = assembliesLoading || annotationsLoading
+  const isError = assembliesError || annotationsError
+  const canContinue = annotationId !== null && !isLoading
+
+  const selectedTaxon = taxa?.find((t) => t.abbreviation === taxonId)
+  const assemblyById = new Map(
+    (assemblies ?? []).map((a) => [a.id, a]),
+  )
+  const rows = (annotations ?? []).map((n) => ({
+    annotation: n,
+    assembly: assemblyById.get(n.assemblyId),
+  }))
+
+  useEffect(() => {
+    if (!annotations || annotations.length === 0) return
+    const currentIsValid =
+      annotationId !== null &&
+      annotations.some((n) => n.id === annotationId)
+    if (currentIsValid) return
+    const def = annotations.find((n) => n.isDefault) ?? annotations[0]
+    dispatch(setAnnotationId(def.id))
+  }, [annotationId, annotations, dispatch])
+
+  const eyebrow = selectedTaxon
+    ? `New gene list  ·  ${selectedTaxon.scientificName}`
     : 'New gene list'
 
   return (
@@ -54,47 +80,80 @@ export default function GenomeSelector() {
         </div>
 
         <div className="mt-5 flex flex-col gap-2 rounded-2xl border border-border bg-card p-5 shadow-card">
-          {visible.map((g) => {
-            const checked = g.id === genomeId
-            return (
-              <label
-                key={g.id}
-                className={`flex h-14 cursor-pointer items-center gap-3 rounded-lg border px-3 ${
-                  checked
-                    ? 'border-primary bg-primary-tint'
-                    : 'border-border bg-card'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="genome"
-                  value={g.id}
-                  checked={checked}
-                  onChange={() => dispatch(setGenomeId(g.id))}
-                  className="sr-only"
+          {isLoading && (
+            <>
+              <span className="sr-only" aria-live="polite">
+                Loading genomes
+              </span>
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  aria-hidden
+                  className="h-14 animate-pulse rounded-lg bg-border/40"
                 />
-                <span
-                  className={`flex size-5 items-center justify-center rounded-full border ${
-                    checked ? 'border-primary' : 'border-border'
+              ))}
+            </>
+          )}
+
+          {isError && (
+            <p role="alert" className="text-sm text-red-600">
+              Couldn't load genomes. Please try again.
+            </p>
+          )}
+
+          {!isLoading && !isError && rows.length === 0 && (
+            <p className="text-sm text-muted">No genomes available</p>
+          )}
+
+          {!isLoading &&
+            !isError &&
+            rows.map(({ annotation, assembly }) => {
+              const checked = annotation.id === annotationId
+              const title = assembly
+                ? `Genome - ${assembly.version}  ·  Annotation - ${annotation.version}`
+                : `Annotation ${annotation.version}`
+              const subtitle = `${numberFmt.format(annotation.geneCount)} genes${
+                annotation.isDefault ? '  ·  Default' : ''
+              }`
+              return (
+                <label
+                  key={annotation.id}
+                  className={`flex h-14 cursor-pointer items-center gap-3 rounded-lg border px-3 ${
+                    checked
+                      ? 'border-primary bg-primary-tint'
+                      : 'border-border bg-card'
                   }`}
                 >
-                  {checked && (
-                    <span className="size-2 rounded-full bg-primary" />
-                  )}
-                </span>
-                <div>
-                  <div
-                    className={`text-sm text-heading ${
-                      checked ? 'font-semibold' : 'font-medium'
+                  <input
+                    type="radio"
+                    name="genome"
+                    value={annotation.id}
+                    checked={checked}
+                    onChange={() => dispatch(setAnnotationId(annotation.id))}
+                    className="sr-only"
+                  />
+                  <span
+                    className={`flex size-5 items-center justify-center rounded-full border ${
+                      checked ? 'border-primary' : 'border-border'
                     }`}
                   >
-                    {g.name}
+                    {checked && (
+                      <span className="size-2 rounded-full bg-primary" />
+                    )}
+                  </span>
+                  <div>
+                    <div
+                      className={`text-sm text-heading ${
+                        checked ? 'font-semibold' : 'font-medium'
+                      }`}
+                    >
+                      {title}
+                    </div>
+                    <div className="text-xs text-muted">{subtitle}</div>
                   </div>
-                  <div className="text-xs text-muted">{g.subtitle}</div>
-                </div>
-              </label>
-            )
-          })}
+                </label>
+              )
+            })}
         </div>
 
         <p className="mt-4 text-xs text-muted">
@@ -122,11 +181,4 @@ export default function GenomeSelector() {
       </div>
     </section>
   )
-}
-
-function taxonLabel(id: string): string {
-  return id
-    .split('-')
-    .map((w) => w[0].toUpperCase() + w.slice(1))
-    .join(' ')
 }

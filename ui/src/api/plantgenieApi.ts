@@ -1,28 +1,61 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
 
 const baseUrl =
-  import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1/'
+  import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/'
 
-export interface Species {
+export interface Taxon {
   id: number
-  speciesName: string
-  speciesAbbreviation: string
-  avatarPath: string
+  scientificName: string
+  abbreviation: string
+  alias: string | null
+  commonName: string | null
 }
 
-interface AvailableSpeciesResponse {
-  species: Species[]
+export interface Assembly {
+  id: string
+  version: string
+  versionName: string | null
+  published: boolean
+  publicationDate: string | null
+  doi: string | null
+  taxonAbbreviation: string
+}
+
+export interface Annotation {
+  id: string
+  version: string
+  geneCount: number
+  isDefault: boolean
+  assemblyId: string
 }
 
 export const plantgenieApi = createApi({
   reducerPath: 'plantgenieApi',
   baseQuery: fetchBaseQuery({ baseUrl }),
   endpoints: (build) => ({
-    getSpecies: build.query<Species[], void>({
-      query: () => 'available-species',
-      transformResponse: (r: AvailableSpeciesResponse) => r.species,
+    getTaxa: build.query<Taxon[], void>({
+      query: () => 'v2/taxa',
+      transformResponse: (r: { taxa: Taxon[] }) => r.taxa,
+    }),
+    getAssemblies: build.query<Assembly[], { taxon?: string }>({
+      query: ({ taxon }) => ({
+        url: 'v2/assemblies',
+        params: { taxon },
+      }),
+      transformResponse: (r: { assemblies: Assembly[] }) => r.assemblies,
+    }),
+    getAnnotations: build.query<
+      Annotation[],
+      { taxon?: string; assembly?: string }
+    >({
+      query: (params) => ({ url: 'v2/annotations', params }),
+      transformResponse: (r: { annotations: Annotation[] }) => r.annotations,
     }),
   }),
 })
 
-export const { useGetSpeciesQuery } = plantgenieApi
+export const {
+  useGetTaxaQuery,
+  useGetAssembliesQuery,
+  useGetAnnotationsQuery,
+} = plantgenieApi

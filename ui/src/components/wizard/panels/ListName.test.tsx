@@ -27,7 +27,7 @@ describe('ListName', () => {
           name: 'Existing list',
           description: 'Already typed',
           taxonId: null,
-          genomeId: null,
+          annotationId: null,
         },
       },
     })
