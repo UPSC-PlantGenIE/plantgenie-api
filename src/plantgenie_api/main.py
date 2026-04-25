@@ -12,6 +12,7 @@ from plantgenie_api.api.v1.enrichment.routes import (
     router as enrichment_router,
 )
 from plantgenie_api.api.v1.genome.routes import router as genome_router
+from plantgenie_api.api.v2.routes import router as v2_router
 from plantgenie_api.dependencies import DatabaseDep, lifespan
 from plantgenie_api.models import (
     AvailableSpecies,
@@ -28,7 +29,7 @@ app = FastAPI(
 
 
 app.add_middleware(
-    CORSMiddleware,  # type: ignore
+    CORSMiddleware,
     allow_origins=[
         "*"
     ],  # Allow all origins (change this to specific origins in production)
@@ -41,6 +42,7 @@ app.include_router(router=genome_router, prefix="/v1")
 app.include_router(router=expression_router, prefix="/v1")
 app.include_router(router=annotation_router, prefix="/v1")
 app.include_router(router=enrichment_router, prefix="/v1")
+app.include_router(router=v2_router)
 
 
 @app.get("/")

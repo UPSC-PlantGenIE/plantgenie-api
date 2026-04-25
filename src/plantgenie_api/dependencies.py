@@ -1,11 +1,12 @@
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated, Dict, Generator, List
+from typing import Annotated, AsyncGenerator, Dict, Generator, List
 
 import duckdb
 from duckdb import DuckDBPyConnection
 from fastapi import Depends, FastAPI, Request
+from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncSession
 
 
 @asynccontextmanager
@@ -21,6 +22,9 @@ async def lifespan(app: FastAPI):
         "OS_INTERFACE",
         "OS_APPLICATION_CREDENTIAL_ID",
         "OS_APPLICATION_CREDENTIAL_SECRET",
+        "NEO4J_URI",
+        "NEO4J_USER",
+        "NEO4J_PASSWORD",
     ]
 
     missing_variables: List[str] = [
@@ -59,7 +63,19 @@ async def lifespan(app: FastAPI):
 
     app.state.APP_ENVIRONMENT = APP_ENVIRONMENT
 
+    driver = AsyncGraphDatabase.driver(
+        APP_ENVIRONMENT["NEO4J_URI"],
+        auth=(
+            APP_ENVIRONMENT["NEO4J_USER"],
+            APP_ENVIRONMENT["NEO4J_PASSWORD"],
+        ),
+    )
+    await driver.verify_connectivity()
+    app.state.NEO4J_DRIVER = driver
+
     yield
+
+    await driver.close()
 
 
 def get_environment(request: Request) -> dict[str, str]:
@@ -94,7 +110,16 @@ def get_db_connection(
         yield connection
 
 
+async def get_neo4j_session(
+    request: Request,
+) -> AsyncGenerator[AsyncSession, None]:
+    driver: AsyncDriver = request.app.state.NEO4J_DRIVER
+    async with driver.session() as session:
+        yield session
+
+
 DatabaseDep = Annotated[DuckDBPyConnection, Depends(get_db_connection)]
+Neo4jDep = Annotated[AsyncSession, Depends(get_neo4j_session)]
 EnvironmentDep = Annotated[Dict[str, str], Depends(get_environment)]
 BlastPathDep = Annotated[Path, Depends(get_blast_path)]
 GoEnrichmentPathDep = Annotated[Path, Depends(get_go_enrichment_path)]

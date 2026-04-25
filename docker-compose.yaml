@@ -4,7 +4,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: pg-local-fastapi
     entrypoint:
       - "fastapi"
       - "dev"
@@ -21,12 +20,17 @@ services:
     environment:
       - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - NEO4J_URI=bolt://neo4j:7687
     volumes:
       - "${HOST_DATA_DIR}:/opt/pg-application-data:rw"
       - ".env.shared:/app/.env.shared:ro"
     depends_on:
-      - rabbitmq
-      - redis
+      rabbitmq:
+        condition: service_started
+      redis:
+        condition: service_started
+      neo4j:
+        condition: service_healthy
     networks:
       - plantgenie_network
     develop:
@@ -42,7 +46,6 @@ services:
       context: .
       dockerfile: packages/task-queue/Dockerfile
     image: ghcr.io/upsc-plantgenie/plantgenie-api/celery-worker:v0.4.0
-    container_name: pg-local-celery
     entrypoint:
       - "celery"
       - "-A"
@@ -72,7 +75,6 @@ services:
 
   rabbitmq:
     image: rabbitmq:4.2-management # an ubuntu image base
-    container_name: pg-local-rabbitmq
     ports:
       - "5672:5672"
       - "15672:15672"  # rabbitmq management console port
@@ -84,9 +86,29 @@ services:
 
   redis:
     image: redis:8.4-bookworm
-    container_name: pg-local-redis
     ports:
       - "6379:6379"
+    networks:
+      - plantgenie_network
+
+  neo4j:
+    image: neo4j:2026.01.4-community-trixie
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: neo4j/guest123
+      NEO4J_PLUGINS: '["graph-data-science"]'
+    volumes:
+      - /opt/neo4j/logs:/logs
+      - /opt/neo4j/data:/data
+      - /opt/neo4j/import:/import
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p guest123 'RETURN 1' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
     networks:
       - plantgenie_network
 
