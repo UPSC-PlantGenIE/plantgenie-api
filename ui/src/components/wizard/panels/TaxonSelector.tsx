@@ -1,15 +1,15 @@
-import { useGetTaxaQuery } from '../../../api/plantgenieApi'
-import { useAppDispatch, useAppSelector } from '../../../store/hooks'
-import { back, next, setTaxonId } from '../../../store/wizardSlice'
+import { useGetTaxaQuery } from "../../../api/plantgenieApi";
+import { useAppDispatch, useAppSelector } from "../../../store/hooks";
+import { back, next, setTaxonId } from "../../../store/wizardSlice";
 
 export default function TaxonSelector() {
-  const dispatch = useAppDispatch()
-  const step = useAppSelector((s) => s.wizard.step)
-  const taxonId = useAppSelector((s) => s.wizard.taxonId)
-  const { data: taxa, isLoading, isError } = useGetTaxaQuery()
+  const dispatch = useAppDispatch();
+  const step = useAppSelector((s) => s.wizard.step);
+  const taxonId = useAppSelector((s) => s.wizard.taxonId);
+  const { data: taxa, isLoading, isError } = useGetTaxaQuery();
 
-  const active = step === 2
-  const canContinue = taxonId !== null && !isLoading
+  const active = step === 2;
+  const canContinue = taxonId !== null && !isLoading;
 
   return (
     <section
@@ -19,9 +19,7 @@ export default function TaxonSelector() {
     >
       <div className="mx-auto w-full max-w-lg px-4 pt-20 pb-8">
         <p className="text-sm font-medium text-muted">New gene list</p>
-        <h1 className="mt-1 text-2xl font-bold text-heading">
-          Select a taxon
-        </h1>
+        <h1 className="mt-1 text-2xl font-bold text-heading">Select a taxon</h1>
 
         <div className="mt-2 flex gap-3">
           <span className="size-2 rounded-full bg-border" />
@@ -58,14 +56,14 @@ export default function TaxonSelector() {
           {!isLoading &&
             !isError &&
             taxa?.map((t) => {
-              const checked = t.abbreviation === taxonId
+              const checked = t.abbreviation === taxonId;
               return (
                 <label
                   key={t.abbreviation}
                   className={`flex h-14 cursor-pointer items-center gap-3 rounded-lg border px-3 ${
                     checked
-                      ? 'border-primary bg-primary-tint'
-                      : 'border-border bg-card'
+                      ? "border-primary bg-primary-tint"
+                      : "border-border bg-card"
                   }`}
                 >
                   <input
@@ -78,7 +76,7 @@ export default function TaxonSelector() {
                   />
                   <span
                     className={`flex size-5 items-center justify-center rounded-full border ${
-                      checked ? 'border-primary' : 'border-border'
+                      checked ? "border-primary" : "border-border"
                     }`}
                   >
                     {checked && (
@@ -88,7 +86,7 @@ export default function TaxonSelector() {
                   <div>
                     <div
                       className={`text-sm text-heading ${
-                        checked ? 'font-semibold' : 'font-medium'
+                        checked ? "font-semibold" : "font-medium"
                       }`}
                     >
                       {t.scientificName}
@@ -98,7 +96,7 @@ export default function TaxonSelector() {
                     )}
                   </div>
                 </label>
-              )
+              );
             })}
         </div>
 
@@ -122,5 +120,5 @@ export default function TaxonSelector() {
         </div>
       </div>
     </section>
-  )
+  );
 }

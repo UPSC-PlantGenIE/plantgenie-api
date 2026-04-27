@@ -1,5 +1,5 @@
-import Navbar from './components/Navbar'
-import Wizard from './components/wizard/Wizard'
+import Navbar from "./components/Navbar";
+import Wizard from "./components/wizard/Wizard";
 
 function App() {
   return (
@@ -9,7 +9,7 @@ function App() {
         <Wizard />
       </main>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
