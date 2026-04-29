@@ -3,10 +3,22 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, AsyncGenerator, Dict, Generator, List
 
+import aiosqlite
 import duckdb
 from duckdb import DuckDBPyConnection
 from fastapi import Depends, FastAPI, Request
 from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncSession
+
+from plantgenie_api.sqlite import bootstrap_sqlite
+
+
+async def get_sqlite_connection(
+    request: Request,
+) -> AsyncGenerator[aiosqlite.Connection, None]:
+    async with aiosqlite.connect(
+        request.app.state.APP_ENVIRONMENT["SQLITE_PATH"]
+    ) as conn:
+        yield conn
 
 
 @asynccontextmanager
@@ -73,6 +85,12 @@ async def lifespan(app: FastAPI):
     await driver.verify_connectivity()
     app.state.NEO4J_DRIVER = driver
 
+    sqlite_path = (
+        Path(APP_ENVIRONMENT["DATA_PATH"]) / "plantgenie-userdata.sqlite"
+    )
+    bootstrap_sqlite(sqlite_path)
+    APP_ENVIRONMENT["SQLITE_PATH"] = sqlite_path.as_posix()
+
     yield
 
     await driver.close()
@@ -120,6 +138,7 @@ async def get_neo4j_session(
 
 DatabaseDep = Annotated[DuckDBPyConnection, Depends(get_db_connection)]
 Neo4jDep = Annotated[AsyncSession, Depends(get_neo4j_session)]
+SqliteDep = Annotated[aiosqlite.Connection, Depends(get_sqlite_connection)]
 EnvironmentDep = Annotated[Dict[str, str], Depends(get_environment)]
 BlastPathDep = Annotated[Path, Depends(get_blast_path)]
 GoEnrichmentPathDep = Annotated[Path, Depends(get_go_enrichment_path)]

@@ -49,3 +49,15 @@ class Annotation(PlantGenieModel):
 
 class AnnotationsResponse(PlantGenieModel):
     annotations: List[Annotation]
+
+
+class CreateListRequest(PlantGenieModel):
+    name: str
+    annotation_id: str
+    account_id: Optional[str] = None
+    description: Optional[str] = None
+
+
+class CreateListResponse(PlantGenieModel):
+    account_id: str
+    list_id: str

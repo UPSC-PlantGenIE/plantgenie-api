@@ -52,6 +52,7 @@ dev = [
     "celery-types>=0.23.0",
     "ipython>=9.3.0",
     "pytest>=9.0.1",
+    "pytest-playwright>=0.7.2",
     "python-dotenv[cli]>=1.0.1",
     "ruff>=0.9.5",
     "ty>=0.0.29",
@@ -67,5 +68,8 @@ testpaths = [
     "packages/task-queue/src/tests",
     "packages/shared/src/tests",
 ]
-addopts = ["--import-mode=importlib"]
+addopts = ["--import-mode=importlib", "-m", "not e2e"]
 filterwarnings = ["ignore::DeprecationWarning:testcontainers"]
+markers = [
+    "e2e: end-to-end browser tests (require docker compose stack and vite dev server running; opt-in via `-m e2e`)",
+]
