@@ -70,6 +70,29 @@ export const handlers = [
       listId: "fake-list-123",
     });
   }),
+  http.get("http://localhost:8000/api/v2/lists", () =>
+    HttpResponse.json({
+      lists: [
+        {
+          listId: "abc-123",
+          name: "Test list",
+          annotationId: "arath-Araport11",
+        },
+      ],
+    })
+  ),
+
+  http.get(
+    "http://localhost:8000/api/v2/lists/:listId",
+    ({ params }) => {
+      return HttpResponse.json({
+        listId: params.listId,
+        name: "My fetched list",
+        annotationId: "arath-Araport11",
+      });
+    }
+  ),
+
   http.get("http://localhost:8000/api/v2/taxa", ({ request }) => {
     const abbreviation = new URL(request.url).searchParams.get("abbreviation");
     const filtered = abbreviation

@@ -91,3 +91,50 @@ async def test_get_list_returns_404_when_missing(
 ):
     response = await async_client.get("/v2/lists/does-not-exist")
     assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_get_lists_returns_all_lists(
+    async_client: AsyncClient,
+):
+    await async_client.post(
+        "/v2/lists",
+        json={"name": "First", "annotationId": "arath-Araport11"},
+    )
+    await async_client.post(
+        "/v2/lists",
+        json={"name": "Second", "annotationId": "arath-Araport11"},
+    )
+
+    response = await async_client.get("/v2/lists")
+
+    assert response.status_code == 200
+    body = response.json()
+    names = [item["name"] for item in body["lists"]]
+    assert "First" in names
+    assert "Second" in names
+
+
+@pytest.mark.anyio
+async def test_patch_list_adds_genes(
+    async_client: AsyncClient,
+    sqlite_conn: sqlite3.Connection,
+):
+    create = await async_client.post(
+        "/v2/lists",
+        json={"name": "My list", "annotationId": "arath-Araport11"},
+    )
+    list_id = create.json()["listId"]
+
+    response = await async_client.patch(
+        f"/v2/lists/{list_id}",
+        json={"addGeneIds": ["AT1G01010", "AT1G01020"]},
+    )
+
+    assert response.status_code == 200
+    rows = sqlite_conn.execute(
+        "SELECT gene_id FROM gene_list_members "
+        "WHERE list_id = ? ORDER BY gene_id",
+        (list_id,),
+    ).fetchall()
+    assert [r[0] for r in rows] == ["AT1G01010", "AT1G01020"]

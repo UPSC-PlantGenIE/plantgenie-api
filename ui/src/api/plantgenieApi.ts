@@ -29,6 +29,12 @@ export interface Annotation {
   assemblyId: string;
 }
 
+export interface GeneList {
+  listId: string;
+  name: string;
+  annotationId: string;
+}
+
 export interface CreateListResponse {
   accountId: string;
   listId: string;
@@ -66,6 +72,13 @@ export const plantgenieApi = createApi({
     createList: build.mutation<CreateListResponse, CreateListRequest>({
       query: (body) => ({ url: "v2/lists", method: "POST", body }),
     }),
+    getList: build.query<GeneList, string>({
+      query: (listId) => `v2/lists/${listId}`,
+    }),
+    getMyLists: build.query<GeneList[], void>({
+      query: () => "v2/lists",
+      transformResponse: (r: { lists: GeneList[] }) => r.lists,
+    }),
   }),
 });
 
@@ -74,4 +87,6 @@ export const {
   useGetAssembliesQuery,
   useGetAnnotationsQuery,
   useCreateListMutation,
+  useGetListQuery,
+  useGetMyListsQuery,
 } = plantgenieApi;

@@ -1,4 +1,3 @@
-import secrets
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
@@ -8,49 +7,16 @@ from plantgenie_api.api.v2.models import (
     AnnotationsResponse,
     AssembliesResponse,
     Assembly,
-    CreateListRequest,
-    CreateListResponse,
     Taxon,
     TaxaResponse,
 )
-from plantgenie_api.dependencies import Neo4jDep, SqliteDep
+from plantgenie_api.dependencies import Neo4jDep
 
 router = APIRouter(prefix="/v2")
 
 
-@router.post(
-    "/lists", status_code=201, response_model=CreateListResponse
-)
-async def create_list(
-    body: CreateListRequest, conn: SqliteDep
-) -> CreateListResponse:
-    list_id = secrets.token_hex(8)
-    await conn.execute(
-        "INSERT INTO gene_lists (list_id, name, annotation_id) "
-        "VALUES (?, ?, ?)",
-        (list_id, body.name, body.annotation_id),
-    )
-    await conn.commit()
-    return CreateListResponse(account_id="stub", list_id=list_id)
-
-
-@router.get("/lists/{list_id}")
-async def get_list(list_id: str, conn: SqliteDep) -> dict:
-    async with conn.execute(
-        "SELECT list_id, name, annotation_id FROM gene_lists "
-        "WHERE list_id = ?",
-        (list_id,),
-    ) as cursor:
-        row = await cursor.fetchone()
-    if row is None:
-        raise HTTPException(
-            status_code=404, detail=f"List '{list_id}' not found"
-        )
-    return {"listId": row[0], "name": row[1], "annotationId": row[2]}
-
-
 @router.get("/taxa", response_model=TaxaResponse, tags=["v2", "taxon"])
-async def list_taxa(
+async def retrieve_taxa(
     session: Neo4jDep, abbreviation: Optional[str] = None
 ) -> TaxaResponse:
     if abbreviation is None:
@@ -69,7 +35,7 @@ async def list_taxa(
     response_model=AssembliesResponse,
     tags=["v2", "assembly"],
 )
-async def list_assemblies(
+async def retrieve_assemblies(
     session: Neo4jDep, taxon: Optional[str] = None
 ) -> AssembliesResponse:
     if taxon is None:
@@ -102,7 +68,7 @@ async def list_assemblies(
     response_model=AnnotationsResponse,
     tags=["v2", "annotation"],
 )
-async def list_annotations(
+async def retrieve_annotations(
     session: Neo4jDep,
     assembly: Optional[str] = None,
     taxon: Optional[str] = None,
