@@ -50,6 +50,7 @@ export interface CreateListRequest {
 export const plantgenieApi = createApi({
   reducerPath: "plantgenieApi",
   baseQuery: fetchBaseQuery({ baseUrl }),
+  tagTypes: ["List"],
   endpoints: (build) => ({
     getTaxa: build.query<Taxon[], void>({
       query: () => "v2/taxa",
@@ -71,6 +72,7 @@ export const plantgenieApi = createApi({
     }),
     createList: build.mutation<CreateListResponse, CreateListRequest>({
       query: (body) => ({ url: "v2/lists", method: "POST", body }),
+      invalidatesTags: ["List"],
     }),
     getList: build.query<GeneList, string>({
       query: (listId) => `v2/lists/${listId}`,
@@ -78,6 +80,7 @@ export const plantgenieApi = createApi({
     getMyLists: build.query<GeneList[], void>({
       query: () => "v2/lists",
       transformResponse: (r: { lists: GeneList[] }) => r.lists,
+      providesTags: ["List"],
     }),
   }),
 });
