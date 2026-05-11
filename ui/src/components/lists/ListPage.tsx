@@ -66,7 +66,7 @@ export default function ListPage() {
         </p>
         <div className="mt-3 flex flex-wrap justify-center gap-3">
           <Link
-            href="#"
+            href={`/lists/${listId}/genes/add-by-id`}
             className="inline-flex h-11 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-white shadow-card"
           >
             + Add by ID

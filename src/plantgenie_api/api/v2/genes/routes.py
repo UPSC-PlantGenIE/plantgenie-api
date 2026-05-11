@@ -16,8 +16,8 @@ async def lookup_genes(
 ) -> LookupGenesResponse:
     result = await session.run(
         "MATCH (:Annotation {id: $annotationId})-[:HAS_GENE]->(g:Gene) "
-        "WHERE g.geneId IN $geneIds "
-        "RETURN g {.geneId, .name, .description} AS g",
+        "WHERE g.id IN $geneIds "
+        "RETURN g {geneId: g.id, .name, .description} AS g",
         annotationId=body.annotation_id,
         geneIds=body.gene_ids,
     )
