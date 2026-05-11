@@ -8,6 +8,7 @@ class CreateListRequest(PlantGenieModel):
     name: str
     description: Optional[str] = None
     annotation_id: str
+    taxon_name: str
 
 
 class CreateListResponse(PlantGenieModel):

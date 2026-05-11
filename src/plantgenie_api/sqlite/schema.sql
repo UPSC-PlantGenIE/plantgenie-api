@@ -1,7 +1,10 @@
 CREATE TABLE IF NOT EXISTS gene_lists (
     list_id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
-    annotation_id TEXT NOT NULL
+    description TEXT,
+    annotation_id TEXT NOT NULL,
+    taxon_name TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS gene_list_members (

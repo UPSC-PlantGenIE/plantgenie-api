@@ -28,6 +28,7 @@ export default function GenomeSelector() {
       name: listName,
       description: listDescription,
       annotationId: annotationId!,
+      taxonName: selectedTaxon?.scientificName ?? "",
     }).unwrap();
     setLocation(`/lists/${listId}`);
   };

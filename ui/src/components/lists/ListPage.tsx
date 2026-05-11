@@ -36,14 +36,40 @@ export default function ListPage() {
         <span>{data.name}</span>
       </nav>
 
-      <article className="mt-6 flex flex-col gap-4 rounded-xl border border-border bg-card px-6 py-5 shadow-card sm:flex-row sm:items-start sm:justify-between">
-        <h1 className="text-xl font-bold text-heading">{data.name}</h1>
-        <button
-          type="button"
-          className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card px-4 text-sm font-semibold text-label shadow-card"
-        >
-          Export
-        </button>
+      <article className="mt-6 rounded-xl border border-border bg-card px-6 py-5 shadow-card">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-heading">{data.name}</h1>
+            {data.description && (
+              <p className="mt-1 text-sm text-muted">{data.description}</p>
+            )}
+          </div>
+          <button
+            type="button"
+            className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card px-4 text-sm font-semibold text-label shadow-card"
+          >
+            Export
+          </button>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <span className="rounded-md bg-primary-tint px-2.5 py-1 text-xs font-medium text-primary">
+            {data.taxonName}
+          </span>
+          <span className="rounded-md bg-primary-tint px-2.5 py-1 text-xs font-medium text-primary">
+            {data.annotationId.split("-").slice(1).join("-")}
+          </span>
+          <span className="rounded-md bg-primary-tint px-2.5 py-1 text-xs font-medium text-primary">
+            {data.geneCount} {data.geneCount === 1 ? "gene" : "genes"}
+          </span>
+          <span className="rounded-md bg-primary-tint px-2.5 py-1 text-xs font-medium text-primary">
+            Created{" "}
+            {new Date(data.createdAt + "Z").toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </span>
+        </div>
       </article>
 
       <section className="mt-6 flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-border bg-card/50 px-6 py-16 text-center">

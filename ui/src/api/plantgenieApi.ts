@@ -32,7 +32,11 @@ export interface Annotation {
 export interface GeneList {
   listId: string;
   name: string;
+  description: string | null;
   annotationId: string;
+  taxonName: string;
+  createdAt: string;
+  geneCount: number;
 }
 
 export interface CreateListResponse {
@@ -45,6 +49,7 @@ export interface CreateListRequest {
   name: string;
   description?: string;
   annotationId: string;
+  taxonName: string;
 }
 
 export interface LookupGene {

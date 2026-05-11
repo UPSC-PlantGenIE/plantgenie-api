@@ -13,6 +13,7 @@ async def test_create_list_returns_account_and_list_ids(
         json={
             "name": "My list",
             "annotationId": "arath-Araport11",
+            "taxonName": "Arabidopsis thaliana",
         },
     )
 
@@ -28,11 +29,11 @@ async def test_create_list_generates_unique_list_ids(
 ):
     r1 = await async_client.post(
         "/v2/lists",
-        json={"name": "First", "annotationId": "arath-Araport11"},
+        json={"name": "First", "annotationId": "arath-Araport11", "taxonName": "Arabidopsis thaliana"},
     )
     r2 = await async_client.post(
         "/v2/lists",
-        json={"name": "Second", "annotationId": "arath-Araport11"},
+        json={"name": "Second", "annotationId": "arath-Araport11", "taxonName": "Arabidopsis thaliana"},
     )
     assert r1.json()["listId"] != r2.json()["listId"]
     assert r1.json()["accountId"] is not None
@@ -48,6 +49,7 @@ async def test_get_list_returns_a_created_list(
         json={
             "name": "My list",
             "annotationId": "arath-Araport11",
+            "taxonName": "Arabidopsis thaliana",
         },
     )
     list_id = create.json()["listId"]
@@ -59,6 +61,9 @@ async def test_get_list_returns_a_created_list(
     assert body["listId"] == list_id
     assert body["name"] == "My list"
     assert body["annotationId"] == "arath-Araport11"
+    assert body["taxonName"] == "Arabidopsis thaliana"
+    assert body["geneCount"] == 0
+    assert body["createdAt"] is not None
 
 
 @pytest.mark.anyio
@@ -71,18 +76,19 @@ async def test_create_list_persists_to_sqlite(
         json={
             "name": "Persisted",
             "annotationId": "arath-Araport11",
+            "taxonName": "Arabidopsis thaliana",
         },
     )
     list_id = response.json()["listId"]
 
     row = sqlite_conn.execute(
-        "SELECT name, annotation_id FROM gene_lists "
+        "SELECT name, annotation_id, taxon_name FROM gene_lists "
         "WHERE list_id = ?",
         (list_id,),
     ).fetchone()
 
     assert row is not None
-    assert row == ("Persisted", "arath-Araport11")
+    assert row == ("Persisted", "arath-Araport11", "Arabidopsis thaliana")
 
 
 @pytest.mark.anyio
@@ -99,11 +105,11 @@ async def test_get_lists_returns_all_lists(
 ):
     await async_client.post(
         "/v2/lists",
-        json={"name": "First", "annotationId": "arath-Araport11"},
+        json={"name": "First", "annotationId": "arath-Araport11", "taxonName": "Arabidopsis thaliana"},
     )
     await async_client.post(
         "/v2/lists",
-        json={"name": "Second", "annotationId": "arath-Araport11"},
+        json={"name": "Second", "annotationId": "arath-Araport11", "taxonName": "Arabidopsis thaliana"},
     )
 
     response = await async_client.get("/v2/lists")
@@ -122,7 +128,7 @@ async def test_patch_list_adds_genes(
 ):
     create = await async_client.post(
         "/v2/lists",
-        json={"name": "My list", "annotationId": "arath-Araport11"},
+        json={"name": "My list", "annotationId": "arath-Araport11", "taxonName": "Arabidopsis thaliana"},
     )
     list_id = create.json()["listId"]
 

@@ -15,12 +15,24 @@ router = APIRouter(prefix="/lists", tags=["v2", "lists"])
 @router.get("")
 async def retrieve_lists(conn: SqliteDep) -> dict:
     async with conn.execute(
-        "SELECT list_id, name, annotation_id FROM gene_lists"
+        "SELECT g.list_id, g.name, g.description, g.annotation_id, g.taxon_name, g.created_at, "
+        "COUNT(m.gene_id) AS gene_count "
+        "FROM gene_lists g "
+        "LEFT JOIN gene_list_members m ON g.list_id = m.list_id "
+        "GROUP BY g.list_id"
     ) as cursor:
         rows = await cursor.fetchall()
     return {
         "lists": [
-            {"listId": r[0], "name": r[1], "annotationId": r[2]}
+            {
+                "listId": r[0],
+                "name": r[1],
+                "description": r[2],
+                "annotationId": r[3],
+                "taxonName": r[4],
+                "createdAt": r[5],
+                "geneCount": r[6],
+            }
             for r in rows
         ]
     }
@@ -32,9 +44,9 @@ async def create_list(
 ) -> CreateListResponse:
     list_id = secrets.token_hex(8)
     await conn.execute(
-        "INSERT INTO gene_lists (list_id, name, annotation_id) "
-        "VALUES (?, ?, ?)",
-        (list_id, body.name, body.annotation_id),
+        "INSERT INTO gene_lists (list_id, name, description, annotation_id, taxon_name) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (list_id, body.name, body.description, body.annotation_id, body.taxon_name),
     )
     await conn.commit()
     return CreateListResponse(account_id="stub", list_id=list_id)
@@ -43,8 +55,12 @@ async def create_list(
 @router.get("/{list_id}")
 async def get_list(list_id: str, conn: SqliteDep) -> dict:
     async with conn.execute(
-        "SELECT list_id, name, annotation_id FROM gene_lists "
-        "WHERE list_id = ?",
+        "SELECT g.list_id, g.name, g.description, g.annotation_id, g.taxon_name, g.created_at, "
+        "COUNT(m.gene_id) AS gene_count "
+        "FROM gene_lists g "
+        "LEFT JOIN gene_list_members m ON g.list_id = m.list_id "
+        "WHERE g.list_id = ? "
+        "GROUP BY g.list_id",
         (list_id,),
     ) as cursor:
         row = await cursor.fetchone()
@@ -52,7 +68,15 @@ async def get_list(list_id: str, conn: SqliteDep) -> dict:
         raise HTTPException(
             status_code=404, detail=f"List '{list_id}' not found"
         )
-    return {"listId": row[0], "name": row[1], "annotationId": row[2]}
+    return {
+        "listId": row[0],
+        "name": row[1],
+        "description": row[2],
+        "annotationId": row[3],
+        "taxonName": row[4],
+        "createdAt": row[5],
+        "geneCount": row[6],
+    }
 
 
 @router.patch("/{list_id}")
