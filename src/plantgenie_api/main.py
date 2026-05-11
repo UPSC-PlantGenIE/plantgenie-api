@@ -1,24 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from plantgenie_api.api.v1.annotation.routes import (
-    router as annotation_router,
-)
-from plantgenie_api.api.v1.blast.routes import router as blast_router
-from plantgenie_api.api.v1.expression.routes import (
-    router as expression_router,
-)
-from plantgenie_api.api.v1.enrichment.routes import (
-    router as enrichment_router,
-)
-from plantgenie_api.api.v1.genome.routes import router as genome_router
-from plantgenie_api.api.v2.lists.routes import router as v2_lists_router
+from plantgenie_api.api.v1.routes import v1_router
 from plantgenie_api.api.v2.routes import router as v2_router
-from plantgenie_api.dependencies import DatabaseDep, lifespan
-from plantgenie_api.models import (
-    AvailableSpecies,
-    AvailableSpeciesResponse,
-)
+from plantgenie_api.dependencies import lifespan
 
 app = FastAPI(
     root_path="/api",
@@ -38,36 +23,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.include_router(router=blast_router, prefix="/v1")
-app.include_router(router=genome_router, prefix="/v1")
-app.include_router(router=expression_router, prefix="/v1")
-app.include_router(router=annotation_router, prefix="/v1")
-app.include_router(router=enrichment_router, prefix="/v1")
+app.include_router(router=v1_router)
 app.include_router(router=v2_router)
-app.include_router(router=v2_lists_router, prefix="/v2")
 
 
 @app.get("/")
 async def root():
     return {"message": "Welcome to the PlantGenIE API!"}
-
-
-@app.get("/available-species")
-async def get_available_species(
-    db_connection: DatabaseDep,
-) -> AvailableSpeciesResponse:
-    return AvailableSpeciesResponse(
-        species=[
-            AvailableSpecies(
-                **{
-                    k: v
-                    for k, v in zip(
-                        AvailableSpecies.model_fields.keys(), result
-                    )
-                }
-            )
-            for result in db_connection.sql(
-                "SELECT * FROM species;"
-            ).fetchall()
-        ]
-    )

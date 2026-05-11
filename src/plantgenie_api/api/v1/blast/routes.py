@@ -18,7 +18,7 @@ from shared.services.openstack import SwiftClient
 from task_queue.blast.models import ExecuteBlastPipelineArgs
 from task_queue.blast.tasks import execute_blast_pipeline
 
-from plantgenie_api.api.v1 import BACKEND_DATA_PATH
+from plantgenie_api import BACKEND_DATA_PATH
 from plantgenie_api.api.v1.blast.models import (
     AvailableDatabase,
     BlastDatabaseType,

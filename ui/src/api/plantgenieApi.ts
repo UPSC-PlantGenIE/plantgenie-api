@@ -47,6 +47,17 @@ export interface CreateListRequest {
   annotationId: string;
 }
 
+export interface LookupGene {
+  geneId: string;
+  name: string | null;
+  description: string | null;
+}
+
+export interface LookupGenesResponse {
+  found: LookupGene[];
+  notFound: string[];
+}
+
 export const plantgenieApi = createApi({
   reducerPath: "plantgenieApi",
   baseQuery: fetchBaseQuery({ baseUrl }),
@@ -82,6 +93,31 @@ export const plantgenieApi = createApi({
       transformResponse: (r: { lists: GeneList[] }) => r.lists,
       providesTags: ["List"],
     }),
+    lookupGenes: build.mutation<
+      LookupGenesResponse,
+      { annotationId: string; geneIds: string[] }
+    >({
+      query: (body) => ({
+        url: "v2/genes/lookup",
+        method: "POST",
+        body,
+      }),
+    }),
+    patchList: build.mutation<
+      { listId: string },
+      {
+        listId: string;
+        addGeneIds?: string[];
+        removeGeneIds?: string[];
+      }
+    >({
+      query: ({ listId, ...body }) => ({
+        url: `v2/lists/${listId}`,
+        method: "PATCH",
+        body,
+      }),
+      invalidatesTags: ["List"],
+    }),
   }),
 });
 
@@ -92,4 +128,6 @@ export const {
   useCreateListMutation,
   useGetListQuery,
   useGetMyListsQuery,
+  useLookupGenesMutation,
+  usePatchListMutation,
 } = plantgenieApi;

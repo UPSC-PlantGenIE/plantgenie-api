@@ -93,6 +93,24 @@ export const handlers = [
     }
   ),
 
+  http.post(
+    "http://localhost:8000/api/v2/genes/lookup",
+    async ({ request }) => {
+      const body = (await request.json()) as { geneIds: string[] };
+      const fixtures: Record<
+        string,
+        { name: string; description: string }
+      > = {
+        AT1G01010: { name: "GENE1", description: "First gene" },
+      };
+      const found = body.geneIds.flatMap((id) =>
+        fixtures[id] ? [{ geneId: id, ...fixtures[id] }] : []
+      );
+      const notFound = body.geneIds.filter((id) => !fixtures[id]);
+      return HttpResponse.json({ found, notFound });
+    }
+  ),
+
   http.get("http://localhost:8000/api/v2/taxa", ({ request }) => {
     const abbreviation = new URL(request.url).searchParams.get("abbreviation");
     const filtered = abbreviation
