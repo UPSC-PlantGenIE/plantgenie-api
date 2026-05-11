@@ -35,9 +35,144 @@ describe("AddByIdPage", () => {
     await user.click(screen.getByRole("button", { name: /validate/i }));
 
     expect(await screen.findByText(/GENE1/i)).toBeInTheDocument();
+    expect(screen.getByText("UNKNOWN")).toBeInTheDocument();
+  });
+
+  it("renders each not-found gene id in its own row with an X indicator", async () => {
+    const user = userEvent.setup();
+    const { hook } = memoryLocation({
+      path: "/lists/abc-123/genes/add-by-id",
+    });
+    renderWithStore(
+      <Router hook={hook}>
+        <Route
+          path="/lists/:listId/genes/add-by-id"
+          component={AddByIdPage}
+        />
+      </Router>
+    );
+
+    await user.type(screen.getByRole("textbox"), "UNKNOWN1, UNKNOWN2");
+    await user.click(screen.getByRole("button", { name: /validate/i }));
+
+    const id1 = await screen.findByText("UNKNOWN1");
+    const id2 = screen.getByText("UNKNOWN2");
+    expect(id1.closest("li")).not.toBeNull();
+    expect(id1.closest("li")).not.toBe(id2.closest("li"));
+
+    const indicators = screen.getAllByLabelText(/not found/i);
+    expect(indicators).toHaveLength(2);
+  });
+
+  it("renders a select-all checkbox when there are found genes", async () => {
+    const user = userEvent.setup();
+    const { hook } = memoryLocation({
+      path: "/lists/abc-123/genes/add-by-id",
+    });
+    renderWithStore(
+      <Router hook={hook}>
+        <Route
+          path="/lists/:listId/genes/add-by-id"
+          component={AddByIdPage}
+        />
+      </Router>
+    );
+
+    await user.type(screen.getByRole("textbox"), "AT1G01010, AT1G01020");
+    await user.click(screen.getByRole("button", { name: /validate/i }));
+
     expect(
-      screen.getByText(/not found:.*UNKNOWN/i)
+      await screen.findByRole("checkbox", { name: /select all/i })
     ).toBeInTheDocument();
+  });
+
+  it("toggles all found genes via the select-all checkbox", async () => {
+    const user = userEvent.setup();
+    const { hook } = memoryLocation({
+      path: "/lists/abc-123/genes/add-by-id",
+    });
+    renderWithStore(
+      <Router hook={hook}>
+        <Route
+          path="/lists/:listId/genes/add-by-id"
+          component={AddByIdPage}
+        />
+      </Router>
+    );
+
+    await user.type(screen.getByRole("textbox"), "AT1G01010, AT1G01020");
+    await user.click(screen.getByRole("button", { name: /validate/i }));
+
+    const selectAll = await screen.findByRole("checkbox", {
+      name: /select all/i,
+    });
+    const gene1 = screen.getByRole("checkbox", { name: /AT1G01010/i });
+    const gene2 = screen.getByRole("checkbox", { name: /AT1G01020/i });
+
+    expect(gene1).toBeChecked();
+    expect(gene2).toBeChecked();
+
+    await user.click(selectAll);
+    expect(gene1).not.toBeChecked();
+    expect(gene2).not.toBeChecked();
+
+    await user.click(selectAll);
+    expect(gene1).toBeChecked();
+    expect(gene2).toBeChecked();
+  });
+
+  it("shows indeterminate state when some but not all found genes are selected", async () => {
+    const user = userEvent.setup();
+    const { hook } = memoryLocation({
+      path: "/lists/abc-123/genes/add-by-id",
+    });
+    renderWithStore(
+      <Router hook={hook}>
+        <Route
+          path="/lists/:listId/genes/add-by-id"
+          component={AddByIdPage}
+        />
+      </Router>
+    );
+
+    await user.type(screen.getByRole("textbox"), "AT1G01010, AT1G01020");
+    await user.click(screen.getByRole("button", { name: /validate/i }));
+
+    const gene1 = await screen.findByRole("checkbox", {
+      name: /AT1G01010/i,
+    });
+    await user.click(gene1);
+
+    const selectAll = screen.getByRole("checkbox", { name: /select all/i });
+    expect(selectAll).toBePartiallyChecked();
+  });
+
+  it("preserves the input order across found and not-found rows", async () => {
+    const user = userEvent.setup();
+    const { hook } = memoryLocation({
+      path: "/lists/abc-123/genes/add-by-id",
+    });
+    renderWithStore(
+      <Router hook={hook}>
+        <Route
+          path="/lists/:listId/genes/add-by-id"
+          component={AddByIdPage}
+        />
+      </Router>
+    );
+
+    await user.type(
+      screen.getByRole("textbox"),
+      "UNKNOWN1, AT1G01010, UNKNOWN2"
+    );
+    await user.click(screen.getByRole("button", { name: /validate/i }));
+
+    await screen.findByText("UNKNOWN1");
+    const rows = screen.getAllByRole("listitem");
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toHaveTextContent("UNKNOWN1");
+    expect(rows[1]).toHaveTextContent("AT1G01010");
+    expect(rows[2]).toHaveTextContent("UNKNOWN2");
   });
 
   it("renders a checked checkbox for each found gene", async () => {

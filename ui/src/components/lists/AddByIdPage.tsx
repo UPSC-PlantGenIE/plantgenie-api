@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   useGetListQuery,
@@ -15,6 +15,7 @@ export default function AddByIdPage() {
   const [lookup, { data: result }] = useLookupGenesMutation();
   const [patchList] = usePatchListMutation();
   const [text, setText] = useState("");
+  const [orderedIds, setOrderedIds] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -25,11 +26,16 @@ export default function AddByIdPage() {
 
   const handleValidate = async () => {
     if (!list) return;
-    const geneIds = text
-      .split(/[\s,]+/)
-      .map((g) => g.trim())
-      .filter(Boolean);
+    const geneIds = Array.from(
+      new Set(
+        text
+          .split(/[\s,]+/)
+          .map((g) => g.trim())
+          .filter(Boolean)
+      )
+    );
     if (geneIds.length === 0) return;
+    setOrderedIds(geneIds);
     await lookup({ annotationId: list.annotationId, geneIds });
   };
 
@@ -54,6 +60,26 @@ export default function AddByIdPage() {
     });
   };
 
+  const foundMap = new Map(result?.found.map((g) => [g.geneId, g]));
+  const foundCount = result?.found.length ?? 0;
+  const allSelected = foundCount > 0 && selected.size === foundCount;
+  const noneSelected = selected.size === 0;
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = !allSelected && !noneSelected;
+    }
+  }, [allSelected, noneSelected]);
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(result?.found.map((g) => g.geneId) ?? []));
+    }
+  };
+
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-8">
       <textarea
@@ -72,35 +98,58 @@ export default function AddByIdPage() {
 
       {result && (
         <div className="mt-6 flex flex-col gap-4">
-          {result.found.length > 0 && (
-            <ul className="flex flex-col gap-2">
-              {result.found.map((g) => (
-                <li key={g.geneId}>
-                  <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selected.has(g.geneId)}
-                      onChange={() => toggle(g.geneId)}
-                      className="mt-1 size-4"
-                    />
-                    <div>
-                      <div className="font-semibold text-heading">
-                        {g.geneId} – {g.name}
+          {foundCount > 0 && (
+            <label className="flex cursor-pointer items-center gap-3 px-4 text-sm font-semibold text-label">
+              <input
+                ref={selectAllRef}
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleAll}
+                className="size-4"
+              />
+              Select all
+            </label>
+          )}
+          <ul className="flex flex-col gap-2">
+            {orderedIds.map((id) => {
+              const found = foundMap.get(id);
+              if (found) {
+                return (
+                  <li key={id}>
+                    <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(found.geneId)}
+                        onChange={() => toggle(found.geneId)}
+                        className="mt-1 size-4"
+                      />
+                      <div>
+                        <div className="font-semibold text-heading">
+                          {found.geneId} – {found.name}
+                        </div>
+                        <div className="text-xs text-muted">
+                          {found.description}
+                        </div>
                       </div>
-                      <div className="text-xs text-muted">
-                        {g.description}
-                      </div>
-                    </div>
-                  </label>
+                    </label>
+                  </li>
+                );
+              }
+              return (
+                <li key={id}>
+                  <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm">
+                    <span
+                      aria-label="Not found"
+                      className="inline-flex size-4 items-center justify-center text-red-600"
+                    >
+                      ✕
+                    </span>
+                    <span className="font-semibold text-red-600">{id}</span>
+                  </div>
                 </li>
-              ))}
-            </ul>
-          )}
-          {result.notFound.length > 0 && (
-            <p className="text-sm text-red-600">
-              Not found: {result.notFound.join(", ")}
-            </p>
-          )}
+              );
+            })}
+          </ul>
           {result.found.length > 0 && (
             <button
               type="button"

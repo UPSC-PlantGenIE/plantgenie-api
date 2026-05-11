@@ -102,6 +102,7 @@ export const handlers = [
         { name: string; description: string }
       > = {
         AT1G01010: { name: "GENE1", description: "First gene" },
+        AT1G01020: { name: "GENE2", description: "Second gene" },
       };
       const found = body.geneIds.flatMap((id) =>
         fixtures[id] ? [{ geneId: id, ...fixtures[id] }] : []
