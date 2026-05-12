@@ -1,9 +1,19 @@
 import { Link, useParams } from "wouter";
-import { useGetListQuery } from "../../api/plantgenieApi";
+import {
+  useGetListQuery,
+  useLookupGenesQuery,
+} from "../../api/plantgenieApi";
 
 export default function ListPage() {
   const { listId } = useParams<{ listId: string }>();
   const { data, isLoading, isError } = useGetListQuery(listId);
+  const { data: members } = useLookupGenesQuery(
+    {
+      annotationId: data?.annotationId ?? "",
+      geneIds: data?.memberGeneIds ?? [],
+    },
+    { skip: !data || (data?.memberGeneIds.length ?? 0) === 0 }
+  );
 
   if (isLoading) {
     return (
@@ -72,6 +82,36 @@ export default function ListPage() {
         </div>
       </article>
 
+      {data.memberGeneIds.length > 0 ? (
+        <section className="mt-6 overflow-hidden rounded-xl border border-border bg-card shadow-card">
+          <table className="w-full text-left">
+            <thead className="bg-surface text-xs font-semibold text-muted">
+              <tr>
+                <th className="px-6 py-3">Gene ID</th>
+                <th className="px-6 py-3">Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.memberGeneIds.map((id) => {
+                const found = members?.found.find((g) => g.geneId === id);
+                return (
+                  <tr key={id} className="border-t border-border">
+                    <td className="px-6 py-4 text-sm font-semibold text-primary">
+                      {id}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-muted">
+                      {found?.description ?? ""}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div className="border-t border-border bg-surface px-6 py-3 text-xs text-muted">
+            {data.geneCount} genes total
+          </div>
+        </section>
+      ) : (
       <section className="mt-6 flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-border bg-card/50 px-6 py-16 text-center">
         <div className="flex size-20 items-center justify-center rounded-full bg-primary-tint">
           <svg
@@ -105,6 +145,7 @@ export default function ListPage() {
           </Link>
         </div>
       </section>
+      )}
     </div>
   );
 }

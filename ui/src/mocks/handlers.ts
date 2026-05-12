@@ -88,7 +88,12 @@ export const handlers = [
       return HttpResponse.json({
         listId: params.listId,
         name: "My fetched list",
+        description: null,
         annotationId: "arath-Araport11",
+        taxonName: "Arabidopsis thaliana",
+        createdAt: "2026-04-14 12:00:00",
+        geneCount: 0,
+        memberGeneIds: [],
       });
     }
   ),

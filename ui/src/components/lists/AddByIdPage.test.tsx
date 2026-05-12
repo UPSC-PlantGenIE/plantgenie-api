@@ -7,6 +7,7 @@ import { memoryLocation } from "wouter/memory-location";
 import { server } from "../../mocks/server";
 import { renderWithStore } from "../../test-utils";
 import AddByIdPage from "./AddByIdPage";
+import ListPage from "./ListPage";
 
 describe("AddByIdPage", () => {
   it("renders a textarea for gene ids and a Validate button", () => {
@@ -237,5 +238,58 @@ describe("AddByIdPage", () => {
     await waitFor(() => {
       expect(history?.at(-1)).toBe("/lists/abc-123");
     });
+  });
+
+  it("shows added genes on the list page after navigating back", async () => {
+    const user = userEvent.setup();
+    const { hook } = memoryLocation({
+      path: "/lists/abc-123/genes/add-by-id",
+    });
+
+    const listMembers: string[] = [];
+    server.use(
+      http.get(
+        "http://localhost:8000/api/v2/lists/:listId",
+        ({ params }) =>
+          HttpResponse.json({
+            listId: params.listId,
+            name: "Test list",
+            description: null,
+            annotationId: "arath-Araport11",
+            taxonName: "Arabidopsis thaliana",
+            createdAt: "2026-04-14 12:00:00",
+            geneCount: listMembers.length,
+            memberGeneIds: [...listMembers],
+          })
+      ),
+      http.patch(
+        "http://localhost:8000/api/v2/lists/:listId",
+        async ({ request, params }) => {
+          const body = (await request.json()) as { addGeneIds?: string[] };
+          if (body.addGeneIds) listMembers.push(...body.addGeneIds);
+          return HttpResponse.json({ listId: params.listId });
+        }
+      )
+    );
+
+    renderWithStore(
+      <Router hook={hook}>
+        <Route
+          path="/lists/:listId/genes/add-by-id"
+          component={AddByIdPage}
+        />
+        <Route path="/lists/:listId" component={ListPage} />
+      </Router>
+    );
+
+    await user.type(screen.getByRole("textbox"), "AT1G01010");
+    await user.click(screen.getByRole("button", { name: /validate/i }));
+    await screen.findByRole("checkbox", { name: /AT1G01010/i });
+    await user.click(screen.getByRole("button", { name: /add to list/i }));
+
+    expect(
+      await screen.findByRole("heading", { name: /test list/i })
+    ).toBeInTheDocument();
+    expect(await screen.findByText("AT1G01010")).toBeInTheDocument();
   });
 });

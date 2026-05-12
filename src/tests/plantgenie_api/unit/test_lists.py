@@ -64,6 +64,32 @@ async def test_get_list_returns_a_created_list(
     assert body["taxonName"] == "Arabidopsis thaliana"
     assert body["geneCount"] == 0
     assert body["createdAt"] is not None
+    assert body["memberGeneIds"] == []
+
+
+@pytest.mark.anyio
+async def test_get_list_returns_member_gene_ids_after_patch(
+    async_client: AsyncClient,
+):
+    create = await async_client.post(
+        "/v2/lists",
+        json={
+            "name": "My list",
+            "annotationId": "arath-Araport11",
+            "taxonName": "Arabidopsis thaliana",
+        },
+    )
+    list_id = create.json()["listId"]
+
+    await async_client.patch(
+        f"/v2/lists/{list_id}",
+        json={"addGeneIds": ["AT1G01010", "AT1G01020"]},
+    )
+
+    response = await async_client.get(f"/v2/lists/{list_id}")
+    body = response.json()
+    assert body["memberGeneIds"] == ["AT1G01010", "AT1G01020"]
+    assert body["geneCount"] == 2
 
 
 @pytest.mark.anyio

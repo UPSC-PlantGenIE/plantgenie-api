@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import {
   useGetListQuery,
-  useLookupGenesMutation,
+  useLazyLookupGenesQuery,
   usePatchListMutation,
 } from "../../api/plantgenieApi";
 
@@ -12,7 +12,7 @@ export default function AddByIdPage() {
   const { data: list } = useGetListQuery(listId ?? "", {
     skip: !listId,
   });
-  const [lookup, { data: result }] = useLookupGenesMutation();
+  const [lookup, { data: result }] = useLazyLookupGenesQuery();
   const [patchList] = usePatchListMutation();
   const [text, setText] = useState("");
   const [orderedIds, setOrderedIds] = useState<string[]>([]);

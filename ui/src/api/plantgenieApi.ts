@@ -37,6 +37,7 @@ export interface GeneList {
   taxonName: string;
   createdAt: string;
   geneCount: number;
+  memberGeneIds: string[];
 }
 
 export interface CreateListResponse {
@@ -92,13 +93,14 @@ export const plantgenieApi = createApi({
     }),
     getList: build.query<GeneList, string>({
       query: (listId) => `v2/lists/${listId}`,
+      providesTags: ["List"],
     }),
     getMyLists: build.query<GeneList[], void>({
       query: () => "v2/lists",
       transformResponse: (r: { lists: GeneList[] }) => r.lists,
       providesTags: ["List"],
     }),
-    lookupGenes: build.mutation<
+    lookupGenes: build.query<
       LookupGenesResponse,
       { annotationId: string; geneIds: string[] }
     >({
@@ -133,6 +135,7 @@ export const {
   useCreateListMutation,
   useGetListQuery,
   useGetMyListsQuery,
-  useLookupGenesMutation,
+  useLookupGenesQuery,
+  useLazyLookupGenesQuery,
   usePatchListMutation,
 } = plantgenieApi;

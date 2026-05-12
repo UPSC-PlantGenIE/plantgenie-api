@@ -68,6 +68,12 @@ async def get_list(list_id: str, conn: SqliteDep) -> dict:
         raise HTTPException(
             status_code=404, detail=f"List '{list_id}' not found"
         )
+    async with conn.execute(
+        "SELECT gene_id FROM gene_list_members "
+        "WHERE list_id = ? ORDER BY added_at, gene_id",
+        (list_id,),
+    ) as cursor:
+        member_rows = await cursor.fetchall()
     return {
         "listId": row[0],
         "name": row[1],
@@ -76,6 +82,7 @@ async def get_list(list_id: str, conn: SqliteDep) -> dict:
         "taxonName": row[4],
         "createdAt": row[5],
         "geneCount": row[6],
+        "memberGeneIds": [r[0] for r in member_rows],
     }
 
 
