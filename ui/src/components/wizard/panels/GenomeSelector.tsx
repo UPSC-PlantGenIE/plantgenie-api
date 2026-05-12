@@ -6,7 +6,7 @@ import {
   useGetTaxaQuery,
 } from "../../../api/plantgenieApi";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks";
-import { back, setAnnotationId } from "../../../store/wizardSlice";
+import { back, reset, setAnnotationId } from "../../../store/wizardSlice";
 import { useLocation } from "wouter";
 
 const numberFmt = new Intl.NumberFormat("en-US");
@@ -31,6 +31,7 @@ export default function GenomeSelector() {
       taxonName: selectedTaxon?.scientificName ?? "",
     }).unwrap();
     setLocation(`/lists/${listId}`);
+    dispatch(reset());
   };
 
   const { data: taxa } = useGetTaxaQuery();
@@ -64,13 +65,14 @@ export default function GenomeSelector() {
   }));
 
   useEffect(() => {
+    if (!taxonId) return;
     if (!annotations || annotations.length === 0) return;
     const currentIsValid =
       annotationId !== null && annotations.some((n) => n.id === annotationId);
     if (currentIsValid) return;
     const def = annotations.find((n) => n.isDefault) ?? annotations[0];
     dispatch(setAnnotationId(def.id));
-  }, [annotationId, annotations, dispatch]);
+  }, [taxonId, annotationId, annotations, dispatch]);
 
   const eyebrow = selectedTaxon
     ? `New gene list  ·  ${selectedTaxon.scientificName}`

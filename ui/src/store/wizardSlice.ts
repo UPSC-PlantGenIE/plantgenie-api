@@ -47,6 +47,9 @@ const wizardSlice = createSlice({
     setAnnotationId(state, action: PayloadAction<string>) {
       state.annotationId = action.payload;
     },
+    reset() {
+      return initialState;
+    },
   },
 });
 
@@ -57,6 +60,7 @@ export const {
   setDescription,
   setTaxonId,
   setAnnotationId,
+  reset,
 } = wizardSlice.actions;
 
 export default wizardSlice.reducer;

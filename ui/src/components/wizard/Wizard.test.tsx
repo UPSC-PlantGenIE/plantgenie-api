@@ -117,6 +117,41 @@ describe("Wizard", () => {
     });
   });
 
+  it("resets wizard state after a successful create so a fresh visit starts at step 1", async () => {
+    const { hook } = memoryLocation({ path: "/lists/new" });
+    const user = userEvent.setup();
+    const { store } = renderWithStore(
+      <Router hook={hook}>
+        <Wizard />
+      </Router>,
+      {
+        preloadedState: {
+          wizard: {
+            step: 3,
+            name: "My list",
+            description: "old description",
+            taxonId: "pinsy",
+            annotationId: "pinsy-Araport11",
+          },
+        },
+      }
+    );
+
+    const createButton = await screen.findByRole("button", {
+      name: /create list/i,
+    });
+    await waitFor(() => expect(createButton).toBeEnabled());
+    await user.click(createButton);
+
+    await waitFor(() => {
+      expect(store.getState().wizard.step).toBe(1);
+    });
+    expect(store.getState().wizard.name).toBe("");
+    expect(store.getState().wizard.description).toBe("");
+    expect(store.getState().wizard.taxonId).toBeNull();
+    expect(store.getState().wizard.annotationId).toBeNull();
+  });
+
   it("step 2 Continue is disabled until a taxon is picked", async () => {
     const user = userEvent.setup();
     renderWithStore(<Wizard />, {
