@@ -37,6 +37,9 @@ export interface GeneList {
   taxonName: string;
   createdAt: string;
   geneCount: number;
+}
+
+export interface GeneListWithMembers extends GeneList {
   memberGeneIds: string[];
 }
 
@@ -91,7 +94,7 @@ export const plantgenieApi = createApi({
       query: (body) => ({ url: "v2/lists", method: "POST", body }),
       invalidatesTags: ["List"],
     }),
-    getList: build.query<GeneList, string>({
+    getList: build.query<GeneListWithMembers, string>({
       query: (listId) => `v2/lists/${listId}`,
       providesTags: ["List"],
     }),

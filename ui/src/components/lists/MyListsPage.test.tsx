@@ -42,7 +42,11 @@ describe("MyListsPage", () => {
           {
             listId: "new-1",
             name: "Brand new list",
+            description: null,
             annotationId: "arath-Araport11",
+            taxonName: "Arabidopsis thaliana",
+            createdAt: "2026-04-14T12:00:00",
+            geneCount: 0,
           },
         ];
         return HttpResponse.json({
@@ -60,6 +64,7 @@ describe("MyListsPage", () => {
       plantgenieApi.endpoints.createList.initiate({
         name: "Brand new list",
         annotationId: "arath-Araport11",
+        taxonName: "Arabidopsis thaliana",
       })
     );
 
