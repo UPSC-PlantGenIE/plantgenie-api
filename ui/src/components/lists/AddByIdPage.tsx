@@ -163,7 +163,8 @@ export default function AddByIdPage() {
                   />
                   <div>
                     <div className="font-semibold text-primary">
-                      {gene.geneId} – {gene.name}
+                      {gene.geneId}
+                      {gene.name && <em> – {gene.name}</em>}
                     </div>
                     <div className="text-xs text-muted">
                       {gene.description}
