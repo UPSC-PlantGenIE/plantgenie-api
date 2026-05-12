@@ -76,7 +76,11 @@ export const handlers = [
         {
           listId: "abc-123",
           name: "Test list",
+          description: "Example list for development",
           annotationId: "arath-Araport11",
+          taxonName: "Arabidopsis thaliana",
+          createdAt: "2026-04-14T12:00:00",
+          geneCount: 12,
         },
       ],
     })

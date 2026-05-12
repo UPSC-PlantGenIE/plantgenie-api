@@ -1,6 +1,18 @@
 import { Link } from "wouter";
 import { useGetMyListsQuery } from "../../api/plantgenieApi";
 
+const dateFmt = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
+const formatDate = (iso: string) =>
+  dateFmt.format(new Date(iso.endsWith("Z") ? iso : iso + "Z"));
+
+const genomeVersion = (annotationId: string) =>
+  annotationId.split("-").slice(1).join("-");
+
 export default function MyListsPage() {
   const { data, isLoading } = useGetMyListsQuery();
   const lists = data ?? [];
@@ -8,7 +20,14 @@ export default function MyListsPage() {
   return (
     <div className="mx-auto w-full max-w-7xl px-6 py-12">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-heading">My lists</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-heading">My Lists</h1>
+          {lists.length > 0 && (
+            <p className="mt-1 text-sm text-muted">
+              {lists.length} {lists.length === 1 ? "list" : "lists"}
+            </p>
+          )}
+        </div>
         <Link
           href="/lists/new"
           className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-white shadow-card"
@@ -54,20 +73,59 @@ export default function MyListsPage() {
           </Link>
         </div>
       ) : (
-        <ul className="mt-8 flex flex-col gap-2">
-          {lists.map((list) => (
-            <li key={list.listId}>
-              <Link
-                href={`/lists/${list.listId}`}
-                className="flex items-center justify-between rounded-xl border border-border bg-card px-5 py-4 shadow-card hover:border-primary"
+        <div className="mt-8 overflow-hidden rounded-xl border border-border bg-card shadow-card">
+          <div
+            role="row"
+            className="hidden border-b border-border bg-surface px-5 py-3 text-xs font-medium text-muted md:grid md:grid-cols-12 md:items-center md:gap-x-4"
+          >
+            <div className="md:col-span-5">List name</div>
+            <div className="md:col-span-2 md:text-center">Taxon</div>
+            <div className="md:col-span-2 md:text-center">Genome</div>
+            <div className="md:col-span-1 md:text-center">Genes</div>
+            <div className="md:col-span-2 md:text-center">Last updated</div>
+          </div>
+
+          <ul>
+            {lists.map((list) => (
+              <li
+                key={list.listId}
+                className="border-b border-border last:border-b-0"
               >
-                <span className="text-sm font-semibold text-heading">
-                  {list.name}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+                <Link
+                  href={`/lists/${list.listId}`}
+                  className="grid grid-cols-1 gap-y-2 px-5 py-4 hover:bg-surface md:grid-cols-12 md:items-center md:gap-x-4"
+                >
+                  <div className="text-center md:col-span-5 md:text-left">
+                    <div className="text-sm font-semibold text-heading">
+                      {list.name}
+                    </div>
+                    {list.description && (
+                      <div className="mt-0.5 text-xs text-muted">
+                        {list.description}
+                      </div>
+                    )}
+                  </div>
+                  <span className="inline-flex w-fit items-center justify-self-center rounded-md bg-primary-tint px-2.5 py-1 text-xs font-medium text-primary md:col-span-2">
+                    {list.taxonName}
+                  </span>
+                  <span className="text-center text-sm text-label md:col-span-2">
+                    {genomeVersion(list.annotationId)}
+                  </span>
+                  <span className="text-center text-sm text-label md:col-span-1">
+                    {list.geneCount} {list.geneCount === 1 ? "gene" : "genes"}
+                  </span>
+                  <span className="text-center text-sm text-muted md:col-span-2">
+                    {formatDate(list.createdAt)}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+
+          <p className="border-t border-border bg-surface px-5 py-3 text-right text-xs text-muted">
+            {lists.length} {lists.length === 1 ? "list" : "lists"} total
+          </p>
+        </div>
       )}
     </div>
   );
