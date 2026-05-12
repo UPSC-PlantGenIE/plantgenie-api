@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { Route, Router } from "wouter";
@@ -39,7 +39,7 @@ describe("AddByIdPage", () => {
     expect(screen.getByText("UNKNOWN")).toBeInTheDocument();
   });
 
-  it("renders each not-found gene id in its own row with an X indicator", async () => {
+  it("renders each not-found gene id in its own row", async () => {
     const user = userEvent.setup();
     const { hook } = memoryLocation({
       path: "/lists/abc-123/genes/add-by-id",
@@ -56,13 +56,13 @@ describe("AddByIdPage", () => {
     await user.type(screen.getByRole("textbox"), "UNKNOWN1, UNKNOWN2");
     await user.click(screen.getByRole("button", { name: /validate/i }));
 
-    const id1 = await screen.findByText("UNKNOWN1");
-    const id2 = screen.getByText("UNKNOWN2");
-    expect(id1.closest("li")).not.toBeNull();
-    expect(id1.closest("li")).not.toBe(id2.closest("li"));
-
-    const indicators = screen.getAllByLabelText(/not found/i);
-    expect(indicators).toHaveLength(2);
+    const notFoundRegion = await screen.findByRole("region", {
+      name: /not found/i,
+    });
+    const rows = within(notFoundRegion).getAllByRole("listitem");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent("UNKNOWN1");
+    expect(rows[1]).toHaveTextContent("UNKNOWN2");
   });
 
   it("renders a select-all checkbox when there are found genes", async () => {
@@ -148,7 +148,7 @@ describe("AddByIdPage", () => {
     expect(selectAll).toBePartiallyChecked();
   });
 
-  it("preserves the input order across found and not-found rows", async () => {
+  it("splits valid and not-found genes into separate accessible regions", async () => {
     const user = userEvent.setup();
     const { hook } = memoryLocation({
       path: "/lists/abc-123/genes/add-by-id",
@@ -164,16 +164,28 @@ describe("AddByIdPage", () => {
 
     await user.type(
       screen.getByRole("textbox"),
-      "UNKNOWN1, AT1G01010, UNKNOWN2"
+      "AT1G01010, UNKNOWN1, AT1G01020, UNKNOWN2"
     );
     await user.click(screen.getByRole("button", { name: /validate/i }));
 
-    await screen.findByText("UNKNOWN1");
-    const rows = screen.getAllByRole("listitem");
-    expect(rows).toHaveLength(3);
-    expect(rows[0]).toHaveTextContent("UNKNOWN1");
-    expect(rows[1]).toHaveTextContent("AT1G01010");
-    expect(rows[2]).toHaveTextContent("UNKNOWN2");
+    const validRegion = await screen.findByRole("region", {
+      name: /valid genes/i,
+    });
+    const notFoundRegion = screen.getByRole("region", { name: /not found/i });
+
+    expect(within(validRegion).getByText(/AT1G01010/)).toBeInTheDocument();
+    expect(within(validRegion).getByText(/AT1G01020/)).toBeInTheDocument();
+    expect(within(validRegion).queryByText("UNKNOWN1")).not.toBeInTheDocument();
+    expect(within(validRegion).queryByText("UNKNOWN2")).not.toBeInTheDocument();
+
+    expect(within(notFoundRegion).getByText("UNKNOWN1")).toBeInTheDocument();
+    expect(within(notFoundRegion).getByText("UNKNOWN2")).toBeInTheDocument();
+    expect(
+      within(notFoundRegion).queryByText(/AT1G01010/)
+    ).not.toBeInTheDocument();
+    expect(
+      within(notFoundRegion).queryByText(/AT1G01020/)
+    ).not.toBeInTheDocument();
   });
 
   it("renders a checked checkbox for each found gene", async () => {
@@ -230,7 +242,7 @@ describe("AddByIdPage", () => {
     await user.click(screen.getByRole("button", { name: /validate/i }));
     await screen.findByRole("checkbox", { name: /AT1G01010/i });
 
-    await user.click(screen.getByRole("button", { name: /add to list/i }));
+    await user.click(screen.getByRole("button", { name: /add .* to list/i }));
 
     await waitFor(() => {
       expect(patched).toEqual({ addGeneIds: ["AT1G01010"] });
@@ -285,7 +297,7 @@ describe("AddByIdPage", () => {
     await user.type(screen.getByRole("textbox"), "AT1G01010");
     await user.click(screen.getByRole("button", { name: /validate/i }));
     await screen.findByRole("checkbox", { name: /AT1G01010/i });
-    await user.click(screen.getByRole("button", { name: /add to list/i }));
+    await user.click(screen.getByRole("button", { name: /add .* to list/i }));
 
     expect(
       await screen.findByRole("heading", { name: /test list/i })
