@@ -27,7 +27,7 @@ class PatchListRequest(PlantGenieModel):
 class GeneList(PlantGenieModel):
     list_id: str
     name: str
-    description: str
+    description: Optional[str] = None
     annotation_id: str
     taxon_name: str
     created_at: datetime

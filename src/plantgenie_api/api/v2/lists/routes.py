@@ -5,6 +5,9 @@ from fastapi import APIRouter, HTTPException
 from plantgenie_api.api.v2.lists.models import (
     CreateListRequest,
     CreateListResponse,
+    GeneList,
+    GeneListWithMember,
+    GetListsResponse,
     PatchListRequest,
 )
 from plantgenie_api.dependencies import SqliteDep
@@ -13,7 +16,7 @@ router = APIRouter(prefix="/lists", tags=["v2", "lists"])
 
 
 @router.get("")
-async def retrieve_lists(conn: SqliteDep) -> dict:
+async def retrieve_lists(conn: SqliteDep) -> GetListsResponse:
     async with conn.execute(
         "SELECT g.list_id, g.name, g.description, g.annotation_id, g.taxon_name, g.created_at, "
         "COUNT(m.gene_id) AS gene_count "
@@ -22,23 +25,23 @@ async def retrieve_lists(conn: SqliteDep) -> dict:
         "GROUP BY g.list_id"
     ) as cursor:
         rows = await cursor.fetchall()
-    return {
-        "lists": [
-            {
-                "listId": r[0],
-                "name": r[1],
-                "description": r[2],
-                "annotationId": r[3],
-                "taxonName": r[4],
-                "createdAt": r[5],
-                "geneCount": r[6],
-            }
+    return GetListsResponse(
+        lists=[
+            GeneList(
+                list_id=r[0],
+                name=r[1],
+                description=r[2],
+                annotation_id=r[3],
+                taxon_name=r[4],
+                created_at=r[5],
+                gene_count=r[6],
+            )
             for r in rows
         ]
-    }
+    )
 
 
-@router.post("", status_code=201, response_model=CreateListResponse)
+@router.post("", status_code=201)
 async def create_list(
     body: CreateListRequest, conn: SqliteDep
 ) -> CreateListResponse:
@@ -46,14 +49,20 @@ async def create_list(
     await conn.execute(
         "INSERT INTO gene_lists (list_id, name, description, annotation_id, taxon_name) "
         "VALUES (?, ?, ?, ?, ?)",
-        (list_id, body.name, body.description, body.annotation_id, body.taxon_name),
+        (
+            list_id,
+            body.name,
+            body.description,
+            body.annotation_id,
+            body.taxon_name,
+        ),
     )
     await conn.commit()
     return CreateListResponse(account_id="stub", list_id=list_id)
 
 
 @router.get("/{list_id}")
-async def get_list(list_id: str, conn: SqliteDep) -> dict:
+async def get_list(list_id: str, conn: SqliteDep) -> GeneListWithMember:
     async with conn.execute(
         "SELECT g.list_id, g.name, g.description, g.annotation_id, g.taxon_name, g.created_at, "
         "COUNT(m.gene_id) AS gene_count "
@@ -74,16 +83,16 @@ async def get_list(list_id: str, conn: SqliteDep) -> dict:
         (list_id,),
     ) as cursor:
         member_rows = await cursor.fetchall()
-    return {
-        "listId": row[0],
-        "name": row[1],
-        "description": row[2],
-        "annotationId": row[3],
-        "taxonName": row[4],
-        "createdAt": row[5],
-        "geneCount": row[6],
-        "memberGeneIds": [r[0] for r in member_rows],
-    }
+    return GeneListWithMember(
+        list_id=row[0],
+        name=row[1],
+        description=row[2],
+        annotation_id=row[3],
+        taxon_name=row[4],
+        created_at=row[5],
+        gene_count=row[6],
+        member_gene_ids=[r[0] for r in member_rows],
+    )
 
 
 @router.patch("/{list_id}")
