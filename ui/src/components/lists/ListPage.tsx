@@ -2,6 +2,7 @@ import { Link, useParams } from "wouter";
 import {
   useGetListQuery,
   useLookupGenesQuery,
+  usePatchListMutation,
 } from "../../api/plantgenieApi";
 
 export default function ListPage() {
@@ -14,6 +15,13 @@ export default function ListPage() {
     },
     { skip: !data || (data?.memberGeneIds.length ?? 0) === 0 }
   );
+  const [patchList, { isLoading: isRemoving }] = usePatchListMutation();
+
+  const handleRemove = (geneId: string) => {
+    if (!listId) return;
+    if (!window.confirm(`Remove ${geneId} from this list?`)) return;
+    patchList({ listId, removeGeneIds: [geneId] });
+  };
 
   if (isLoading) {
     return (
@@ -89,6 +97,9 @@ export default function ListPage() {
               <tr>
                 <th className="px-6 py-3">Gene ID</th>
                 <th className="px-6 py-3">Description</th>
+                <th className="px-6 py-3 text-right">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -101,6 +112,17 @@ export default function ListPage() {
                     </td>
                     <td className="px-6 py-4 text-sm text-muted">
                       {found?.description ?? ""}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleRemove(id)}
+                        disabled={isRemoving}
+                        aria-label={`Remove ${id}`}
+                        className="inline-flex size-8 items-center justify-center rounded-md text-muted hover:bg-surface hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        ✕
+                      </button>
                     </td>
                   </tr>
                 );

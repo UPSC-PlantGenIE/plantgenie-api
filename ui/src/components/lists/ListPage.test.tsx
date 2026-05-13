@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { Route, Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
@@ -75,6 +76,107 @@ describe("ListPage", () => {
     renderListPage();
     expect(await screen.findByText("AT1G01010")).toBeInTheDocument();
     expect(screen.getByText("AT1G01020")).toBeInTheDocument();
+  });
+
+  it("renders a Remove button for each member gene", async () => {
+    server.use(
+      http.get("http://localhost:8000/api/v2/lists/:listId", ({ params }) => {
+        return HttpResponse.json({
+          listId: params.listId,
+          name: "Populated list",
+          description: null,
+          annotationId: "arath-Araport11",
+          taxonName: "Arabidopsis thaliana",
+          createdAt: "2026-04-14 12:00:00",
+          geneCount: 2,
+          memberGeneIds: ["AT1G01010", "AT1G01020"],
+        });
+      })
+    );
+    renderListPage();
+    expect(
+      await screen.findByRole("button", { name: /remove AT1G01010/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /remove AT1G01020/i })
+    ).toBeInTheDocument();
+  });
+
+  it("PATCHes the list with removeGeneIds when Remove is confirmed", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    server.use(
+      http.get("http://localhost:8000/api/v2/lists/:listId", ({ params }) => {
+        return HttpResponse.json({
+          listId: params.listId,
+          name: "Populated list",
+          description: null,
+          annotationId: "arath-Araport11",
+          taxonName: "Arabidopsis thaliana",
+          createdAt: "2026-04-14 12:00:00",
+          geneCount: 1,
+          memberGeneIds: ["AT1G01010"],
+        });
+      })
+    );
+
+    let patched: { removeGeneIds?: string[] } | null = null;
+    server.use(
+      http.patch(
+        "http://localhost:8000/api/v2/lists/abc-123",
+        async ({ request }) => {
+          patched = (await request.json()) as { removeGeneIds?: string[] };
+          return HttpResponse.json({ listId: "abc-123" });
+        }
+      )
+    );
+
+    renderListPage();
+    await user.click(
+      await screen.findByRole("button", { name: /remove AT1G01010/i })
+    );
+
+    await waitFor(() => {
+      expect(patched).toEqual({ removeGeneIds: ["AT1G01010"] });
+    });
+    expect(confirmSpy).toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("does not PATCH when the Remove confirmation is cancelled", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    server.use(
+      http.get("http://localhost:8000/api/v2/lists/:listId", ({ params }) => {
+        return HttpResponse.json({
+          listId: params.listId,
+          name: "Populated list",
+          description: null,
+          annotationId: "arath-Araport11",
+          taxonName: "Arabidopsis thaliana",
+          createdAt: "2026-04-14 12:00:00",
+          geneCount: 1,
+          memberGeneIds: ["AT1G01010"],
+        });
+      })
+    );
+
+    let patchCalled = false;
+    server.use(
+      http.patch("http://localhost:8000/api/v2/lists/abc-123", () => {
+        patchCalled = true;
+        return HttpResponse.json({ listId: "abc-123" });
+      })
+    );
+
+    renderListPage();
+    await user.click(
+      await screen.findByRole("button", { name: /remove AT1G01010/i })
+    );
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(patchCalled).toBe(false);
+    confirmSpy.mockRestore();
   });
 
   it("shows the gene description for each member", async () => {
