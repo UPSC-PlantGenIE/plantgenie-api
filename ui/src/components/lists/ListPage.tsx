@@ -23,6 +23,29 @@ export default function ListPage() {
     patchList({ listId, removeGeneIds: [geneId] });
   };
 
+  const handleExport = () => {
+    if (!data) return;
+    const rows = data.memberGeneIds.map((id) => {
+      const found = members?.found.find((g) => g.geneId === id);
+      return `${id}\t${found?.description ?? ""}`;
+    });
+    const tsv = ["geneId\tdescription", ...rows].join("\n");
+    const slug = data.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    const date = new Date().toISOString().slice(0, 10);
+    const blob = new Blob([tsv], { type: "text/tab-separated-values" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${slug}-${date}.tsv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   if (isLoading) {
     return (
       <div className="mx-auto w-full max-w-7xl px-6 py-8">
@@ -64,7 +87,9 @@ export default function ListPage() {
           </div>
           <button
             type="button"
-            className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card px-4 text-sm font-semibold text-label shadow-card"
+            onClick={handleExport}
+            disabled={data.memberGeneIds.length === 0}
+            className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card px-4 text-sm font-semibold text-label shadow-card disabled:cursor-not-allowed disabled:opacity-50"
           >
             Export
           </button>

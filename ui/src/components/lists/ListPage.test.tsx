@@ -179,6 +179,93 @@ describe("ListPage", () => {
     confirmSpy.mockRestore();
   });
 
+  it("exports a TSV of gene IDs and descriptions when Export is clicked", async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.get("http://localhost:8000/api/v2/lists/:listId", ({ params }) => {
+        return HttpResponse.json({
+          listId: params.listId,
+          name: "Stress Response",
+          description: null,
+          annotationId: "arath-Araport11",
+          taxonName: "Arabidopsis thaliana",
+          createdAt: "2026-04-14 12:00:00",
+          geneCount: 2,
+          memberGeneIds: ["AT1G01010", "AT1G01020"],
+        });
+      })
+    );
+
+    const blobs: Blob[] = [];
+    const origCreate = URL.createObjectURL;
+    const origRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = vi.fn((blob: Blob) => {
+      blobs.push(blob);
+      return "blob:mock-url";
+    });
+    URL.revokeObjectURL = vi.fn();
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+
+    renderListPage();
+    await screen.findByText(/first gene/i);
+    await screen.findByText(/second gene/i);
+    await user.click(screen.getByRole("button", { name: /export/i }));
+
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+    const text = await blobs[0].text();
+    expect(text).toBe(
+      "geneId\tdescription\nAT1G01010\tFirst gene\nAT1G01020\tSecond gene"
+    );
+
+    clickSpy.mockRestore();
+    URL.createObjectURL = origCreate;
+    URL.revokeObjectURL = origRevoke;
+  });
+
+  it("names the exported file using the list name slug and today's date", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-05-13T10:00:00Z"));
+    const user = userEvent.setup();
+    server.use(
+      http.get("http://localhost:8000/api/v2/lists/:listId", ({ params }) => {
+        return HttpResponse.json({
+          listId: params.listId,
+          name: "Stress Response!",
+          description: null,
+          annotationId: "arath-Araport11",
+          taxonName: "Arabidopsis thaliana",
+          createdAt: "2026-04-14 12:00:00",
+          geneCount: 1,
+          memberGeneIds: ["AT1G01010"],
+        });
+      })
+    );
+
+    const origCreate = URL.createObjectURL;
+    const origRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = vi.fn(() => "blob:mock-url");
+    URL.revokeObjectURL = vi.fn();
+    let downloadName = "";
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(function (this: HTMLAnchorElement) {
+        downloadName = this.download;
+      });
+
+    renderListPage();
+    await screen.findByText("AT1G01010");
+    await user.click(screen.getByRole("button", { name: /export/i }));
+
+    expect(downloadName).toBe("stress-response-2026-05-13.tsv");
+
+    clickSpy.mockRestore();
+    URL.createObjectURL = origCreate;
+    URL.revokeObjectURL = origRevoke;
+    vi.useRealTimers();
+  });
+
   it("shows the gene description for each member", async () => {
     server.use(
       http.get(
