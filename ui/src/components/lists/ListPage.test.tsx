@@ -78,6 +78,29 @@ describe("ListPage", () => {
     expect(screen.getByText("AT1G01020")).toBeInTheDocument();
   });
 
+  it("links each gene id to its gene page", async () => {
+    server.use(
+      http.get("http://localhost:8000/api/v2/lists/:listId", ({ params }) => {
+        return HttpResponse.json({
+          listId: params.listId,
+          name: "Populated list",
+          description: null,
+          annotationId: "arath-Araport11",
+          taxonName: "Arabidopsis thaliana",
+          createdAt: "2026-04-14 12:00:00",
+          geneCount: 1,
+          memberGeneIds: ["AT1G01010"],
+        });
+      })
+    );
+    renderListPage();
+    const link = await screen.findByRole("link", { name: /AT1G01010/ });
+    expect(link).toHaveAttribute(
+      "href",
+      "/genes/arath-Araport11/AT1G01010"
+    );
+  });
+
   it("renders a Remove button for each member gene", async () => {
     server.use(
       http.get("http://localhost:8000/api/v2/lists/:listId", ({ params }) => {

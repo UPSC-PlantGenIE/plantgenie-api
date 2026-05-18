@@ -117,43 +117,46 @@ export default function ListPage() {
 
       {data.memberGeneIds.length > 0 ? (
         <section className="mt-6 overflow-hidden rounded-xl border border-border bg-card shadow-card">
-          <table className="w-full text-left">
-            <thead className="bg-surface text-xs font-semibold text-muted">
-              <tr>
-                <th className="px-6 py-3">Gene ID</th>
-                <th className="px-6 py-3">Description</th>
-                <th className="px-6 py-3 text-right">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.memberGeneIds.map((id) => {
-                const found = members?.found.find((g) => g.geneId === id);
-                return (
-                  <tr key={id} className="border-t border-border">
-                    <td className="px-6 py-4 text-sm font-semibold text-primary">
+          <div
+            role="row"
+            className="hidden border-b border-border bg-surface px-6 py-3 text-xs font-semibold text-muted md:grid md:grid-cols-12 md:items-center md:gap-x-4"
+          >
+            <div className="md:col-span-4">Gene ID</div>
+            <div className="md:col-span-8">Description</div>
+          </div>
+          <ul>
+            {data.memberGeneIds.map((id) => {
+              const found = members?.found.find((g) => g.geneId === id);
+              return (
+                <li
+                  key={id}
+                  className="relative border-b border-border last:border-b-0"
+                >
+                  <Link
+                    href={`/genes/${data.annotationId}/${id}`}
+                    state={{ listId: data.listId, listName: data.name }}
+                    className="grid grid-cols-1 gap-y-1 px-6 py-4 pr-14 hover:bg-surface md:grid-cols-12 md:items-center md:gap-x-4"
+                  >
+                    <span className="text-sm font-semibold text-primary md:col-span-4">
                       {id}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-muted">
+                    </span>
+                    <span className="text-sm text-muted md:col-span-8">
                       {found?.description ?? ""}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <button
-                        type="button"
-                        onClick={() => handleRemove(id)}
-                        disabled={isRemoving}
-                        aria-label={`Remove ${id}`}
-                        className="inline-flex size-8 items-center justify-center rounded-md text-muted hover:bg-surface hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        ✕
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </span>
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => handleRemove(id)}
+                    disabled={isRemoving}
+                    aria-label={`Remove ${id}`}
+                    className="absolute right-3 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-muted hover:bg-surface hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    ✕
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
           <div className="border-t border-border bg-surface px-6 py-3 text-xs text-muted">
             {data.geneCount} genes total
           </div>
