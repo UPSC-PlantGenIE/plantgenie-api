@@ -1,4 +1,5 @@
 import sqlite3
+from collections.abc import Generator
 from pathlib import Path
 
 import pytest
@@ -65,7 +66,7 @@ async def async_client(sqlite_conn: sqlite3.Connection):
 
 
 @pytest.fixture
-def neo4j_session():
+def neo4j_session() -> Generator[FakeNeo4jSession, None, None]:
     session = FakeNeo4jSession()
 
     async def override():

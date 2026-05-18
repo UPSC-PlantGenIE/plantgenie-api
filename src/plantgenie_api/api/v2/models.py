@@ -47,5 +47,10 @@ class Annotation(PlantGenieModel):
     assembly_id: str
 
 
+class AnnotationDetail(Annotation):
+    taxon_abbreviation: str
+    taxon_scientific_name: str
+
+
 class AnnotationsResponse(PlantGenieModel):
     annotations: List[Annotation]

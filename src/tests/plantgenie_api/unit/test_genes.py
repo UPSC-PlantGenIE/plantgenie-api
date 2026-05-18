@@ -1,7 +1,7 @@
 import pytest
 from httpx import AsyncClient
 
-from .conftest import FakeNeo4jSession
+from tests.plantgenie_api.unit.conftest import FakeNeo4jSession
 
 
 @pytest.mark.anyio

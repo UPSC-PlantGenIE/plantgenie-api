@@ -6,6 +6,7 @@ from plantgenie_api.api.v2.genes.routes import router as genes_router
 from plantgenie_api.api.v2.lists.routes import router as user_lists_router
 from plantgenie_api.api.v2.models import (
     Annotation,
+    AnnotationDetail,
     AnnotationsResponse,
     AssembliesResponse,
     Assembly,
@@ -116,4 +117,34 @@ async def retrieve_annotations(
             )
             for record in records
         ]
+    )
+
+
+@router.get(
+    "/annotations/{annotation_id}",
+    response_model=AnnotationDetail,
+    tags=["annotations"],
+)
+async def retrieve_annotation(
+    session: Neo4jDep,
+    annotation_id: str,
+) -> AnnotationDetail:
+    result = await session.run(
+        "MATCH (t:Taxon)-[:HAS_ASSEMBLY]->(a:Assembly)-[:HAS_ANNOTATION]->"
+        "(n:Annotation {id: $annotationId}) "
+        "RETURN n {.id, .version, .geneCount, .isDefault} AS n, "
+        "a.id AS assemblyId, "
+        "t.abbreviation AS taxonAbbreviation, "
+        "t.scientificName AS taxonScientificName",
+        annotationId=annotation_id,
+    )
+    records = [record async for record in result]
+    if not records:
+        raise HTTPException(status_code=404, detail="Annotation not found")
+    record = records[0]
+    return AnnotationDetail(
+        **record["n"],
+        assembly_id=record["assemblyId"],
+        taxon_abbreviation=record["taxonAbbreviation"],
+        taxon_scientific_name=record["taxonScientificName"],
     )
