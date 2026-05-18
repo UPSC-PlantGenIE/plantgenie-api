@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { plantgenieApi, type GeneList } from "../../api/plantgenieApi";
 import { server } from "../../mocks/server";
@@ -114,6 +115,98 @@ describe("MyListsPage", () => {
     renderWithStore(<MyListsPage />);
     const link = screen.getByRole("link", { name: /\+ new list/i });
     expect(link).toHaveAttribute("href", "/lists/new");
+  });
+
+  it("renders a Delete button for each list", async () => {
+    renderWithStore(<MyListsPage />);
+    expect(
+      await screen.findByRole("button", { name: /delete test list/i })
+    ).toBeInTheDocument();
+  });
+
+  it("calls DELETE /v2/lists/:listId when Delete is confirmed", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    let deletedId: string | null = null;
+    server.use(
+      http.delete(
+        "http://localhost:8000/api/v2/lists/:listId",
+        ({ params }) => {
+          deletedId = params.listId as string;
+          return new HttpResponse(null, { status: 204 });
+        }
+      )
+    );
+
+    renderWithStore(<MyListsPage />);
+    await user.click(
+      await screen.findByRole("button", { name: /delete test list/i })
+    );
+
+    await waitFor(() => {
+      expect(deletedId).toBe("abc-123");
+    });
+    expect(confirmSpy).toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("does not call DELETE when the confirm is cancelled", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    let deleteCalled = false;
+    server.use(
+      http.delete("http://localhost:8000/api/v2/lists/:listId", () => {
+        deleteCalled = true;
+        return new HttpResponse(null, { status: 204 });
+      })
+    );
+
+    renderWithStore(<MyListsPage />);
+    await user.click(
+      await screen.findByRole("button", { name: /delete test list/i })
+    );
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(deleteCalled).toBe(false);
+    confirmSpy.mockRestore();
+  });
+
+  it("removes the deleted list from the page after success", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    let lists: GeneList[] = [
+      {
+        listId: "abc-123",
+        name: "Doomed list",
+        description: null,
+        annotationId: "arath-Araport11",
+        taxonName: "Arabidopsis thaliana",
+        createdAt: "2026-04-14T12:00:00",
+        geneCount: 0,
+      },
+    ];
+    server.use(
+      http.get("http://localhost:8000/api/v2/lists", () =>
+        HttpResponse.json({ lists })
+      ),
+      http.delete("http://localhost:8000/api/v2/lists/:listId", () => {
+        lists = [];
+        return new HttpResponse(null, { status: 204 });
+      })
+    );
+
+    renderWithStore(<MyListsPage />);
+    await user.click(
+      await screen.findByRole("button", { name: /delete doomed list/i })
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText("Doomed list")).not.toBeInTheDocument();
+    });
+    confirmSpy.mockRestore();
   });
 
   it("shows newly created lists without a remount", async () => {

@@ -1,6 +1,6 @@
 import secrets
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 
 from plantgenie_api.api.v2.lists.models import (
     CreateListRequest,
@@ -93,6 +93,24 @@ async def get_list(list_id: str, conn: SqliteDep) -> GeneListWithMember:
         gene_count=row[6],
         member_gene_ids=[r[0] for r in member_rows],
     )
+
+
+@router.delete("/{list_id}", status_code=204)
+async def delete_list(list_id: str, conn: SqliteDep) -> Response:
+    async with conn.execute(
+        "SELECT 1 FROM gene_lists WHERE list_id = ?", (list_id,)
+    ) as cursor:
+        row = await cursor.fetchone()
+    if row is None:
+        raise HTTPException(
+            status_code=404, detail=f"List '{list_id}' not found"
+        )
+    await conn.execute(
+        "DELETE FROM gene_list_members WHERE list_id = ?", (list_id,)
+    )
+    await conn.execute("DELETE FROM gene_lists WHERE list_id = ?", (list_id,))
+    await conn.commit()
+    return Response(status_code=204)
 
 
 @router.patch("/{list_id}")

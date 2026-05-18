@@ -1,5 +1,8 @@
 import { Link } from "wouter";
-import { useGetMyListsQuery } from "../../api/plantgenieApi";
+import {
+  useDeleteListMutation,
+  useGetMyListsQuery,
+} from "../../api/plantgenieApi";
 
 const dateFmt = new Intl.DateTimeFormat("en-US", {
   month: "short",
@@ -15,7 +18,14 @@ const genomeVersion = (annotationId: string) =>
 
 export default function MyListsPage() {
   const { data, isLoading } = useGetMyListsQuery();
+  const [deleteList, { isLoading: isDeleting }] = useDeleteListMutation();
   const lists = data ?? [];
+
+  const handleDelete = (listId: string, name: string) => {
+    if (!window.confirm(`Delete list "${name}"? This cannot be undone.`))
+      return;
+    deleteList(listId);
+  };
 
   return (
     <div className="mx-auto w-full max-w-7xl px-6 py-12">
@@ -89,11 +99,11 @@ export default function MyListsPage() {
             {lists.map((list) => (
               <li
                 key={list.listId}
-                className="border-b border-border last:border-b-0"
+                className="relative border-b border-border last:border-b-0"
               >
                 <Link
                   href={`/lists/${list.listId}`}
-                  className="grid grid-cols-1 gap-y-2 px-5 py-4 hover:bg-surface md:grid-cols-12 md:items-center md:gap-x-4"
+                  className="grid grid-cols-1 gap-y-2 px-5 py-4 pr-14 hover:bg-surface md:grid-cols-12 md:items-center md:gap-x-4"
                 >
                   <div className="text-center md:col-span-5 md:text-left">
                     <div className="text-sm font-semibold text-heading">
@@ -118,6 +128,15 @@ export default function MyListsPage() {
                     {formatDate(list.createdAt)}
                   </span>
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(list.listId, list.name)}
+                  disabled={isDeleting}
+                  aria-label={`Delete ${list.name}`}
+                  className="absolute right-3 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-muted hover:bg-surface hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  ✕
+                </button>
               </li>
             ))}
           </ul>

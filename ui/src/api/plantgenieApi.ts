@@ -128,6 +128,13 @@ export const plantgenieApi = createApi({
       }),
       invalidatesTags: ["List"],
     }),
+    deleteList: build.mutation<void, string>({
+      query: (listId) => ({
+        url: `v2/lists/${listId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ["List"],
+    }),
   }),
 });
 
@@ -141,4 +148,5 @@ export const {
   useLookupGenesQuery,
   useLazyLookupGenesQuery,
   usePatchListMutation,
+  useDeleteListMutation,
 } = plantgenieApi;
