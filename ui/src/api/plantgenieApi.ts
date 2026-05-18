@@ -29,6 +29,11 @@ export interface Annotation {
   assemblyId: string;
 }
 
+export interface AnnotationDetail extends Annotation {
+  taxonAbbreviation: string;
+  taxonScientificName: string;
+}
+
 export interface GeneList {
   listId: string;
   name: string;
@@ -90,6 +95,9 @@ export const plantgenieApi = createApi({
       query: (params) => ({ url: "v2/annotations", params }),
       transformResponse: (r: { annotations: Annotation[] }) => r.annotations,
     }),
+    getAnnotation: build.query<AnnotationDetail, string>({
+      query: (annotationId) => `v2/annotations/${annotationId}`,
+    }),
     createList: build.mutation<CreateListResponse, CreateListRequest>({
       query: (body) => ({ url: "v2/lists", method: "POST", body }),
       invalidatesTags: ["List"],
@@ -142,6 +150,7 @@ export const {
   useGetTaxaQuery,
   useGetAssembliesQuery,
   useGetAnnotationsQuery,
+  useGetAnnotationQuery,
   useCreateListMutation,
   useGetListQuery,
   useGetMyListsQuery,
