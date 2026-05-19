@@ -13,7 +13,9 @@ cloud-init, but just in case:
 sudo apt install certbot python3-certbot-nginx
 ```
 
-3. Run it!
+3. Update A Record for your domain to have the correct IP for the nginx VM!
+
+4. Run it!
 
 ```bash
 sudo certbot --nginx \
