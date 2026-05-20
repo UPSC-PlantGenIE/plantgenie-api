@@ -37,3 +37,48 @@ async def test_lookup_splits_known_and_unknown(
         }
     ]
     assert body["notFound"] == ["UNKNOWN"]
+
+
+@pytest.mark.anyio
+async def test_get_gene_returns_full_record(
+    async_client: AsyncClient,
+    neo4j_session: FakeNeo4jSession,
+):
+    neo4j_session.next_records = [
+        {
+            "g": {
+                "geneId": "AT1G01010",
+                "name": "GENE1",
+                "description": "First gene",
+                "chromosome": "Chr1",
+                "startPosition": 3631,
+                "endPosition": 5899,
+                "strand": "+",
+            }
+        }
+    ]
+
+    response = await async_client.get("/v2/genes/arath-Araport11/AT1G01010")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "geneId": "AT1G01010",
+        "name": "GENE1",
+        "description": "First gene",
+        "chromosome": "Chr1",
+        "startPosition": 3631,
+        "endPosition": 5899,
+        "strand": "+",
+    }
+
+
+@pytest.mark.anyio
+async def test_get_gene_returns_404_when_missing(
+    async_client: AsyncClient,
+    neo4j_session: FakeNeo4jSession,
+):
+    neo4j_session.next_records = []
+
+    response = await async_client.get("/v2/genes/arath-Araport11/UNKNOWN")
+
+    assert response.status_code == 404

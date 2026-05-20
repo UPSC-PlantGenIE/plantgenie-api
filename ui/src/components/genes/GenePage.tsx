@@ -1,7 +1,7 @@
 import { Link, useParams } from "wouter";
 import {
   useGetAnnotationQuery,
-  useLookupGenesQuery,
+  useGetGeneQuery,
 } from "../../api/plantgenieApi";
 
 type GeneNavState = {
@@ -15,12 +15,12 @@ export default function GenePage() {
     geneId: string;
   }>();
   const { data: annotation } = useGetAnnotationQuery(annotationId);
-  const { data: lookup } = useLookupGenesQuery({
-    annotationId,
-    geneIds: [geneId],
-  });
+  const { data: gene } = useGetGeneQuery({ annotationId, geneId });
   const navState = (window.history.state ?? {}) as GeneNavState;
-  const gene = lookup?.found.find((g) => g.geneId === geneId);
+  const length =
+    gene?.startPosition != null && gene?.endPosition != null
+      ? gene.endPosition - gene.startPosition + 1
+      : null;
 
   return (
     <div className="mx-auto w-full max-w-7xl px-6 py-8">
@@ -65,28 +65,74 @@ export default function GenePage() {
             ← Back to My Lists
           </Link>
         </div>
-        {annotation && (
-          <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
+          {annotation && (
+            <>
+              <span className="rounded-md bg-primary-tint px-2.5 py-1 text-xs font-medium text-primary">
+                {annotation.taxonScientificName}
+              </span>
+              <span className="rounded-md bg-primary-tint px-2.5 py-1 text-xs font-medium text-primary">
+                {annotation.version}
+              </span>
+            </>
+          )}
+          {gene?.chromosome && (
             <span className="rounded-md bg-primary-tint px-2.5 py-1 text-xs font-medium text-primary">
-              {annotation.taxonScientificName}
+              {gene.chromosome}
             </span>
-            <span className="rounded-md bg-primary-tint px-2.5 py-1 text-xs font-medium text-primary">
-              {annotation.version}
-            </span>
-          </div>
-        )}
+          )}
+        </div>
       </article>
 
       <div className="mt-6 space-y-6">
         <PlaceholderCard heading="Genome browser" />
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <PlaceholderCard heading="Annotation details" />
+          <AnnotationDetailsCard gene={gene} length={length} />
           <PlaceholderCard heading="Best Arabidopsis hit" />
         </div>
         <PlaceholderCard heading="Best hits in other taxa" />
         <PlaceholderCard heading="GO terms" />
       </div>
     </div>
+  );
+}
+
+function AnnotationDetailsCard({
+  gene,
+  length,
+}: {
+  gene:
+    | {
+        chromosome: string | null;
+        startPosition: number | null;
+        endPosition: number | null;
+        strand: string | null;
+      }
+    | undefined;
+  length: number | null;
+}) {
+  return (
+    <section className="rounded-xl border border-border bg-card px-6 py-5 shadow-card">
+      <h2 className="text-sm font-semibold text-heading">
+        Annotation details
+      </h2>
+      <dl className="mt-3 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-xs">
+        <dt className="text-muted">Chromosome</dt>
+        <dd className="text-heading">{gene?.chromosome ?? "—"}</dd>
+        <dt className="text-muted">Position</dt>
+        <dd className="text-heading">
+          {gene?.startPosition != null && gene?.endPosition != null
+            ? `${gene.startPosition.toLocaleString()}–${gene.endPosition.toLocaleString()}`
+            : "—"}
+        </dd>
+        <dt className="text-muted">Length</dt>
+        <dd className="text-heading">
+          {length != null ? `${length.toLocaleString()} bp` : "—"}
+        </dd>
+        <dt className="text-muted">Strand</dt>
+        <dd className="text-heading">{gene?.strand ?? "—"}</dd>
+      </dl>
+    </section>
   );
 }
 

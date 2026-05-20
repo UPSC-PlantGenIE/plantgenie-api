@@ -121,6 +121,49 @@ export const handlers = [
     }
   ),
 
+  http.get(
+    "http://localhost:8000/api/v2/genes/:annotationId/:geneId",
+    ({ params }) => {
+      const fixtures: Record<
+        string,
+        {
+          name: string;
+          description: string;
+          chromosome: string;
+          startPosition: number;
+          endPosition: number;
+          strand: string;
+        }
+      > = {
+        AT1G01010: {
+          name: "GENE1",
+          description: "First gene",
+          chromosome: "Chr1",
+          startPosition: 3631,
+          endPosition: 5899,
+          strand: "+",
+        },
+        AT1G01020: {
+          name: "GENE2",
+          description: "Second gene",
+          chromosome: "Chr1",
+          startPosition: 6788,
+          endPosition: 9130,
+          strand: "-",
+        },
+      };
+      const geneId = params.geneId as string;
+      const fixture = fixtures[geneId];
+      if (!fixture) {
+        return HttpResponse.json(
+          { detail: "Gene not found" },
+          { status: 404 }
+        );
+      }
+      return HttpResponse.json({ geneId, ...fixture });
+    }
+  ),
+
   http.get("http://localhost:8000/api/v2/taxa", ({ request }) => {
     const abbreviation = new URL(request.url).searchParams.get("abbreviation");
     const filtered = abbreviation

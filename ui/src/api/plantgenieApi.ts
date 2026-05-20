@@ -72,6 +72,16 @@ export interface LookupGenesResponse {
   notFound: string[];
 }
 
+export interface GeneDetail {
+  geneId: string;
+  name: string | null;
+  description: string | null;
+  chromosome: string | null;
+  startPosition: number | null;
+  endPosition: number | null;
+  strand: string | null;
+}
+
 export const plantgenieApi = createApi({
   reducerPath: "plantgenieApi",
   baseQuery: fetchBaseQuery({ baseUrl }),
@@ -121,6 +131,13 @@ export const plantgenieApi = createApi({
         body,
       }),
     }),
+    getGene: build.query<
+      GeneDetail,
+      { annotationId: string; geneId: string }
+    >({
+      query: ({ annotationId, geneId }) =>
+        `v2/genes/${annotationId}/${geneId}`,
+    }),
     patchList: build.mutation<
       { listId: string },
       {
@@ -156,6 +173,7 @@ export const {
   useGetMyListsQuery,
   useLookupGenesQuery,
   useLazyLookupGenesQuery,
+  useGetGeneQuery,
   usePatchListMutation,
   useDeleteListMutation,
 } = plantgenieApi;

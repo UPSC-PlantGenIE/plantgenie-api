@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { Route, Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
@@ -67,14 +67,11 @@ describe("GenePage", () => {
     expect(screen.getByText("Araport11")).toBeInTheDocument();
   });
 
-  it("renders the five placeholder card headings", async () => {
+  it("renders the remaining placeholder card headings", async () => {
     mockAnnotation();
     renderGenePage();
     expect(
       await screen.findByRole("heading", { name: /genome browser/i })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: /annotation details/i })
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: /best arabidopsis hit/i })
@@ -106,6 +103,32 @@ describe("GenePage", () => {
     expect(
       screen.queryByRole("link", { name: /drought-response tfs/i })
     ).not.toBeInTheDocument();
+  });
+
+  it("renders a chromosome tag in the header from the gene fetch", async () => {
+    mockAnnotation();
+    renderGenePage();
+    const heading = await screen.findByRole("heading", { name: "AT1G01010" });
+    const header = heading.closest("article");
+    expect(header).not.toBeNull();
+    const scoped = within(header as HTMLElement);
+    expect(await scoped.findByText("Chr1")).toBeInTheDocument();
+  });
+
+  it("populates the Annotation details card with chromosome, position, and strand", async () => {
+    mockAnnotation();
+    renderGenePage();
+    const heading = await screen.findByRole("heading", {
+      name: /annotation details/i,
+    });
+    const card = heading.closest("section");
+    expect(card).not.toBeNull();
+    const scoped = within(card as HTMLElement);
+    expect(await scoped.findByText("Chr1")).toBeInTheDocument();
+    expect(scoped.getByText(/3,631/)).toBeInTheDocument();
+    expect(scoped.getByText(/5,899/)).toBeInTheDocument();
+    expect(scoped.getByText("+")).toBeInTheDocument();
+    expect(scoped.queryByText(/coming soon/i)).not.toBeInTheDocument();
   });
 
   it("links the list name in the breadcrumb when history state carries list context", async () => {
