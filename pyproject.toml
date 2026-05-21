@@ -24,6 +24,7 @@ dependencies = [
     "shared",
     "task-queue",
     "go-enrich",
+    "sentence-transformers>=5.5.1",
 ]
 
 [tool.uv.workspace]
