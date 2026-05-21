@@ -7,9 +7,14 @@ import duckdb
 from duckdb import DuckDBPyConnection
 from fastapi import Depends, FastAPI, Request
 
+import numpy as np
+from sentence_transformers import SentenceTransformer
+
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    
     APP_ENVIRONMENT: Dict[str, str] = {}
     required_environmental_variables = [
         "DATA_PATH",
@@ -47,17 +52,30 @@ async def lifespan(app: FastAPI):
         strict=True
     ).as_posix()
 
-    # connection = duckdb.connect(APP_ENVIRONMENT["DATABASE_PATH"])
-
     with duckdb.connect(APP_ENVIRONMENT["DATABASE_PATH"]) as connection:
         connection.execute(
-            f"SET allowed_directories = ['{APP_ENVIRONMENT["DATA_PATH"]}'];"
+            f"SET allowed_directories = ['{APP_ENVIRONMENT['DATA_PATH']}'];"
         )
-
         connection.execute("SET enable_external_access = false;")
         connection.execute("SET lock_configuration = true")
 
     app.state.APP_ENVIRONMENT = APP_ENVIRONMENT
+    app.state.embedding_model = SentenceTransformer("mixedbread-ai/mxbai-embed-large-v1")
+
+    search_dir = Path(APP_ENVIRONMENT["DATA_PATH"]) / "pg-service-semantic-search"
+
+    search_index: dict[str, dict] = {}
+    if search_dir.exists():
+        for emb_path in search_dir.glob("*_embeddings.npy"):
+            taxon = emb_path.stem.removesuffix("_embeddings")
+            ids_path = search_dir / f"{taxon}_gene_ids.npy"
+            if ids_path.exists():
+                search_index[taxon] = {
+                    "embeddings": np.load(str(emb_path)),
+                    "gene_ids": np.load(str(ids_path), allow_pickle=True),
+                }
+
+    app.state.search_index = search_index
 
     yield
 
@@ -98,3 +116,15 @@ DatabaseDep = Annotated[DuckDBPyConnection, Depends(get_db_connection)]
 EnvironmentDep = Annotated[Dict[str, str], Depends(get_environment)]
 BlastPathDep = Annotated[Path, Depends(get_blast_path)]
 GoEnrichmentPathDep = Annotated[Path, Depends(get_go_enrichment_path)]
+
+
+def get_embedding_model(request: Request) -> SentenceTransformer:
+    return request.app.state.embedding_model
+
+
+def get_search_index(request: Request) -> dict:
+    return request.app.state.search_index
+
+
+EmbeddingModelDep = Annotated[SentenceTransformer, Depends(get_embedding_model)]
+SearchIndexDep = Annotated[dict, Depends(get_search_index)]

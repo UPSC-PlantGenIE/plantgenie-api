@@ -18,6 +18,8 @@ from plantgenie_api.models import (
     AvailableSpeciesResponse,
 )
 
+from plantgenie_api.api.v1.search.routes import router as search_router
+
 app = FastAPI(
     root_path="/api",
     title="UPSC PlantGenIE API",
@@ -41,7 +43,7 @@ app.include_router(router=genome_router, prefix="/v1")
 app.include_router(router=expression_router, prefix="/v1")
 app.include_router(router=annotation_router, prefix="/v1")
 app.include_router(router=enrichment_router, prefix="/v1")
-
+app.include_router(router=search_router, prefix="/v1")
 
 @app.get("/")
 async def root():
