@@ -27,3 +27,9 @@ class GeneDetail(PlantGenieModel):
     start_position: Optional[int] = None
     end_position: Optional[int] = None
     strand: Optional[str] = None
+
+
+class GoTerm(PlantGenieModel):
+    id: str
+    name: Optional[str] = None
+    namespace: Optional[str] = None

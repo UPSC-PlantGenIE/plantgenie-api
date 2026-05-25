@@ -80,8 +80,56 @@ describe("GenePage", () => {
       screen.getByRole("heading", { name: /best hits in other taxa/i })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: /go terms/i })
+      screen.getByRole("heading", { name: /^go terms$/i })
     ).toBeInTheDocument();
+  });
+
+  it("renders GO term names from the API in the GO terms card", async () => {
+    mockAnnotation();
+    renderGenePage();
+    const heading = await screen.findByRole("heading", {
+      name: /^go terms$/i,
+    });
+    const card = heading.closest("section");
+    expect(card).not.toBeNull();
+    const scoped = within(card as HTMLElement);
+    expect(
+      await scoped.findByText(/regulation of dna-templated transcription/i)
+    ).toBeInTheDocument();
+    expect(
+      scoped.getByText(/dna-binding transcription factor activity/i)
+    ).toBeInTheDocument();
+    expect(scoped.getByText(/nucleus/i)).toBeInTheDocument();
+  });
+
+  it("renders GO term section headers grouped by namespace", async () => {
+    mockAnnotation();
+    renderGenePage();
+    const heading = await screen.findByRole("heading", {
+      name: /^go terms$/i,
+    });
+    const card = heading.closest("section");
+    const scoped = within(card as HTMLElement);
+    expect(
+      await scoped.findByRole("heading", { name: /biological process/i })
+    ).toBeInTheDocument();
+    expect(
+      scoped.getByRole("heading", { name: /molecular function/i })
+    ).toBeInTheDocument();
+    expect(
+      scoped.getByRole("heading", { name: /cellular component/i })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the total GO term count in the card subtitle", async () => {
+    mockAnnotation();
+    renderGenePage();
+    const heading = await screen.findByRole("heading", {
+      name: /^go terms$/i,
+    });
+    const card = heading.closest("section");
+    const scoped = within(card as HTMLElement);
+    expect(await scoped.findByText(/3 annotations/i)).toBeInTheDocument();
   });
 
   it("renders a 'Back to My Lists' link pointing to '/'", async () => {

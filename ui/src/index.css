@@ -11,6 +11,10 @@
   --color-muted: #9ea6b8;
   --color-input: #fafafc;
 
+  --color-namespace-bp: #1fba80;
+  --color-namespace-mf: #3885f5;
+  --color-namespace-cc: #8f5cd9;
+
   --font-sans: "Source Sans 3", sans-serif;
 
   --shadow-nav: 0 2px 8px 0 rgba(0, 0, 0, 0.05);

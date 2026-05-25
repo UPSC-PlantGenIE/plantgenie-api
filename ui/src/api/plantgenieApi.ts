@@ -82,6 +82,12 @@ export interface GeneDetail {
   strand: string | null;
 }
 
+export interface GoTerm {
+  id: string;
+  name: string | null;
+  namespace: string | null;
+}
+
 export const plantgenieApi = createApi({
   reducerPath: "plantgenieApi",
   baseQuery: fetchBaseQuery({ baseUrl }),
@@ -138,6 +144,13 @@ export const plantgenieApi = createApi({
       query: ({ annotationId, geneId }) =>
         `v2/genes/${annotationId}/${geneId}`,
     }),
+    getGeneGoTerms: build.query<
+      GoTerm[],
+      { annotationId: string; geneId: string }
+    >({
+      query: ({ annotationId, geneId }) =>
+        `v2/genes/${annotationId}/${geneId}/go-terms`,
+    }),
     patchList: build.mutation<
       { listId: string },
       {
@@ -174,6 +187,7 @@ export const {
   useLookupGenesQuery,
   useLazyLookupGenesQuery,
   useGetGeneQuery,
+  useGetGeneGoTermsQuery,
   usePatchListMutation,
   useDeleteListMutation,
 } = plantgenieApi;

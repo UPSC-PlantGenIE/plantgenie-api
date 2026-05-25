@@ -1,7 +1,10 @@
 from fastapi import APIRouter, HTTPException
 
+from typing import List
+
 from plantgenie_api.api.v2.genes.models import (
     GeneDetail,
+    GoTerm,
     LookupGene,
     LookupGenesRequest,
     LookupGenesResponse,
@@ -44,3 +47,17 @@ async def get_gene(
     if not records:
         raise HTTPException(status_code=404, detail="Gene not found")
     return GeneDetail(**dict(records[0]["g"]))
+
+
+@router.get("/{annotation_id}/{gene_id}/go-terms", response_model=List[GoTerm])
+async def get_gene_go_terms(
+    session: Neo4jDep, annotation_id: str, gene_id: str
+) -> List[GoTerm]:
+    result = await session.run(
+        "MATCH (:Annotation {id: $annotationId})-[:HAS_GENE]->"
+        "(:Gene {id: $geneId})-[:HAS_GO_TERM]->(t:GoTerm) "
+        "RETURN t {.id, .name, .namespace} AS t",
+        annotationId=annotation_id,
+        geneId=gene_id,
+    )
+    return [GoTerm(**dict(r["t"])) async for r in result]

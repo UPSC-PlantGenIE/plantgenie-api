@@ -122,6 +122,36 @@ export const handlers = [
   ),
 
   http.get(
+    "http://localhost:8000/api/v2/genes/:annotationId/:geneId/go-terms",
+    ({ params }) => {
+      const fixtures: Record<
+        string,
+        { id: string; name: string; namespace: string }[]
+      > = {
+        AT1G01010: [
+          {
+            id: "GO:0006355",
+            name: "regulation of DNA-templated transcription",
+            namespace: "biological_process",
+          },
+          {
+            id: "GO:0003700",
+            name: "DNA-binding transcription factor activity",
+            namespace: "molecular_function",
+          },
+          {
+            id: "GO:0005634",
+            name: "nucleus",
+            namespace: "cellular_component",
+          },
+        ],
+      };
+      const geneId = params.geneId as string;
+      return HttpResponse.json(fixtures[geneId] ?? []);
+    }
+  ),
+
+  http.get(
     "http://localhost:8000/api/v2/genes/:annotationId/:geneId",
     ({ params }) => {
       const fixtures: Record<
