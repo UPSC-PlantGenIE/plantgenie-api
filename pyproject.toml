@@ -31,12 +31,14 @@ members = [
     "packages/task-queue",
     "packages/shared",
     "packages/go-enrich",
+    "packages/knowledge-builder",
 ]
 
 [tool.uv.sources]
 task-queue = { workspace = true }
 shared = { workspace = true }
 go-enrich = { workspace = true }
+knowledge-builder = { workspace = true }
 
 [project.scripts]
 plantgenie-api = "plantgenie_api.main:start"
