@@ -1,2 +1,5 @@
+from knowledge_builder.cli import app
+
+
 def main() -> None:
-    print("Hello from knowledge-builder!")
+    app()
