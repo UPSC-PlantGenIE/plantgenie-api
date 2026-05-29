@@ -1,0 +1,117 @@
+# Source-of-truth config for the PlantGenie knowledge graph.
+#
+# Nesting expresses the domain hierarchy: taxon -> assembly -> annotation.
+# The OF edges (annotation -> assembly -> taxon) and FROM edges
+# (asset -> the assembly/annotation it is nested under) are derived from the
+# nesting. See DATA_MODEL.md.
+#
+# Status: domain data for all seven taxa is transcribed from the curated CSVs
+# in /opt/neo4j/import. Source assets are filled in for betpe only so far; the
+# other taxa still need their gff/eggnog/genome assets added.
+
+bucket: https://north-1.cloud.snic.se:8080/swift/v1/AUTH_d9d5ac98cb2b4a3091b60040077e8efc/plantgenie-knowledge
+
+taxa:
+  - abbreviation: picab
+    scientificName: Picea abies
+    alias: picea-abies
+    commonName: Norway spruce
+    assemblies:
+      - version: v2
+        versionName: Picab02_230926
+        published: false
+        annotations:
+          - slug: v2.0
+            geneCount: 78426
+            isDefault: true
+
+  - abbreviation: pinsy
+    scientificName: Pinus sylvestris
+    alias: pinus-sylvestris
+    commonName: Scots pine
+    assemblies:
+      - version: v1
+        versionName: Pinsy01_240308
+        published: false
+        annotations:
+          - slug: v1.0
+            geneCount: 59029
+            isDefault: true
+
+  - abbreviation: potra
+    scientificName: Populus tremula
+    alias: populus-tremula
+    commonName: European aspen
+    assemblies:
+      - version: v2
+        versionName: Potra02_240916
+        published: true
+        publicationDate: 2024-09-16
+        doi: 10.1111/ppl.14511
+        annotations:
+          - slug: v2.2
+            geneCount: 37184
+            isDefault: true
+
+  - abbreviation: arath
+    scientificName: Arabidopsis thaliana
+    alias: arabidopsis-thaliana
+    commonName: Thale cress
+    assemblies:
+      - version: TAIR10
+        versionName: TAIR10
+        published: true
+        publicationDate: 2011-12-02
+        doi: 10.1093/nar/gkr1090
+        annotations:
+          - slug: tair10
+            geneCount: 28775
+            isDefault: false
+          - slug: araport11
+            geneCount: 27655
+            isDefault: true
+
+  - abbreviation: pruav
+    scientificName: Prunus avium
+    alias: prunus-avium
+    commonName: Wild cherry
+    assemblies:
+      - version: v2
+        versionName: Tieton
+        published: false
+        annotations:
+          - slug: v2.0
+            geneCount: 39984
+            isDefault: true
+
+  - abbreviation: betpe
+    scientificName: Betula pendula
+    alias: betula-pendula
+    commonName: Silver birch
+    assemblies:
+      - version: v1
+        versionName: Bepen_v1p2
+        published: false
+        assets:
+          - name: genome
+            format: fasta
+            # object: TBC — genome may still need fetching from CoGe into the bucket
+            source_url: https://genomevolution.org/coge/api/v1/genomes/68624/sequence
+        annotations:
+          - slug: v1.2
+            geneCount: 28147
+            isDefault: true
+            assets:
+              - name: gff
+                format: gff
+                object: Bepen_v1p2_coge_sorted.gff3.gz
+                source_url: https://genomevolution.org/coge/api/v1/downloads/?gid=68624&filename=Betula_pendula_subsp._pendula_annos1-cds0-id_typenum-nu1-upa1-add_chr0.gid68624.gff
+              - name: eggnog
+                format: tsv
+                object: Bepen_v1p2_eggnog_annotation.tsv.gz
+
+  - abbreviation: pinco
+    scientificName: Pinus contorta
+    alias: pinus-contorta
+    commonName: Lodgepole pine
+    # no assembly or annotation yet
