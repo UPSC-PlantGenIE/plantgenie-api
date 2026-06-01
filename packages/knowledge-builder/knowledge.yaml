@@ -115,3 +115,12 @@ taxa:
     alias: pinus-contorta
     commonName: Lodgepole pine
     # no assembly or annotation yet
+
+steps:
+  - id: betpe/v1/v1.2/gene-records
+    reads:
+      - betpe/v1/v1.2/gff
+      - betpe/v1/v1.2/eggnog
+    writes:
+      - id: betpe/v1/v1.2/gene-records
+        format: csv
