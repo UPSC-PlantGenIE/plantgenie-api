@@ -117,10 +117,29 @@ taxa:
     # no assembly or annotation yet
 
 steps:
-  - id: betpe/v1/v1.2/gene-records
+  - id: betpe/v1/v1.2/build-gene-records
     reads:
       - betpe/v1/v1.2/gff
       - betpe/v1/v1.2/eggnog
     writes:
       - id: betpe/v1/v1.2/gene-records
         format: csv
+
+  - id: betpe/v1/v1.2/build-gene-go
+    reads:
+      - betpe/v1/v1.2/gff
+      - betpe/v1/v1.2/eggnog
+    writes:
+      - id: betpe/v1/v1.2/gene-go
+        format: csv
+
+loads:
+  - id: betpe/v1/v1.2/load-gene-records
+    reads:
+      - betpe/v1/v1.2/gene-records
+
+  - id: betpe/v1/v1.2/load-gene-go
+    reads:
+      - betpe/v1/v1.2/gene-go
+    requires:
+      - betpe/v1/v1.2/load-gene-records
