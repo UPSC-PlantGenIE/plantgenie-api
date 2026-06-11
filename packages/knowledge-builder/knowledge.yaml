@@ -11,6 +11,12 @@
 
 bucket: https://north-1.cloud.snic.se:8080/swift/v1/AUTH_d9d5ac98cb2b4a3091b60040077e8efc/plantgenie-knowledge
 
+shared:
+  assets:
+    - id: shared/go-basic
+      format: json
+      source_url: https://current.geneontology.org/ontology/go-basic.json
+
 taxa:
   - abbreviation: picab
     scientificName: Picea abies
@@ -20,10 +26,21 @@ taxa:
       - version: v2
         versionName: Picab02_230926
         published: false
+        assets:
+          - name: genome
+            format: fasta
+            object: Picab02_chromosomes_and_unplaced.fa.gz
         annotations:
           - slug: v2.0
             geneCount: 78426
             isDefault: true
+            assets:
+              - name: gff
+                format: gff
+                object: Picab02_230926_at01_longest_no_TE_sorted.gff3.gz
+              - name: eggnog
+                format: tsv
+                object: Picab02_230926_at01_longest_representative_annotations_merged_sorted_non_redundant_panthers.tsv.gz
 
   - abbreviation: pinsy
     scientificName: Pinus sylvestris
@@ -33,10 +50,21 @@ taxa:
       - version: v1
         versionName: Pinsy01_240308
         published: false
+        assets:
+          - name: genome
+            format: fasta
+            object: Pinsy01_chromosomes_and_unplaced.fa.gz
         annotations:
           - slug: v1.0
             geneCount: 59029
             isDefault: true
+            assets:
+              - name: gff
+                format: gff
+                object: Pinsy01_240308_at01_longest_no_TE.gff3.gz
+              - name: eggnog
+                format: tsv
+                object: Pinsy01_240308_at01_longest_representative_annotations_merged_sorted_non_redundant_panthers.tsv.gz
 
   - abbreviation: potra
     scientificName: Populus tremula
@@ -48,28 +76,57 @@ taxa:
         published: true
         publicationDate: 2024-09-16
         doi: 10.1111/ppl.14511
+        assets:
+          - name: genome
+            format: fasta
+            object: Potra02_genome.fasta.gz
+            source_url: ftp://plantgenie.org:980/Data/PlantGenIE/Populus_tremula/v2.2/fasta/Potra02_genome.fasta.gz
         annotations:
           - slug: v2.2
             geneCount: 37184
             isDefault: true
+            assets:
+              - name: gff
+                format: gff
+                object: Potra02_240916_genes_all_sorted.gff3.gz
+                source_url: ftp://plantgenie.org:980/Data/PlantGenIE/Populus_tremula/v2.2/fasta/t/Potra02_genes.gff
+              - name: eggnog
+                format: tsv
+                object: Potra02_240916_eggnog_annotation.tsv.gz
 
   - abbreviation: arath
     scientificName: Arabidopsis thaliana
     alias: arabidopsis-thaliana
     commonName: Thale cress
     assemblies:
-      - version: TAIR10
-        versionName: TAIR10
+      - version: tair10
+        versionName: tair10
         published: true
         publicationDate: 2011-12-02
         doi: 10.1093/nar/gkr1090
+        assets:
+          - name: genome
+            format: fasta
+            object: Arabidopsis_thaliana.TAIR10.dna.toplevel.fa.gz
+            source_url: https://ftp.ensemblgenomes.org/pub/plants/release-62/fasta/arabidopsis_thaliana/dna/Arabidopsis_thaliana.TAIR10.dna.toplevel.fa.gz
         annotations:
           - slug: tair10
             geneCount: 28775
             isDefault: false
+            assets:
+              - name: gff
+                format: gff
+                object: TAIR10_GFF3_genes_sorted.gff3.gz
+              - name: functional-descriptions
+                format: tsv
+                object: TAIR10_functional_descriptions
           - slug: araport11
             geneCount: 27655
             isDefault: true
+            assets:
+              - name: gff
+                format: gff
+                object: TAIR10_araport11_sorted.gff3.gz
 
   - abbreviation: pruav
     scientificName: Prunus avium
@@ -79,10 +136,23 @@ taxa:
       - version: v2
         versionName: Tieton
         published: false
+        assets:
+          - name: genome
+            format: fasta
+            object: Tieton02_genome.fasta.gz
+            source_url: https://www.rosaceae.org/rosaceae_downloads/Prunus_avium/Prunus_avium_Tieton.v2.0.a1/assembly/Prunus_avium_Tieton.chr.fasta.gz
         annotations:
           - slug: v2.0
             geneCount: 39984
             isDefault: true
+            assets:
+              - name: gff
+                format: gff
+                object: Tieton02_original_sorted.gff3.gz
+                source_url: https://www.rosaceae.org/rosaceae_downloads/Prunus_avium/Prunus_avium_Tieton.v2.0.a1/genes/Prunus_avium_Tieton.annotation.gff3.gz
+              - name: eggnog
+                format: tsv
+                object: Tieton_v2p0_eggnog_annotation.tsv.gz
 
   - abbreviation: betpe
     scientificName: Betula pendula
@@ -95,7 +165,7 @@ taxa:
         assets:
           - name: genome
             format: fasta
-            # object: TBC — genome may still need fetching from CoGe into the bucket
+            object: Bepen_v1p2_genome.fa
             source_url: https://genomevolution.org/coge/api/v1/genomes/68624/sequence
         annotations:
           - slug: v1.2
@@ -114,9 +184,17 @@ taxa:
     scientificName: Pinus contorta
     alias: pinus-contorta
     commonName: Lodgepole pine
-    # no assembly or annotation yet
+    uses:
+      - assembly: pinsy/v1
 
 steps:
+  - id: shared/build-go-terms
+    reads:
+      - shared/go-basic
+    writes:
+      - id: shared/go-terms
+        format: csv
+
   - id: betpe/v1/v1.2/build-gene-records
     reads:
       - betpe/v1/v1.2/gff
@@ -133,7 +211,98 @@ steps:
       - id: betpe/v1/v1.2/gene-go
         format: csv
 
+  - id: picab/v2/v2.0/build-gene-records
+    reads:
+      - picab/v2/v2.0/gff
+      - picab/v2/v2.0/eggnog
+    writes:
+      - id: picab/v2/v2.0/gene-records
+        format: csv
+
+  - id: picab/v2/v2.0/build-gene-go
+    reads:
+      - picab/v2/v2.0/gff
+      - picab/v2/v2.0/eggnog
+    writes:
+      - id: picab/v2/v2.0/gene-go
+        format: csv
+
+  - id: pinsy/v1/v1.0/build-gene-records
+    reads:
+      - pinsy/v1/v1.0/gff
+      - pinsy/v1/v1.0/eggnog
+    writes:
+      - id: pinsy/v1/v1.0/gene-records
+        format: csv
+
+  - id: pinsy/v1/v1.0/build-gene-go
+    reads:
+      - pinsy/v1/v1.0/gff
+      - pinsy/v1/v1.0/eggnog
+    writes:
+      - id: pinsy/v1/v1.0/gene-go
+        format: csv
+
+  - id: potra/v2/v2.2/build-gene-records
+    reads:
+      - potra/v2/v2.2/gff
+      - potra/v2/v2.2/eggnog
+    writes:
+      - id: potra/v2/v2.2/gene-records
+        format: csv
+
+  - id: potra/v2/v2.2/build-gene-go
+    reads:
+      - potra/v2/v2.2/gff
+      - potra/v2/v2.2/eggnog
+    writes:
+      - id: potra/v2/v2.2/gene-go
+        format: csv
+
+  - id: pruav/v2/v2.0/build-gene-records
+    reads:
+      - pruav/v2/v2.0/gff
+      - pruav/v2/v2.0/eggnog
+    writes:
+      - id: pruav/v2/v2.0/gene-records
+        format: csv
+
+  - id: pruav/v2/v2.0/build-gene-go
+    reads:
+      - pruav/v2/v2.0/gff
+      - pruav/v2/v2.0/eggnog
+    writes:
+      - id: pruav/v2/v2.0/gene-go
+        format: csv
+
+  - id: arath/tair10/tair10/build-gene-records
+    reads:
+      - arath/tair10/tair10/gff
+      - arath/tair10/tair10/functional-descriptions
+    writes:
+      - id: arath/tair10/tair10/gene-records
+        format: csv
+
+  - id: arath/tair10/araport11/build-functional-descriptions
+    reads:
+      - arath/tair10/araport11/gff
+    writes:
+      - id: arath/tair10/araport11/functional-descriptions
+        format: csv
+
+  - id: arath/tair10/araport11/build-gene-records
+    reads:
+      - arath/tair10/araport11/gff
+      - arath/tair10/araport11/functional-descriptions
+    writes:
+      - id: arath/tair10/araport11/gene-records
+        format: csv
+
 loads:
+  - id: shared/load-go-terms
+    reads:
+      - shared/go-terms
+
   - id: betpe/v1/v1.2/load-gene-records
     reads:
       - betpe/v1/v1.2/gene-records
@@ -143,3 +312,56 @@ loads:
       - betpe/v1/v1.2/gene-go
     requires:
       - betpe/v1/v1.2/load-gene-records
+      - shared/load-go-terms
+
+  - id: picab/v2/v2.0/load-gene-records
+    reads:
+      - picab/v2/v2.0/gene-records
+
+  - id: picab/v2/v2.0/load-gene-go
+    reads:
+      - picab/v2/v2.0/gene-go
+    requires:
+      - picab/v2/v2.0/load-gene-records
+      - shared/load-go-terms
+
+  - id: pinsy/v1/v1.0/load-gene-records
+    reads:
+      - pinsy/v1/v1.0/gene-records
+
+  - id: pinsy/v1/v1.0/load-gene-go
+    reads:
+      - pinsy/v1/v1.0/gene-go
+    requires:
+      - pinsy/v1/v1.0/load-gene-records
+      - shared/load-go-terms
+
+  - id: potra/v2/v2.2/load-gene-records
+    reads:
+      - potra/v2/v2.2/gene-records
+
+  - id: potra/v2/v2.2/load-gene-go
+    reads:
+      - potra/v2/v2.2/gene-go
+    requires:
+      - potra/v2/v2.2/load-gene-records
+      - shared/load-go-terms
+
+  - id: pruav/v2/v2.0/load-gene-records
+    reads:
+      - pruav/v2/v2.0/gene-records
+
+  - id: pruav/v2/v2.0/load-gene-go
+    reads:
+      - pruav/v2/v2.0/gene-go
+    requires:
+      - pruav/v2/v2.0/load-gene-records
+      - shared/load-go-terms
+
+  - id: arath/tair10/tair10/load-gene-records
+    reads:
+      - arath/tair10/tair10/gene-records
+
+  - id: arath/tair10/araport11/load-gene-records
+    reads:
+      - arath/tair10/araport11/gene-records

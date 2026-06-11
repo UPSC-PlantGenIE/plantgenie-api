@@ -1,14 +1,23 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 from functools import wraps
 from pathlib import Path
-from typing import Dict, List, Literal, Optional
+from typing import Dict, Iterable, List, Literal, Optional
 
 import pendulum
 import requests
 from pendulum import DateTime
 from pydantic import BaseModel, ConfigDict, Field, field_validator, ValidationError
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
+)
 from swiftclient.service import SwiftService
 
 
@@ -311,6 +320,95 @@ class SwiftClient:
         return objects
 
     @authenticated
+    def upload(
+        self,
+        container: str,
+        object_name: str,
+        path: Path,
+        content_type: str = "application/octet-stream",
+    ) -> None:
+        self.create_container(container)
+        with path.open("rb") as f:
+            response = requests.put(
+                f"{self.storage_service_url}/{container}/{object_name}",
+                headers={
+                    "X-Auth-Token": self.token,
+                    "Content-Type": content_type,
+                },
+                data=f,
+            )
+            response.raise_for_status()
+
+    @authenticated
+    def stream_upload(
+        self,
+        container: str,
+        object_name: str,
+        path: Path,
+        chunk_size: int = 256 * 1024 * 1024,
+        content_type: str = "application/octet-stream",
+    ) -> None:
+        self.create_container(container)
+
+        manifest: List[Dict] = []
+        with (
+            path.open("rb") as f,
+            Progress(
+                BarColumn(),
+                DownloadColumn(),
+                TransferSpeedColumn(),
+                TimeRemainingColumn(),
+            ) as progress,
+        ):
+            task = progress.add_task(
+                "uploading", total=path.stat().st_size
+            )
+            for index, data in enumerate(
+                iter(lambda: f.read(chunk_size), b""), start=1
+            ):
+                part_name = f"{object_name}/parts/{index:04d}"
+                etag = hashlib.md5(data).hexdigest()
+                response = requests.put(
+                    f"{self.storage_service_url}/{container}/{part_name}",
+                    headers={
+                        "X-Auth-Token": self.token,
+                        "Content-Type": content_type,
+                        "ETag": etag,
+                    },
+                    data=data,
+                )
+                response.raise_for_status()
+                manifest.append(
+                    {
+                        "path": f"/{container}/{part_name}",
+                        "etag": etag,
+                        "size_bytes": len(data),
+                    }
+                )
+                progress.advance(task, len(data))
+
+        response = requests.put(
+            f"{self.storage_service_url}/{container}/{object_name}",
+            params={"multipart-manifest": "put"},
+            headers={
+                "X-Auth-Token": self.token,
+                "Content-Type": content_type,
+            },
+            data=json.dumps(manifest),
+        )
+        response.raise_for_status()
+
+    @authenticated
+    def list_objects(self, container: str) -> List[Dict]:
+        response = requests.get(
+            f"{self.storage_service_url}/{container}",
+            headers={"X-Auth-Token": self.token},
+            params={"format": "json"},
+        )
+        response.raise_for_status()
+        return response.json()
+
+    @authenticated
     def download_object(
         self, container: str, object: str | List[str], output_path: Path
     ) -> Optional[requests.Response]:
@@ -338,7 +436,9 @@ class SwiftClient:
 
         for obj in objects:
             response = requests.delete(
-                f"{self.storage_service_url}/{container}/{obj}"
+                f"{self.storage_service_url}/{container}/{obj}",
+                headers={"X-Auth-Token": self.token},
+                params={"multipart-manifest": "delete"},
             )
 
             responses.append(

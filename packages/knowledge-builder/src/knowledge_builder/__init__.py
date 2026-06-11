@@ -1,4 +1,4 @@
-from knowledge_builder.cli import app
+from knowledge_builder.main import app
 
 
 def main() -> None:

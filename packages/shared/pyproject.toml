@@ -12,6 +12,7 @@ dependencies = [
     "pendulum>=3.1.0",
     "python-dotenv>=1.0.1",
     "python-swiftclient>=4.8.0",
+    "rich>=13.9.4",
 ]
 
 [project.scripts]

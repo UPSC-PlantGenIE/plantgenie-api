@@ -1,330 +1,320 @@
 # knowledge-builder
 
-A graph-driven build system for the PlantGenie data layer. Build steps and
-their inputs/outputs live as nodes in the same Neo4j instance that holds the
-application graph. A Typer CLI walks the dependency graph, detects which
-upstream sources have changed in the Swift bucket, and re-runs only the
-downstream steps that need it.
+A graph-driven build system for the PlantGenie Neo4j knowledge graph. A
+single `kb` command runs end-to-end: connects to Neo4j, reads
+`knowledge.yaml`, MERGEs the catalog into the graph, runs DuckDB to produce
+derived CSVs into `/opt/neo4j/import`, then runs Cypher LOAD CSV to populate
+the application graph.
 
-## Goal
+`DATA_MODEL.md` and `knowledge.yaml` are the two source-of-truth files.
+Everything else is implementation.
 
-Reproducibility for everything we feed into Neo4j: GFFs, FASTAs, eggnog
-annotations, derived sequences (CDS / mRNA / protein), DIAMOND databases,
-pairwise DIAMOND hits, the GO ontology graph, gene→GO closures, and every
-CSV the application currently consumes. Each artefact has a known producer,
-a known set of inputs, and a known checksum. Update an upstream → the runner
-knows what downstream is stale.
+## Current state (2026-06-11)
 
-## Scope of v1
+### Pipeline shape
 
-In:
+`kb` is a `typer` app with two subcommands:
 
-- Catalog of every existing artefact the app already depends on (the ~17 DuckDB
-  `COPY` blocks in `generate-neo4j-records.sql` and the ~15 Cypher load blocks
-  in `neo4j-queries.cypher`, each lifted into its own `BuildStep`).
-- The GO ancestor-closure rewrite (Python + networkx) as a new `BuildStep`.
-- `kb bootstrap` / `kb sync` / `kb status` / `kb build` / `kb logs` Typer
-  subcommands.
-- Swift as the storage backend (`packages/shared` swift client, extended if
-  needed for HEAD/ETag lookups without breaking existing callers).
-- Checksum-based staleness via Swift `ETag` headers.
-- Structured JSON logging captured per `BuildRun`, log files uploaded to the
-  bucket alongside the artefacts.
+**`uv run kb build`** runs the full graph build, top to bottom:
 
-Deferred:
+1. Load `.env.shared` then `.env`, verify `NEO4J_URI` / `NEO4J_USER` /
+   `NEO4J_PASSWORD`, connect, `verify_connectivity()`.
+2. Read `knowledge.yaml`.
+3. Run `cypher/merge_domain.cypher` — MERGE `Taxon` / `Assembly` /
+   `Annotation` nodes and `OF` edges. The yaml→params loop in
+   `main.py` materialises the extra `Assembly --OF--> taxon` row for
+   each entry in a taxon's `uses:` block (currently just `pinco`).
+4. Run `cypher/merge_build.cypher` — MERGE source + derived `Asset`,
+   `BuildStep`, `LoadStep` nodes, and `FROM` / `READ_BY` / `WRITES` /
+   `REQUIRES` edges.
+5. Download `go-basic.json` via `httpx` (logged start/finish),
+   `json.load` it, write `/tmp/knowledge-builder/go-basic-nodes.ndjson`
+   and `go-basic-edges.ndjson`. Done in Python because DuckDB's
+   `read_json` on the monolithic 70 MB nested object is its slow path;
+   NDJSON is its fast path.
+6. Run `sql/build.sql` — one DuckDB connection, multi-statement
+   `con.execute()`. Produces all derived CSVs into `/opt/neo4j/import/`.
+7. Run `cypher/load.cypher` — `session.run()` per statement. LOAD CSV
+   every derived CSV into Neo4j and create the application-graph nodes
+   (`Gene`, `GoTerm`) and their edges (`OF`, `HAS_GO`, `IS_A`,
+   `PART_OF`).
+8. Print a graph report: per-label node counts (Taxon, Assembly,
+   Annotation, Asset, BuildStep, LoadStep, Gene, GoTerm) and a
+   per-annotation table of Gene + HAS_GO counts.
 
-- Parallel execution (the dependency graph makes ordering non-trivial; serial
-  is fine for v1).
-- A UI dashboard for visualising graph status and clicking through to a
-  step's outputs and logs. Logging shape is chosen now so this can be added
-  later without re-instrumenting.
-- Python entrypoint–style step bodies for type-checked inputs/outputs.
-  Everything is a shell string for v1.
-- Retry / partial-failure recovery. Failed steps stay failed until re-run.
+**`uv run kb sync`** walks every yaml asset with `object:` set,
+cross-checks against the bucket listing, prints present/missing, and
+uploads each missing source asset via a bespoke
+`fetch_<species>_genome` function (FTP via `ftplib` for potra; HTTPS
+via `httpx` for arath/pruav with `verify=False` for broken cert chains,
+betpe with no `verify=False` needed). Uses `SwiftClient` from
+`packages/shared` (auth via OpenStack application credential from
+`.env.shared`).
 
-## Schema
+Total `kb build` run time on the dev box is on the order of a few
+minutes.
 
-Two concerns live as separate node families so that catalog redefinition does
-not destroy runtime history.
+### What's in the graph
 
-### Catalog nodes (static; rewritten by `kb bootstrap`)
+Seven annotations across six taxa loaded end-to-end (`pinco` shares
+pinsy's assembly + annotation via the `uses:` cross-link, so it gets
+the same Gene + HAS_GO via the chain — not a separate row):
 
-- `(:DataAsset {id, kind, bucket_uri, source_url?, description?})`
-  - `id` is the stable business key (e.g. `pinsy::gff`,
-    `pinsy::gene-records-csv`, `go::basic-json`).
-  - `kind` is a free-form string. Initial values: `gff`, `fasta`, `cds_fasta`,
-    `mrna_fasta`, `protein_fasta`, `eggnog_tsv`, `diamond_db`, `diamond_hits`,
-    `go_basic_json`, `go_terms_csv`, `go_aliases_csv`, `go_edges_csv`,
-    `gene_records_csv`, `gene_go_csv`, `functional_descriptions_txt`.
-  - `bucket_uri` is the canonical Swift URL.
-  - `source_url` is set only on upstream assets the project does not produce
-    (e.g. `https://current.geneontology.org/ontology/go-basic.json`).
-- `(:BuildStep {id, command, script_sha?, body_path?})`
-  - `id` is the stable business key (e.g. `pinsy-gene-records`,
-    `go-load-terms`).
-  - `command` is a shell string that the runner will exec. Examples:
-    - `kb run-sql steps/sql/pinsy-gene-records.sql`
-    - `kb run-cypher steps/cypher/load-go-terms.cypher`
-    - `python -m knowledge_builder.steps.build_go_closure --species pinsy`
-    - `gffread {{ inputs.gff.local }} -g {{ inputs.fasta.local }} -x {{ outputs.cds.local }}`
-  - `body_path` (optional) records the snippet file the command consumes so
-    `script_sha` can be tracked for staleness.
+| taxon | annotation | Gene | HAS_GO |
+|---|---|---|---|
+| arath | `arath/tair10/araport11` | 27,655 | 0 |
+| arath | `arath/tair10/tair10` | 28,775 | 0 |
+| betpe | `betpe/v1/v1.2` | 27,356 | ~699K |
+| picab | `picab/v2/v2.0` | 43,382 | ~990K |
+| pinsy | `pinsy/v1/v1.0` | 49,387 | ~1.00M |
+| potra | `potra/v2/v2.2` | 37,184 | ~966K |
+| pruav | `pruav/v2/v2.0` | 39,984 | ~802K |
 
-### Edges (catalog)
+Distinct Gene nodes after MERGE-by-id: 226,805 (less than the
+per-annotation sum because tair10 and araport11 share AT-prefix gene
+ids). Distinct HAS_GO: ~4.46M.
 
-- `(:BuildStep)-[:READS {role}]->(:DataAsset)` — input. `role` names the input
-  (`gff`, `eggnog`, `fasta`, …) so the runner can resolve `{{ inputs.gff }}`
-  in templates.
-- `(:BuildStep)-[:WRITES {role}]->(:DataAsset)` — output, same convention.
-- `(:Annotation)-[:HAS_FILE {role}]->(:DataAsset)` /
-  `(:Assembly)-[:HAS_FILE {role}]->(:DataAsset)` — the bridge into the
-  existing application graph. Lets a future query ask "what is the GFF for
-  picab-v2.0?" without leaving Neo4j.
+Plus 51,967 `GoTerm`, 57,803 `IS_A`, 6,272 `PART_OF` from the GO
+ontology (loaded once via `shared/build-go-terms` →
+`shared/load-go-terms`).
 
-### Runtime nodes (mutable; written by the runner, **not** dropped on bootstrap)
+arath has no eggnog and no GO source, so neither annotation has a
+`build-gene-go` / `load-gene-go` step — modelled by simply omitting
+those steps in `knowledge.yaml`, exactly as the user wants ("an
+annotation can simply have no GO terms"). araport11 has a derived
+`functional-descriptions` asset (extracted from the gff attributes by
+a `BuildStep` whose output is consumed by another `BuildStep` — first
+build-feeds-build chain in the graph). tair10 reads the source
+`TAIR10_functional_descriptions` file inline.
 
-- `(:BuildRun {id, step_id, started_at, finished_at, status, exit_code,
-  log_uri, input_checksums, output_checksums})`
-  - `step_id` is the business-key reference to a `BuildStep.id`. Linked
-    structurally via `(:BuildRun)-[:OF_STEP]->(:BuildStep)`, but the property
-    also exists so history survives a catalog re-bootstrap where a step is
-    temporarily missing.
-  - `status` ∈ `running` | `success` | `failed`.
-  - `input_checksums` / `output_checksums` are JSON maps of role → checksum
-    at the time of the run. Enables "what changed since last successful run".
-  - `log_uri` points to the JSON log file uploaded to the bucket.
-- `(:DataAsset)` runtime properties, updated in place by `kb sync` and after
-  successful `BuildRun`s: `checksum`, `checksum_algo`, `size_bytes`,
-  `last_synced`, `last_modified` (from Swift).
+Build half: ~31 `Asset`, ~14 `BuildStep`, ~13 `LoadStep`.
 
-### Bootstrap behaviour
+### Bucket state
 
-`kb bootstrap` is a destructive catalog refresh:
+All seven genomes are now in the `plantgenie-knowledge` bucket:
 
-1. `MATCH (n:DataAsset) DETACH DELETE n`
-2. `MATCH (n:BuildStep) DETACH DELETE n`
-3. `CREATE` every `DataAsset`, `BuildStep`, `READS`, `WRITES`, and `HAS_FILE`
-   row from the Python catalog in a single UNWIND batch.
+| taxon | object | how it got there |
+|---|---|---|
+| arath | `Arabidopsis_thaliana.TAIR10.dna.toplevel.fa.gz` | `kb sync` → `fetch_arath_genome` |
+| betpe | `Bepen_v1p2_genome.fa` | `kb sync` → `fetch_betpe_genome` |
+| picab | `Picab02_chromosomes_and_unplaced.fa.gz` | manual `client.stream_upload` (no `source_url`) |
+| pinsy | `Pinsy01_chromosomes_and_unplaced.fa.gz` | manual `client.stream_upload` (no `source_url`) |
+| potra | `Potra02_genome.fasta.gz` | manual `client.upload` from local copy (FTP source flaky) |
+| pruav | `Tieton02_genome.fasta.gz` | `kb sync` → `fetch_pruav_genome` |
 
-No `MERGE`s — they are too slow at this volume. `BuildRun` history is
-untouched. After bootstrap the user runs `kb sync` to repopulate checksums on
-`DataAsset` nodes (everything is treated as "unknown checksum" → stale until
-synced).
+picab and pinsy don't have `source_url` in yaml (uploaded from local
+copies) — `kb sync` still sees them as present because `object:` is
+declared.
 
-The existing `(:Annotation)` and `(:Assembly)` nodes also do not get touched
-— bootstrap re-links them by `MATCH` + `CREATE` of the new `HAS_FILE`
-edges.
+Non-genome source assets (gffs, eggnog, functional-descriptions) were
+uploaded out of band before this work started (some are pre-sorted /
+renamed versions of upstream files); `kb sync` doesn't try to
+reproduce them — that would require a separate normalize step.
 
-## Catalog definition (Python)
-
-Steps and assets are declared in Python data, not Cypher init files. Example
-shape (not final code, just illustrating the contract):
-
-```python
-# packages/knowledge-builder/src/knowledge_builder/catalog/__init__.py
-pinsy_gff = upstream_asset(
-    id="pinsy::gff",
-    kind="gff",
-    bucket_uri=SWIFT + "/Pinsy01_240308_at01_longest_no_TE.gff3.gz",
-)
-pinsy_eggnog = upstream_asset(
-    id="pinsy::eggnog-panthers",
-    kind="eggnog_tsv",
-    bucket_uri=SWIFT + "/Pinsy01_240308_..._panthers.tsv.gz",
-)
-pinsy_gene_records = derived_asset(
-    id="pinsy::gene-records-csv",
-    kind="gene_records_csv",
-    bucket_uri=SWIFT + "/derived/pinsy-gene-records.csv",
-)
-step(
-    id="pinsy-gene-records",
-    command="kb run-sql steps/sql/pinsy-gene-records.sql",
-    body_path="steps/sql/pinsy-gene-records.sql",
-    reads={"gff": pinsy_gff, "eggnog": pinsy_eggnog},
-    writes={"records": pinsy_gene_records},
-)
-```
-
-Catalog declarations may be table-driven (a loop over the seven species is
-fine — they do not share output snippets, only the declaration shape). Step
-**bodies** (the SQL / Cypher / Python files) are never shared between steps,
-even when they look near-identical. Differences are inevitable (betpe's
-`m_alias` join, potra's `query` vs pinsy's `id`) and a band-aid in two places
-is cheaper than a leaky abstraction.
-
-## Step bodies
-
-Layout under the package:
+### File layout
 
 ```
-packages/knowledge-builder/src/knowledge_builder/
-├── catalog/                     # Python declarations
-├── runner/                      # core loop, swift sync, staleness logic
-├── cli.py                       # Typer entry point
-└── steps/
-    ├── sql/                     # one .sql per DuckDB step
-    │   ├── pinsy-gene-records.sql
-    │   ├── pinsy-gene-go.sql
-    │   ├── picab-gene-records.sql
-    │   ├── ...
-    │   ├── go-terms.sql
-    │   ├── go-aliases.sql
-    │   └── go-edges.sql
-    ├── cypher/                  # one .cypher per Neo4j load step
-    │   ├── load-go-terms.cypher
-    │   ├── load-go-aliases.cypher
-    │   ├── load-go-edges.cypher
-    │   ├── load-pinsy-gene-records.cypher
-    │   ├── load-pinsy-gene-go.cypher
-    │   └── ...
-    └── python/                  # python-driven steps
-        └── build_go_closure.py  # networkx ancestor closure
+packages/knowledge-builder/
+├── DATA_MODEL.md
+├── knowledge.yaml
+├── PLAN.md                                  # this file
+├── pyproject.toml                           # deps: neo4j, duckdb, httpx, pyyaml,
+│                                            #       typer, python-dotenv, structlog,
+│                                            #       jinja2 (unused now)
+└── src/knowledge_builder/
+    ├── __init__.py                          # re-exports main.app as main
+    ├── main.py                              # the whole kb build flow (~180 lines)
+    ├── cypher/
+    │   ├── merge_domain.cypher              # 3 statements
+    │   ├── merge_build.cypher               # 9 statements
+    │   └── load.cypher                      # CREATE INDEX + awaitIndexes +
+    │                                        # LOAD CSV per derived CSV
+    └── sql/
+        └── build.sql                        # every DuckDB COPY block, one file
 ```
 
-Bodies are Jinja2-templated with two top-level namespaces:
+`domain.py`, `steps/`, and the old `cli.py` are leftovers from earlier
+experiments and are orphaned — nothing imports them. Safe to delete.
 
-- `inputs.<role>.local` → local cached path after download from Swift.
-- `outputs.<role>.local` → local path the step should write to; the runner
-  uploads it after the step finishes.
-- `inputs.<role>.bucket_uri` / `outputs.<role>.bucket_uri` are also exposed
-  for steps that want to read/write the bucket directly (DuckDB can `read_csv`
-  from a Swift URL; that bypass is fine for upstream sources whose
-  `local_path` would otherwise be the same gigabytes downloaded twice).
+### Design decisions worth carrying forward
 
-The role names in templates match the `role` properties on `READS` / `WRITES`
-edges in the graph.
+- **The graph is the build plan.** `BuildStep` / `LoadStep` are nodes; the
+  yaml is a declarative description; the Python script is just an executor
+  that runs MERGE → DuckDB → LOAD CSV in order. No per-step Python
+  functions, no CLI subcommand per step.
+- **DuckDB reads bucket source assets straight from URLs.** No pre-fetch
+  step for the gff / eggnog files — they're streamed by `read_csv` over
+  HTTPS each run. Pre-fetch with `httpx` is reserved for things DuckDB's
+  reads can't handle well (GO JSON), or sources that don't speak HTTPS
+  (FTP, when we get there).
+- **SQL/Cypher live in files, not in code.** `cypher/*.cypher` and
+  `sql/build.sql` are the operational source of truth; main.py reads them
+  verbatim. New taxa = a yaml block + a SQL `COPY` block + a Cypher
+  LOAD CSV block. No splitters, no templating engine, no `sqlfluff` parse —
+  splitting on `;` works for Cypher because our Cypher has no semicolons
+  inside literals; SQL is passed whole to DuckDB.
 
-## Execution model
+## Next steps
 
-`kb build <step-id>` (or `kb build --all`):
+### Derived genome assets (next chunk — design agreed, not started)
 
-1. Compute the topological subgraph for the target.
-2. For each step in topo order, decide if stale (see below). If not, skip.
-3. If stale:
-   a. Resolve all `READS` → ensure local cache is up to date (download from
-      Swift if missing or checksum mismatch).
-   b. Render the `command` with Jinja using the resolved input/output paths.
-   c. Create a `BuildRun` node with `status: "running"`.
-   d. Exec the command. stdout/stderr go to a JSON log file in a local
-      runs/ dir.
-   e. On success: upload every `WRITES` artefact to Swift, fetch the new
-      ETags, update each `DataAsset` checksum/size/last_modified in place.
-   f. Upload the log file to Swift under a runs/ prefix. Stamp the
-      `BuildRun` with `status: "success"`, `finished_at`, `exit_code: 0`,
-      `output_checksums`, `log_uri`.
-   g. On failure: `BuildRun` gets `status: "failed"`, exit code captured,
-      partial outputs are **not** uploaded. The runner aborts the topo walk
-      so dependents do not run on garbage.
+Now that all seven genomes are in the bucket, the next work is the
+derived assets the API runtime needs (not Neo4j — these are not LOAD
+CSV inputs). They cluster into two layers:
 
-`kb run-sql <path>` / `kb run-cypher <path>` are thin internal subcommands the
-runner shells out to from a step's `command`. They:
+**Per-assembly (genome → ...):**
+- bgzipped + faidx-indexed FASTA (random access via samtools / htslib)
+- BLAST nucleotide DB (`makeblastdb -dbtype nucl`)
 
-1. Read `KB_STEP_ID` from env (set by the parent runner).
-2. Query Neo4j for that step's `READS` / `WRITES` edges to populate the
-   Jinja context.
-3. Render the file.
-4. Execute via `duckdb` (Python in-process) or via the `neo4j` Python driver.
+**Per-annotation (gff + genome → ... via `gffread`):**
+- CDS FASTA
+- mRNA / transcript FASTA
+- protein FASTA
+- BLAST protein DB (`makeblastdb -dbtype prot`)
+- DIAMOND DB (`diamond makedb`)
 
-The `command` shell string is the same contract for everything — direct
-binary calls (`gffread`, `diamond`, `bgzip`), `kb run-sql`, `kb run-cypher`,
-or `python -m knowledge_builder.steps.build_go_closure`. Steps that need
-binaries from `Dockerfile.tools` will be run inside that image; v1 assumes
-the user invokes `kb` from inside (or via) a container built on
-`Dockerfile.tools` with Python + the package installed on top.
+Each is its own `Asset` node, written by its own bespoke `BuildStep`
+function in `main.py` — one Python function per asset, single
+`subprocess.run` per tool. Flat list, no shared helpers, ~50 step
+entries in `knowledge.yaml` across 7 taxa. The user has been explicit
+about this: don't extract anything; errors will come from sources, not
+from code organisation, and a flat ugly file is the correct shape.
 
-## Staleness rules
+#### Design decisions
 
-A `BuildStep` is stale if **any** of:
+**(1) Where do derived assets live?** All synced to the bucket. The
+bucket is the source of truth for "is this built." A future build
+manifest will compute a hash of the locally-built asset and compare
+against the bucket etag to decide whether to rerun the upstream
+`BuildStep`; downstream `LoadStep`s rerun automatically when an asset
+they `READ_BY` changes. (User's explicit answer.)
 
-- It has no `BuildRun` with `status: "success"`.
-- The latest successful `BuildRun.script_sha` differs from the current SHA
-  of the file at `body_path` (only checked if `body_path` is set; pure-shell
-  steps skip this).
-- Any input `DataAsset.checksum` differs from the `input_checksums` recorded
-  on the latest successful `BuildRun`.
-- Any output `DataAsset.checksum` is null or does not match the bucket's
-  current ETag (i.e. the output was deleted or replaced externally).
+**(2) What runtime runs the build?** Create
+`packages/knowledge-builder/Dockerfile` that uses the top-level
+`Dockerfile.tools` as its base image (which ships `bgzip`, `samtools`,
+`gffread`, `makeblastdb`, `diamond`), then layers Python + uv +
+`knowledge-builder` source on top — same shape as
+`packages/task-queue/Dockerfile`. `kb` then runs in that container and
+each derived-asset `BuildStep` just calls `subprocess.run(...)` against
+the tools on PATH. (User's explicit answer.)
 
-A `DataAsset` is checked for freshness by `kb sync`, which HEADs every
-`bucket_uri` and updates `checksum` / `size_bytes` / `last_modified` if they
-have changed. Upstream assets with `source_url` also get an optional HEAD
-against the source URL — `kb sync --upstream` will additionally re-download
-into the bucket if the source ETag differs, but that is gated behind the
-flag because re-downloading multi-GB files is not always wanted.
+**(3) Bucket caching.** Implicit from (1) — always cached.
 
-## Logging
+**(4) Build graph edges.** Same `READ_BY` / `WRITES` model as today.
+Derived `Asset` entries get `object:` set so the upload side of
+`kb sync` (still to be added — currently sync only fetches from
+external sources) can push them back to the bucket. Hash/etag
+staleness comparison is the build manifest work below — deferred.
 
-Every `BuildRun` produces a single JSON-lines log file:
+#### Handoff plan (smallest next chunk for a fresh session)
 
-```json
-{"ts": "...", "level": "info", "event": "step.start", "step_id": "pinsy-gene-records", "run_id": "..."}
-{"ts": "...", "level": "info", "event": "input.resolved", "role": "gff", "asset_id": "pinsy::gff", "checksum": "..."}
-{"ts": "...", "level": "info", "event": "command.exec", "command": "kb run-sql ..."}
-{"ts": "...", "level": "info", "event": "stdout", "line": "..."}
-{"ts": "...", "level": "info", "event": "output.uploaded", "role": "records", "asset_id": "pinsy::gene-records-csv", "checksum": "..."}
-{"ts": "...", "level": "info", "event": "step.end", "status": "success", "duration_seconds": 12.4}
-```
+1. **Create `packages/knowledge-builder/Dockerfile`** modeled on
+   `packages/task-queue/Dockerfile`. `FROM` the top-level
+   `Dockerfile.tools` for the binaries, then layer
+   `python:3.13-slim-bookworm` + `uv` + the `knowledge-builder`
+   package on top. Result: a `kb` container with all the
+   bioinformatics tools available on PATH and the Python entrypoint
+   working.
 
-`structlog` configured to emit this format, plus a human-readable mirror to
-stderr for terminal use. The log file is uploaded to Swift under
-`runs/<step-id>/<run-id>.jsonl` and the `BuildRun.log_uri` field points at
-it. The fields chosen here (typed events, stable run/step IDs) are enough to
-drive a later UI without reformatting.
+2. **Pick one assembly and build the bgzip + faidx pair end-to-end.**
+   Suggest picab (smallest big-genome upload; we have it locally and
+   in the bucket). Concretely:
+   - In `knowledge.yaml`, under the picab assembly's `assets:` block,
+     add two new derived `Asset` entries: `genome-bgz` and
+     `genome-fai`. Both get `object:` set (e.g.
+     `Picab02_chromosomes_and_unplaced.fa.gz` is already the bgzipped
+     name — clarify naming with the user; faidx output ends `.fai`).
+   - Add a `BuildStep` to `steps:` that reads
+     `picab/v2/genome` and writes both derived assets.
+   - Add a `build_picab_genome_bgz_fai` function in `main.py` that:
+     downloads the source genome from the bucket to a temp dir
+     (`client.download_object` already exists in `SwiftClient`), runs
+     `bgzip` if not already bgzipped, runs `samtools faidx`, then
+     uploads both outputs back to the bucket via `client.upload`.
+   - Run it in the container, confirm the outputs land in the bucket.
 
-## CLI
+3. **Then write the same function shape per-assembly** for the
+   remaining 6. Flat list, one function each, no extraction even at
+   7 of them.
 
-```
-kb bootstrap              # drop+rebuild catalog nodes from the Python catalog
-kb sync                   # refresh DataAsset checksums from Swift HEAD
-kb sync --upstream        # also re-download upstreams whose source URL ETag changed
-kb status [step-id]       # list every step + its staleness, optionally rooted
-kb plan <step-id>         # show the topo subgraph that `kb build` would run
-kb build <step-id>        # build one step, after building its stale ancestors
-kb build --all            # build everything that is stale, topo order
-kb logs <run-id>          # stream/fetch a BuildRun's JSON log
-kb logs <step-id> --last  # latest log for a step
-```
+4. **Build manifest / staleness — DEFER.** Don't design or wire it
+   yet. Every `kb build` rebuilds everything for now. The hash/etag
+   comparison comes after we have a working set of derived assets.
 
-Typer subcommands; all reads from / writes to Neo4j use the `NEO4J_ADDRESS`
-/ `NEO4J_USERNAME` / `NEO4J_PASSWORD` env vars already established by
-`scripts/check-unresolved-go-ids.sh`. Swift credentials follow the same
-env-var pattern (TBD when extending `packages/shared`).
+5. **`kb sync` upload side for derived assets — DEFER.** The current
+   `kb sync` walks yaml and uploads missing *source* assets; the
+   derived-asset functions above upload directly. A unified upload
+   pass via `kb sync` for derived assets comes later, when staleness
+   tracking arrives.
 
-## Migration
+#### Open questions for the new session
 
-1. Bootstrap the catalog from a Python module that enumerates every existing
-   artefact: the 17 `COPY` outputs from `generate-neo4j-records.sql`, the
-   ~15 `LOAD CSV` blocks from `neo4j-queries.cypher`, the GO graph sources
-   (`go-basic.json`), and every upstream GFF / eggnog TSV on Swift.
-2. Port each DuckDB `COPY` body to its own `.sql` file under `steps/sql/`,
-   with the original `read_csv` / `COPY ... TO` URLs replaced by the Jinja
-   `{{ inputs.<role>.local }}` / `{{ outputs.<role>.local }}` placeholders.
-3. Port each `LOAD CSV ... CREATE` block to its own `.cypher` file under
-   `steps/cypher/`.
-4. Add the new `build_go_closure` Python step in place of the existing gene→GO
-   COPYs. Its `READS` are each species' eggnog TSV + `go-basic.json`; its
-   `WRITES` are the per-species `*-gene-go.csv` files (now closed under
-   ancestors). The corresponding `load-<species>-gene-go.cypher` step
-   consumes those CSVs unchanged from how it does today, except that the
-   set of GO IDs per gene is now connected to the root.
-5. Verify parity: each output CSV produced by `kb build --all` is byte-equal
-   (or row-set-equal modulo ordering) to the current
-   `generate-neo4j-records.sql` output. After parity is confirmed, delete
-   `generate-neo4j-records.sql` and `neo4j-queries.cypher` from the repo
-   root.
+- Naming for the bgzipped/faidx outputs. picab is already named
+  `Picab02_chromosomes_and_unplaced.fa.gz` — is that already a
+  bgzipped gzip, or just a plain gzip? `bgzip` and `gzip` produce
+  files that both decode as gzip but only bgzip is faidx-indexable.
+  Check before deciding whether the existing `.gz` is the bgz or
+  whether we need to upload a separate `*.bgz` / `*.fa.gz` pair.
+- arath and betpe genomes are NOT bgzipped at source (`.fa.gz` from
+  Ensembl is gzip; `Bepen_v1p2_genome.fa` is uncompressed). The
+  bgzip step has to handle both gzip-decompress-then-bgzip and
+  plain-bgzip cases.
+- Does the API runtime read directly from the bucket (DuckDB-style
+  URL reads — fine for samtools when files are HTTPS-accessible
+  via htslib) or does it expect a local mount? Determines whether
+  `kb sync` needs to populate a local cache dir on hosts that run
+  the API.
 
-## Open questions to settle during implementation
+### Build manifest / staleness
 
-- Should `(:DataAsset)` get a `version` property derived from the bucket
-  ETag, so application queries can pin a specific snapshot? Probably yes,
-  but deferred until a consumer needs it.
-- Where in the package layout do upstream-source-URL HEAD requests live —
-  inside the shared swift client (broader contract) or local to the
-  runner? Lean local for v1, lift later if reused.
-- How does `kb build` behave if a step's local cache dir is already
-  populated with stale outputs from an aborted prior run? Wipe on start vs
-  reuse vs error out. Lean wipe on start (simplest, no orphaned bytes).
-- DIAMOND pairwise hits: many-to-many between annotations. Each pair is its
-  own `BuildStep`? Or one step that produces N×N outputs? Lean one step per
-  pair so a single failure doesn't redo the rest.
+Currently every `kb` run does everything. The old
+`/opt/plantgenie/.knowledge-pipeline-state.json` tracked per-`<file>:<consumer>`
+ETag + `last_loaded`. The clean mapping into the graph:
+
+- `etag` + `last_fetched_at` on source `Asset` nodes (HEAD request against
+  `bucketUri`; cheap).
+- `last_etag` + `last_read_at` on `READ_BY` edges (per-consumer cursor).
+- A step is stale iff any incoming `READ_BY` edge has `last_etag <>
+  Asset.etag` or is null.
+
+Defer until parity is reached across all taxa.
+
+### Known data-quality issues
+
+- **3 orphan `Gene` nodes** (`HAS_GO` but no `OF`), accounting for ~67
+  HAS_GO edges. The betpe `chromosome Contig0` orphan is almost certainly
+  an eggnog tsv parse artifact and worth investigating.
+- **Gene `id` collisions across taxa are possible.** Load Cypher MERGEs
+  Gene by `id` only, no taxon scoping. Distinct prefixes per species
+  ([Bpev*], `Picab02_*`, `Pinsy01_*`, etc.) make collision very unlikely
+  in practice, but Gene id should probably be qualified by annotation
+  long-term.
+- **`geneCount` mismatch in yaml** for picab/pinsy (the `*_longest_no_TE`
+  files are pre-filtered). The user has indicated this will be reconciled
+  separately — do not edit `geneCount` here.
+- **GO term aliases** (alt_id → canonical) are skipped; the old SQL
+  produced `go-aliases.csv`. Add if a consumer needs them.
+
+### DATA_MODEL.md open questions still open
+
+1. `BuildStep` cardinality invariant (≥1 READ_BY / ≥1 WRITES — hard
+   constraint or just convention?).
+2. Asset / step properties beyond what's settled (`bucket_uri`, `format`).
+3. Domain-free source assets — the `shared:` block now exists in
+   `knowledge.yaml` for GO; formal spec for other ontologies / DBs not yet
+   written.
+4. Cross-taxon derived assets (DIAMOND hits, ortholog groups) — id form
+   not decided.
+
+### Operational notes
+
+- `cypher/load.cypher` must keep `CALL db.awaitIndexes()` between the two
+  `CREATE INDEX` statements and the first `LOAD CSV`. Without it the LOAD
+  CSV runs before the index is online and re-runs the ~50-minute
+  label-scan path.
+- `/opt/neo4j/import/` is shared across worktrees per the docker-compose
+  mount. Concurrent multi-worktree builds writing the same filenames would
+  race. Not a today-blocker but worth knowing.
+- DuckDB's progress bar (`PRAGMA enable_progress_bar`) renders for table
+  scans but **not** for `read_json` over HTTP — that's why the GO download
+  is in Python: explicit visible progress, faster path overall.

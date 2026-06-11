@@ -24,6 +24,7 @@ dependencies = [
     "shared",
     "task-queue",
     "go-enrich",
+    "dotenv>=0.9.9",
 ]
 
 [tool.uv.workspace]
