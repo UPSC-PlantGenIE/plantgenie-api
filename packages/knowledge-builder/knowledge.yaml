@@ -30,6 +30,12 @@ taxa:
           - name: genome
             format: fasta
             object: Picab02_chromosomes_and_unplaced.fa.gz
+          - name: genome-fai
+            format: fai
+            object: Picab02_chromosomes_and_unplaced.fa.gz.fai
+          - name: genome-gzi
+            format: gzi
+            object: Picab02_chromosomes_and_unplaced.fa.gz.gzi
         annotations:
           - slug: v2.0
             geneCount: 78426
@@ -54,6 +60,12 @@ taxa:
           - name: genome
             format: fasta
             object: Pinsy01_chromosomes_and_unplaced.fa.gz
+          - name: genome-fai
+            format: fai
+            object: Pinsy01_chromosomes_and_unplaced.fa.gz.fai
+          - name: genome-gzi
+            format: gzi
+            object: Pinsy01_chromosomes_and_unplaced.fa.gz.gzi
         annotations:
           - slug: v1.0
             geneCount: 59029
@@ -210,6 +222,39 @@ steps:
     writes:
       - id: betpe/v1/v1.2/gene-go
         format: csv
+
+  - id: betpe/v1/v1.2/build-gffread
+    reads:
+      - betpe/v1/genome
+      - betpe/v1/v1.2/gff
+    writes:
+      - id: betpe/v1/v1.2/cds
+        format: fasta
+        object: Bepen_v1p2_cds.fa.gz
+      - id: betpe/v1/v1.2/cds-fai
+        format: fai
+        object: Bepen_v1p2_cds.fa.gz.fai
+      - id: betpe/v1/v1.2/cds-gzi
+        format: gzi
+        object: Bepen_v1p2_cds.fa.gz.gzi
+      - id: betpe/v1/v1.2/mrna
+        format: fasta
+        object: Bepen_v1p2_mrna.fa.gz
+      - id: betpe/v1/v1.2/mrna-fai
+        format: fai
+        object: Bepen_v1p2_mrna.fa.gz.fai
+      - id: betpe/v1/v1.2/mrna-gzi
+        format: gzi
+        object: Bepen_v1p2_mrna.fa.gz.gzi
+      - id: betpe/v1/v1.2/protein
+        format: fasta
+        object: Bepen_v1p2_protein.fa.gz
+      - id: betpe/v1/v1.2/protein-fai
+        format: fai
+        object: Bepen_v1p2_protein.fa.gz.fai
+      - id: betpe/v1/v1.2/protein-gzi
+        format: gzi
+        object: Bepen_v1p2_protein.fa.gz.gzi
 
   - id: picab/v2/v2.0/build-gene-records
     reads:

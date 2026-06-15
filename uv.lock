@@ -1720,8 +1720,10 @@ source = { editable = "packages/shared" }
 dependencies = [
     { name = "duckdb" },
     { name = "pendulum" },
+    { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "python-swiftclient" },
+    { name = "requests" },
     { name = "rich" },
 ]
 
@@ -1734,8 +1736,10 @@ dev = [
 requires-dist = [
     { name = "duckdb", specifier = ">=1.2.0" },
     { name = "pendulum", specifier = ">=3.1.0" },
+    { name = "pydantic", specifier = ">=2.10.6" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "python-swiftclient", specifier = ">=4.8.0" },
+    { name = "requests", specifier = ">=2.32.4" },
     { name = "rich", specifier = ">=13.9.4" },
 ]
 

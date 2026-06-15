@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import time
 from ftplib import FTP
 from pathlib import Path
@@ -94,6 +95,62 @@ def fetch_pruav_genome(client, container, object_name, source_url):
     local.unlink()
 
 
+def build_betpe_v1_v1_2_gffread(client, container):
+    work = Path("/tmp/knowledge-builder/betpe-gffread")
+    work.mkdir(parents=True, exist_ok=True)
+
+    genome = work / "Bepen_v1p2_genome.fa"
+    gff_gz = work / "Bepen_v1p2_coge_sorted.gff3.gz"
+    gff = work / "Bepen_v1p2_coge_sorted.gff3"
+
+    typer.echo(f"downloading {genome.name}")
+    client.download_object(container, genome.name, genome)
+    typer.echo(f"downloading {gff_gz.name}")
+    client.download_object(container, gff_gz.name, gff_gz)
+
+    typer.echo(f"stripping lcl| prefix from {genome.name} headers")
+    subprocess.run(["sed", "-i", "s/^>lcl|/>/", str(genome)], check=True)
+
+    typer.echo(f"decompressing {gff_gz.name}")
+    subprocess.run(["gunzip", "-f", "-k", str(gff_gz)], check=True)
+
+    cds = work / "Bepen_v1p2_cds.fa"
+    mrna = work / "Bepen_v1p2_mrna.fa"
+    protein = work / "Bepen_v1p2_protein.fa"
+
+    typer.echo("running gffread")
+    subprocess.run(
+        [
+            "gffread", str(gff),
+            "-g", str(genome),
+            "-x", str(cds),
+            "-w", str(mrna),
+            "-y", str(protein),
+        ],
+        check=True,
+    )
+
+    for output in (cds, mrna, protein):
+        bgz = Path(str(output) + ".gz")
+        fai = Path(str(bgz) + ".fai")
+        gzi = Path(str(bgz) + ".gzi")
+
+        typer.echo(f"bgzip {output.name}")
+        subprocess.run(["bgzip", "-f", str(output)], check=True)
+
+        typer.echo(f"samtools faidx {bgz.name}")
+        subprocess.run(["samtools", "faidx", str(bgz)], check=True)
+
+        for path in (bgz, fai, gzi):
+            typer.echo(f"uploading {path.name}")
+            client.upload(container, path.name, path)
+
+
+STEP_BUILDERS = {
+    "betpe/v1/v1.2/build-gffread": build_betpe_v1_v1_2_gffread,
+}
+
+
 @app.command(name="sync")
 def sync() -> None:
     missing = [name for name in SYNC_REQUIRED_ENV if not os.environ.get(name)]
@@ -170,7 +227,11 @@ def sync() -> None:
 
 @app.command(name="build")
 def build() -> None:
-    missing = [name for name in REQUIRED_ENV if not os.environ.get(name)]
+    missing = [
+        name
+        for name in (*REQUIRED_ENV, *SYNC_REQUIRED_ENV)
+        if not os.environ.get(name)
+    ]
     if missing:
         raise RuntimeError(
             f"Required env vars not set: {', '.join(missing)}"
@@ -304,13 +365,14 @@ def build() -> None:
             for read_id in step.get("reads", []) or []:
                 build_read_rows.append({"assetId": read_id, "stepId": step["id"]})
             for write in step.get("writes", []) or []:
+                object_name = write.get("object")
                 asset_rows.append(
                     {
                         "id": write["id"],
                         "name": None,
                         "format": write.get("format"),
-                        "object": None,
-                        "bucketUri": None,
+                        "object": object_name,
+                        "bucketUri": f"{bucket}/{object_name}" if object_name else None,
                         "sourceUrl": None,
                     }
                 )
@@ -365,6 +427,20 @@ def build() -> None:
             f"{len(load_step_rows)} load steps "
             f"({len(load_read_rows)} READ_BY, {len(requires_rows)} REQUIRES)"
         )
+
+        container = bucket.rsplit("/", 1)[1]
+        client = SwiftClient(
+            openstack_auth_type=os.environ["OS_AUTH_TYPE"],
+            openstack_auth_url=os.environ["OS_AUTH_URL"],
+            application_credential_id=os.environ["OS_APPLICATION_CREDENTIAL_ID"],
+            application_credential_secret=os.environ["OS_APPLICATION_CREDENTIAL_SECRET"],
+        )
+        for step in config.get("steps", []) or []:
+            builder = STEP_BUILDERS.get(step["id"])
+            if builder is None:
+                continue
+            typer.echo(f"running {step['id']}")
+            builder(client, container)
 
         go_dir = Path("/tmp/knowledge-builder")
         go_dir.mkdir(parents=True, exist_ok=True)
