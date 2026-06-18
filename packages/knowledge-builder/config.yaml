@@ -1,0 +1,3 @@
+# config.yaml
+container: "test-snakemake"
+local_dir: "/tmp/snakemake-swift-test"

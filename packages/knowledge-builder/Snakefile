@@ -1,0 +1,73 @@
+configfile: "config.yaml"
+
+
+CONTAINER = config["container"]
+
+GENOMES = [
+    "Bepen_v1p2_genome.fa",
+    "Arabidopsis_thaliana.TAIR10.dna.toplevel.fa",
+    "Tieton02_genome.fasta",
+    # "Potra02_genome.fasta",  # FTP source (port 980) unreachable for now
+]
+
+
+rule all:
+    input:
+        [
+            storage(q)
+            for q in expand(
+                f"swift://{CONTAINER}/{{stem}}.gz{{ext}}",
+                stem=GENOMES,
+                ext=["", ".fai", ".gzi"],
+            )
+        ],
+
+
+rule index_genome:
+    input:
+        "normalized/{stem}",
+    output:
+        gz=storage(f"swift://{CONTAINER}/{{stem}}.gz"),
+        fai=storage(f"swift://{CONTAINER}/{{stem}}.gz.fai"),
+        gzi=storage(f"swift://{CONTAINER}/{{stem}}.gz.gzi"),
+    shell:
+        """
+        bgzip -c {input} > {output.gz}
+        samtools faidx {output.gz}
+        """
+
+
+rule download_betpe:
+    output:
+        temp("normalized/Bepen_v1p2_genome.fa"),
+    params:
+        url="https://genomevolution.org/coge/api/v1/genomes/68624/sequence",
+    shell:
+        "curl -fsSLk '{params.url}' | sed 's/^>lcl|/>/' > {output}"
+
+
+rule download_arath:
+    output:
+        temp("normalized/Arabidopsis_thaliana.TAIR10.dna.toplevel.fa"),
+    params:
+        url="https://ftp.ensemblgenomes.org/pub/plants/release-62/fasta/arabidopsis_thaliana/dna/Arabidopsis_thaliana.TAIR10.dna.toplevel.fa.gz",
+    shell:
+        "curl -fsSLk '{params.url}' | gunzip -c > {output}"
+
+
+rule download_pruav:
+    output:
+        temp("normalized/Tieton02_genome.fasta"),
+    params:
+        url="https://www.rosaceae.org/rosaceae_downloads/Prunus_avium/Prunus_avium_Tieton.v2.0.a1/assembly/Prunus_avium_Tieton.chr.fasta.gz",
+    shell:
+        "curl -fsSLk '{params.url}' | gunzip -c > {output}"
+
+
+# rule download_potra:
+#     output:
+#         temp("normalized/Potra02_genome.fasta"),
+#     params:
+#         url="ftp://plantgenie.org:980/Data/PlantGenIE/Populus_tremula/v2.2/fasta/Potra02_genome.fasta.gz",
+#     shell:
+#         "curl -fsSLk '{params.url}' | gunzip -c > {output}"
