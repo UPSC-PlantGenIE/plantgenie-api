@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import os
@@ -139,6 +140,10 @@ class SwiftNotFoundException(Exception):
 
 
 class TokenExpiredException(Exception):
+    pass
+
+
+class ComputeNotFoundException(Exception):
     pass
 
 
@@ -447,6 +452,81 @@ class SwiftClient(OpenStackClient):
             )
 
         return responses
+
+
+class Server(SwiftClientBaseModel):
+    id: str
+    name: Optional[str] = None
+    status: Optional[str] = None
+
+
+class ComputeClient(OpenStackClient):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.service_endpoint("compute") is None:
+            raise ComputeNotFoundException(
+                "A compute service was not found"
+            )
+
+    @property
+    def compute_url(self) -> Optional[str]:
+        return self.service_endpoint("compute")
+
+    @authenticated
+    def create_server(
+        self,
+        name: str,
+        image_id: str,
+        flavor_id: str,
+        network_id: str,
+        key_name: Optional[str] = None,
+        user_data: Optional[str] = None,
+        security_groups: Optional[List[str]] = None,
+    ) -> Server:
+        server: Dict = {
+            "name": name,
+            "imageRef": image_id,
+            "flavorRef": flavor_id,
+            "networks": [{"uuid": network_id}],
+        }
+        if key_name:
+            server["key_name"] = key_name
+        if user_data:
+            server["user_data"] = base64.b64encode(
+                user_data.encode()
+            ).decode()
+        if security_groups:
+            server["security_groups"] = [
+                {"name": group} for group in security_groups
+            ]
+
+        response = requests.post(
+            f"{self.compute_url}/servers",
+            headers={
+                "X-Auth-Token": self.token,
+                "Content-Type": "application/json",
+            },
+            json={"server": server},
+        )
+        response.raise_for_status()
+        return Server(**response.json()["server"])
+
+    @authenticated
+    def get_server(self, server_id: str) -> Server:
+        response = requests.get(
+            f"{self.compute_url}/servers/{server_id}",
+            headers={"X-Auth-Token": self.token},
+        )
+        response.raise_for_status()
+        return Server(**response.json()["server"])
+
+    @authenticated
+    def delete_server(self, server_id: str) -> None:
+        response = requests.delete(
+            f"{self.compute_url}/servers/{server_id}",
+            headers={"X-Auth-Token": self.token},
+        )
+        response.raise_for_status()
 
 
 def get_swift_service(env: Dict[str, str]) -> SwiftService:
