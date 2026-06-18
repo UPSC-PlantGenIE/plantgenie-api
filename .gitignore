@@ -26,3 +26,12 @@ wheels/
 .DS_STORE
 ui/.pnp.cjs
 ui/.pnp.loader.mjs
+
+# Private keys
+*.pem
+
+# Snakemake cache
+.snakemake/
+
+# Knowledge-builder dev scratch
+packages/knowledge-builder/scripts/
