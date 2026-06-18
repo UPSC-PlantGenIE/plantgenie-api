@@ -9,13 +9,28 @@ the application graph.
 `DATA_MODEL.md` and `knowledge.yaml` are the two source-of-truth files.
 Everything else is implementation.
 
-## Current state (2026-06-11)
+## Current state (2026-06-15)
 
 ### Pipeline shape
 
 `kb` is a `typer` app with two subcommands:
 
-**`uv run kb build`** runs the full graph build, top to bottom:
+`kb` now ships as a Docker image (`packages/knowledge-builder/Dockerfile`)
+that bundles `bgzip`, `samtools`, `tabix`, `gffread`, BLAST+, and DIAMOND
+on PATH alongside the Python entrypoint. The top-level `Dockerfile.tools`
+is orphaned and can be deleted in a follow-up. Typical run shape:
+
+```bash
+docker run --rm \
+-v $(pwd)/.env.shared:/app/.env.shared:ro \
+-v $(pwd)/.env:/app/.env:ro \
+-v /opt/neo4j/import:/opt/neo4j/import \
+--network api-new-knowledge-builder_plantgenie_network \
+plantgenie-kb:dev build
+```
+
+**`uv run kb build`** (or `docker run … plantgenie-kb:dev build`) runs the
+full graph build, top to bottom:
 
 1. Load `.env.shared` then `.env`, verify `NEO4J_URI` / `NEO4J_USER` /
    `NEO4J_PASSWORD`, connect, `verify_connectivity()`.
@@ -27,18 +42,24 @@ Everything else is implementation.
 4. Run `cypher/merge_build.cypher` — MERGE source + derived `Asset`,
    `BuildStep`, `LoadStep` nodes, and `FROM` / `READ_BY` / `WRITES` /
    `REQUIRES` edges.
-5. Download `go-basic.json` via `httpx` (logged start/finish),
+5. Run any registered `BuildStep` whose id appears in `STEP_BUILDERS`
+   (a `{step_id: function}` dict in `main.py`). Each registered builder
+   gets `(SwiftClient, container)` and does its own
+   download → tool invocation → upload. Currently registered:
+   `betpe/v1/v1.2/build-gffread`. Steps not in `STEP_BUILDERS` are
+   no-ops here (the DuckDB phase below handles gene-records / gene-go).
+6. Download `go-basic.json` via `httpx` (logged start/finish),
    `json.load` it, write `/tmp/knowledge-builder/go-basic-nodes.ndjson`
    and `go-basic-edges.ndjson`. Done in Python because DuckDB's
    `read_json` on the monolithic 70 MB nested object is its slow path;
    NDJSON is its fast path.
-6. Run `sql/build.sql` — one DuckDB connection, multi-statement
+7. Run `sql/build.sql` — one DuckDB connection, multi-statement
    `con.execute()`. Produces all derived CSVs into `/opt/neo4j/import/`.
-7. Run `cypher/load.cypher` — `session.run()` per statement. LOAD CSV
+8. Run `cypher/load.cypher` — `session.run()` per statement. LOAD CSV
    every derived CSV into Neo4j and create the application-graph nodes
    (`Gene`, `GoTerm`) and their edges (`OF`, `HAS_GO`, `IS_A`,
    `PART_OF`).
-8. Print a graph report: per-label node counts (Taxon, Assembly,
+9. Print a graph report: per-label node counts (Taxon, Assembly,
    Annotation, Asset, BuildStep, LoadStep, Gene, GoTerm) and a
    per-annotation table of Gene + HAS_GO counts.
 
@@ -116,6 +137,8 @@ reproduce them — that would require a separate normalize step.
 ```
 packages/knowledge-builder/
 ├── DATA_MODEL.md
+├── Dockerfile                               # 3 stages: tool-builder, py-builder,
+│                                            # final (python+venv+tools+yaml)
 ├── knowledge.yaml
 ├── PLAN.md                                  # this file
 ├── pyproject.toml                           # deps: neo4j, duckdb, httpx, pyyaml,
@@ -123,7 +146,8 @@ packages/knowledge-builder/
 │                                            #       jinja2 (unused now)
 └── src/knowledge_builder/
     ├── __init__.py                          # re-exports main.app as main
-    ├── main.py                              # the whole kb build flow (~180 lines)
+    ├── main.py                              # whole kb build flow, fetch_*/build_*
+    │                                        # step functions, STEP_BUILDERS dispatch
     ├── cypher/
     │   ├── merge_domain.cypher              # 3 statements
     │   ├── merge_build.cypher               # 9 statements
@@ -156,114 +180,214 @@ experiments and are orphaned — nothing imports them. Safe to delete.
 
 ## Next steps
 
-### Derived genome assets (next chunk — design agreed, not started)
+### Derived genome assets — status
 
-Now that all seven genomes are in the bucket, the next work is the
-derived assets the API runtime needs (not Neo4j — these are not LOAD
-CSV inputs). They cluster into two layers:
+Two layers, both per-taxon flat-list (one bespoke Python function each,
+no shared helpers — confirmed design):
 
 **Per-assembly (genome → ...):**
 - bgzipped + faidx-indexed FASTA (random access via samtools / htslib)
 - BLAST nucleotide DB (`makeblastdb -dbtype nucl`)
 
 **Per-annotation (gff + genome → ... via `gffread`):**
-- CDS FASTA
-- mRNA / transcript FASTA
-- protein FASTA
+- CDS FASTA (bgzipped + faidx)
+- mRNA / transcript FASTA (bgzipped + faidx)
+- protein FASTA (bgzipped + faidx)
 - BLAST protein DB (`makeblastdb -dbtype prot`)
 - DIAMOND DB (`diamond makedb`)
 
-Each is its own `Asset` node, written by its own bespoke `BuildStep`
-function in `main.py` — one Python function per asset, single
-`subprocess.run` per tool. Flat list, no shared helpers, ~50 step
-entries in `knowledge.yaml` across 7 taxa. The user has been explicit
-about this: don't extract anything; errors will come from sources, not
-from code organisation, and a flat ugly file is the correct shape.
+#### Done in earlier sessions
 
-#### Design decisions
+- `packages/knowledge-builder/Dockerfile` exists and builds; bundles
+  `bgzip` / `samtools` / `tabix` / `gffread` / BLAST+ / DIAMOND. Image
+  layout mirrors the dev tree (`/app/packages/knowledge-builder/…`)
+  so `main.py`'s `REPO_ROOT` / `PACKAGE_ROOT` arithmetic works inside
+  the container. `knowledge.yaml` is baked in; env files mount at
+  `/app/.env.shared` and `/app/.env`; `/opt/neo4j/import` mounts
+  through so `LOAD CSV` and the DuckDB CSV writes share a directory.
+- picab + pinsy `genome-fai` and `genome-gzi` `Asset` entries added to
+  yaml; user uploaded the four index files to the bucket from local
+  copies (genome was already bgzipped at source for these two — the
+  existing `.fa.gz` *is* the bgz).
+- `betpe/v1/v1.2/build-gffread` end-to-end: 9 outputs (`cds`, `mrna`,
+  `protein` × `.fa.gz` / `.fa.gz.fai` / `.fa.gz.gzi`) uploaded; new
+  yaml entry uses `object:` on each `writes:` entry, enabled by a
+  one-line tweak to `main.py`'s `writes` loop that lets `object` and
+  `bucketUri` flow through.
+- `STEP_BUILDERS` registry + dispatch pass inside `kb build` between
+  the merge and GO phases. `kb build` now requires the swift env vars
+  in addition to the neo4j ones.
 
-**(1) Where do derived assets live?** All synced to the bucket. The
-bucket is the source of truth for "is this built." A future build
-manifest will compute a hash of the locally-built asset and compare
-against the bucket etag to decide whether to rerun the upstream
-`BuildStep`; downstream `LoadStep`s rerun automatically when an asset
-they `READ_BY` changes. (User's explicit answer.)
+#### Done in today's session (2026-06-15)
 
-**(2) What runtime runs the build?** Create
-`packages/knowledge-builder/Dockerfile` that uses the top-level
-`Dockerfile.tools` as its base image (which ships `bgzip`, `samtools`,
-`gffread`, `makeblastdb`, `diamond`), then layers Python + uv +
-`knowledge-builder` source on top — same shape as
-`packages/task-queue/Dockerfile`. `kb` then runs in that container and
-each derived-asset `BuildStep` just calls `subprocess.run(...)` against
-the tools on PATH. (User's explicit answer.)
+- Added `betpe/v1/build-genome-bgz-fai` step + yaml entries: renamed
+  the existing `betpe/v1/genome` Asset to `genome-source` (raw
+  `Bepen_v1p2_genome.fa` with `lcl|` prefix), added derived `genome`
+  / `genome-fai` / `genome-gzi` triplet for the bgz outputs. Step
+  reads `genome-source`, writes the triplet.
+- Added `build_betpe_v1_genome_bgz_fai(client, container)` to
+  `main.py` and registered it: downloads `genome-source` from bucket,
+  `sed`s out `lcl|`, `bgzip -f`, `samtools faidx`, uploads triplet.
+- Rewired `build_betpe_v1_v1_2_gffread` to consume the bgz triplet
+  instead of the plain `.fa` and dropped the inline `sed` lcl-strip
+  (the bgz is already cleaned). Step's `reads:` already pointed at
+  `betpe/v1/genome` which is now the bgz — graph stayed correct.
+- **gffread segfaults on bgzipped FASTA input** (verified manually
+  inside the Docker image: `gffread … -g foo.fa.gz` → SIGSEGV;
+  decompressing to plain `.fa` works). htslib path in gffread is
+  unreliable. Worked around in code by `bgzip -d -c` decompressing
+  the bgz to a plain `.fa` in the gffread step's work dir, then
+  passing the plain path to gffread. Bucket still holds bgz triplet
+  for the API runtime.
+- Reuse logic added: gffread step skips re-downloading the genome
+  triplet if all three files are already on disk at the bgz-fai
+  step's work dir (so a single `kb build` doesn't round-trip the
+  bucket twice).
+- Followed-up open question: `main.py:222` still has
+  `if asset_id == "betpe/v1/genome": fetch_betpe_genome(...)` from
+  the old `kb sync` dispatch — `betpe/v1/genome` is now the derived
+  bgz, not the source. Mooted by the refactor below.
 
-**(3) Bucket caching.** Implicit from (1) — always cached.
+#### Big realisation today: only derived assets belong in the bucket
 
-**(4) Build graph edges.** Same `READ_BY` / `WRITES` model as today.
-Derived `Asset` entries get `object:` set so the upload side of
-`kb sync` (still to be added — currently sync only fetches from
-external sources) can push them back to the bucket. Hash/etag
-staleness comparison is the build manifest work below — deferred.
+While debugging the above, the architecture-level problem became
+obvious. Every external source we touch needs *some* preprocessing —
+`lcl|` strip on the betpe genome, sort on gffs, bgzip+faidx on
+fastas, etc. So the source/derived split that `kb sync` was built
+around is artificial:
 
-#### Handoff plan (smallest next chunk for a fresh session)
+- We end up storing redundant blobs in the bucket (raw `.fa` AND
+  bgz of the same content).
+- The build step round-trips: download raw → process → upload
+  derived → re-download derived → decompress for gffread → ...
+- `kb sync` exists to upload raw sources to the bucket, but those
+  raw sources are never actually consumed as-is — they go straight
+  into a build step. The intermediate bucket presence buys nothing.
 
-1. **Create `packages/knowledge-builder/Dockerfile`** modeled on
-   `packages/task-queue/Dockerfile`. `FROM` the top-level
-   `Dockerfile.tools` for the binaries, then layer
-   `python:3.13-slim-bookworm` + `uv` + the `knowledge-builder`
-   package on top. Result: a `kb` container with all the
-   bioinformatics tools available on PATH and the Python entrypoint
-   working.
+The cleaner model (next-session refactor target):
 
-2. **Pick one assembly and build the bgzip + faidx pair end-to-end.**
-   Suggest picab (smallest big-genome upload; we have it locally and
-   in the bucket). Concretely:
-   - In `knowledge.yaml`, under the picab assembly's `assets:` block,
-     add two new derived `Asset` entries: `genome-bgz` and
-     `genome-fai`. Both get `object:` set (e.g.
-     `Picab02_chromosomes_and_unplaced.fa.gz` is already the bgzipped
-     name — clarify naming with the user; faidx output ends `.fai`).
-   - Add a `BuildStep` to `steps:` that reads
-     `picab/v2/genome` and writes both derived assets.
-   - Add a `build_picab_genome_bgz_fai` function in `main.py` that:
-     downloads the source genome from the bucket to a temp dir
-     (`client.download_object` already exists in `SwiftClient`), runs
-     `bgzip` if not already bgzipped, runs `samtools faidx`, then
-     uploads both outputs back to the bucket via `client.upload`.
-   - Run it in the container, confirm the outputs land in the bucket.
+- **Only derived `Asset` nodes exist** in the graph and in the bucket.
+  No `genome-source` / `gff-source` etc.
+- **`source_url:` lives on the derived `Asset`** that is the
+  primary output of a step (e.g., `betpe/v1/genome` is the bgz, and
+  carries `source_url: https://genomevolution.org/coge/…`).
+- **BuildStep has no `reads:` for raw URL inputs** — the URL is
+  implicit on the write target. `reads:` still exists for
+  upstream-derived inputs (e.g., the gffread step `reads:`
+  the bgz `genome` Asset that a previous step produced).
+- **The build function** looks up its primary write target's
+  `source_url`, streams from URL with `httpx`, processes in a
+  temp dir, uploads to the bucket via `object:`, discards the temp.
+- **`kb sync` goes away.** `kb build` is the whole flow.
+  One-shot source uploads we did to bootstrap the bucket stay there
+  but stop being graph-modelled.
 
-3. **Then write the same function shape per-assembly** for the
-   remaining 6. Flat list, one function each, no extraction even at
-   7 of them.
+Worked example for betpe:
 
-4. **Build manifest / staleness — DEFER.** Don't design or wire it
-   yet. Every `kb build` rebuilds everything for now. The hash/etag
-   comparison comes after we have a working set of derived assets.
+```yaml
+# under taxa: betpe -> assemblies: v1 -> assets:
+- name: genome
+  format: fasta
+  object: Bepen_v1p2_genome.fa.gz
+  source_url: https://genomevolution.org/coge/api/v1/genomes/68624/sequence
+- name: genome-fai
+  format: fai
+  object: Bepen_v1p2_genome.fa.gz.fai
+- name: genome-gzi
+  format: gzi
+  object: Bepen_v1p2_genome.fa.gz.gzi
+```
 
-5. **`kb sync` upload side for derived assets — DEFER.** The current
-   `kb sync` walks yaml and uploads missing *source* assets; the
-   derived-asset functions above upload directly. A unified upload
-   pass via `kb sync` for derived assets comes later, when staleness
-   tracking arrives.
+```yaml
+# under steps:
+- id: betpe/v1/build-genome-bgz-fai
+  writes:
+    - id: betpe/v1/genome
+    - id: betpe/v1/genome-fai
+    - id: betpe/v1/genome-gzi
+```
+
+Build function:
+
+```python
+def build_betpe_v1_genome_bgz_fai(client, container, assets):
+    # assets["betpe/v1/genome"].source_url is the COGE URL
+    # stream → temp → sed lcl| strip → bgzip → samtools faidx
+    # → client.upload(...) of the bgz triplet
+    # → done; no kb sync, no genome-source asset, no raw .fa in bucket
+```
+
+Same pattern applies to any source needing prep:
+
+- gffs that need sorting → a `build-gff-sorted` step fetches the
+  raw gff from `source_url`, sorts, bgzips, uploads.
+- eggnog tsvs that need column normalisation → same shape.
+
+#### Next-session work (start here)
+
+1. **Prototype the derived-only model on betpe genome.**
+   - yaml: drop `genome-source`, move `source_url:` onto the
+     existing `genome` derived Asset.
+   - yaml: drop `reads:` from `betpe/v1/build-genome-bgz-fai`.
+   - main.py: rewrite `build_betpe_v1_genome_bgz_fai` to look up
+     `genome.source_url` from yaml/graph and stream via `httpx`
+     instead of `client.download_object`. Discard the temp at end.
+   - Bucket cleanup: delete `Bepen_v1p2_genome.fa` (the raw `.fa`).
+   - Confirm `kb build` still produces the bgz triplet and the
+     downstream gffread step still works.
+
+2. **Decide how the build function gets access to its outputs'
+   `source_url`.** Options:
+   - Pass the yaml/Asset-record dict into the function alongside
+     `(client, container)`. Simplest.
+   - Pre-resolve URLs and pass just the URL string per write id.
+   - Have the function read `knowledge.yaml` itself.
+   Pick one and apply across.
+
+3. **Kill `kb sync`.** Once (1) is proven, delete the `sync`
+   subcommand, `fetch_<species>_genome` functions, and the
+   `SYNC_REQUIRED_ENV` env-var split. `kb build` is the only
+   subcommand.
+
+4. **Apply the pattern to the remaining genomes.** arath / potra /
+   pruav each get a `build-<taxon>-<v>-genome-bgz-fai` step that
+   fetches from `source_url`, possibly preprocesses, bgzips,
+   uploads. picab / pinsy already have a clean bgz in the bucket
+   from out-of-band upload — decide whether to retroactively model
+   them with a build step (no `source_url` they were uploaded from
+   local) or leave them as bucket-only Assets with no step.
+
+5. **Apply the pattern to gffs that need preprocessing.** Most/all
+   gffs in the bucket are pre-sorted versions; model them as
+   derived outputs of a `build-gff-sorted` step rather than raw
+   sources.
+
+6. **Then resume the gffread / BLAST / DIAMOND replication across
+   the other 6 annotations.** Same plan as before, just on top of
+   the new model.
+
+7. **Build manifest / staleness — DEFER.** Unchanged.
 
 #### Open questions for the new session
 
-- Naming for the bgzipped/faidx outputs. picab is already named
-  `Picab02_chromosomes_and_unplaced.fa.gz` — is that already a
-  bgzipped gzip, or just a plain gzip? `bgzip` and `gzip` produce
-  files that both decode as gzip but only bgzip is faidx-indexable.
-  Check before deciding whether the existing `.gz` is the bgz or
-  whether we need to upload a separate `*.bgz` / `*.fa.gz` pair.
-- arath and betpe genomes are NOT bgzipped at source (`.fa.gz` from
-  Ensembl is gzip; `Bepen_v1p2_genome.fa` is uncompressed). The
-  bgzip step has to handle both gzip-decompress-then-bgzip and
-  plain-bgzip cases.
-- Does the API runtime read directly from the bucket (DuckDB-style
-  URL reads — fine for samtools when files are HTTPS-accessible
-  via htslib) or does it expect a local mount? Determines whether
-  `kb sync` needs to populate a local cache dir on hosts that run
-  the API.
+- How does the build function get its outputs' `source_url`? See
+  next-session step (2).
+- picab / pinsy modelling: their bgz was uploaded out-of-band from
+  local copies (no `source_url`). Model them as build-stepless
+  derived Assets, or invent a no-op step for graph symmetry?
+- Object naming for derived gffread outputs across multi-annotation
+  taxa (arath has two annotations under the same assembly) — still
+  open from before.
+- Does the API runtime read FASTA/index files directly from bucket
+  via htslib (HTTPS-aware) or expect a local mount? Affects whether
+  hosts running the API need a pull step.
+- Sequences-in-graph alternative (`Cds` / `Transcript` / `Protein`
+  nodes with sequence properties) raised in a prior session;
+  deferred in favour of bucket+faidx for now.
+- gffread can't read bgz FASTA without segfaulting — the current
+  decompress-before-call workaround stays for now. The user
+  floated writing a bespoke `(genome+gff) -> (cds, mrna, protein)`
+  extractor; revisit if gffread becomes more annoying.
 
 ### Build manifest / staleness
 
@@ -294,6 +418,16 @@ Defer until parity is reached across all taxa.
   separately — do not edit `geneCount` here.
 - **GO term aliases** (alt_id → canonical) are skipped; the old SQL
   produced `go-aliases.csv`. Add if a consumer needs them.
+- **betpe genome FASTA headers carry a `lcl|` BLAST prefix**
+  (`>lcl|Contig0` etc.) but the gff references bare names
+  (`Contig0`). `build_betpe_v1_v1_2_gffread` strips `>lcl|` → `>`
+  inline as a workaround. Real fix is to re-upload the genome
+  without the prefix.
+- **betpe gff has duplicate mRNA features** with the same id,
+  surfacing as `Error: discarding overlapping duplicate mRNA feature`
+  from gffread and `[W::fai_insert_index] Ignoring duplicate sequence`
+  from `samtools faidx` on the derived FASTAs. Non-fatal. Other
+  taxa's gffs may have the same — watch for it.
 
 ### DATA_MODEL.md open questions still open
 
@@ -318,3 +452,10 @@ Defer until parity is reached across all taxa.
 - DuckDB's progress bar (`PRAGMA enable_progress_bar`) renders for table
   scans but **not** for `read_json` over HTTP — that's why the GO download
   is in Python: explicit visible progress, faster path overall.
+- The image's `appuser` is created with `--create-home` (not
+  `--no-create-home`); DuckDB auto-installs the `httpfs` extension at
+  runtime and needs a writable `$HOME` for its extension cache.
+- `kb build` in the container needs three mounts: `.env.shared`,
+  `.env`, and `/opt/neo4j/import` (read-write — DuckDB writes CSVs
+  there and neo4j reads via its own `:ro` mount). Plus
+  `--network <compose-network>` to reach the neo4j service by name.
