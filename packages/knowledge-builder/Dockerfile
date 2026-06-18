@@ -98,6 +98,8 @@ COPY packages/task-queue/pyproject.toml /app/packages/task-queue/pyproject.toml
 COPY packages/task-queue/src/task_queue /app/packages/task-queue/src/task_queue
 COPY packages/go-enrich/pyproject.toml /app/packages/go-enrich/pyproject.toml
 COPY packages/go-enrich/src/go_enrich /app/packages/go-enrich/src/go_enrich
+COPY packages/snakemake-storage-plugin-swift/pyproject.toml /app/packages/snakemake-storage-plugin-swift/pyproject.toml
+COPY packages/snakemake-storage-plugin-swift/src/snakemake_storage_plugin_swift /app/packages/snakemake-storage-plugin-swift/src/snakemake_storage_plugin_swift
 
 RUN touch /app/packages/shared/README.md
 RUN touch /app/packages/knowledge-builder/README.md
@@ -113,6 +115,7 @@ ARG SAMTOOLS_VERSION
 ARG DIAMOND_VERSION
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
     libbz2-1.0 \
     zlib1g \
     libcurl4 \
@@ -137,10 +140,16 @@ RUN useradd --create-home appuser
 COPY --from=py-builder /app/.venv /app/.venv
 COPY --from=py-builder /app/packages/knowledge-builder/src/knowledge_builder /app/packages/knowledge-builder/src/knowledge_builder
 COPY --from=py-builder /app/packages/shared/src /app/packages/shared/src
+COPY --from=py-builder /app/packages/snakemake-storage-plugin-swift/src /app/packages/snakemake-storage-plugin-swift/src
 COPY packages/knowledge-builder/knowledge.yaml /app/packages/knowledge-builder/knowledge.yaml
+COPY packages/knowledge-builder/Snakefile /app/packages/knowledge-builder/Snakefile
+COPY packages/knowledge-builder/config.yaml /app/packages/knowledge-builder/config.yaml
 
 ENV PYTHONUNBUFFERED=1
 ENV PATH="/app/.venv/bin:$PATH"
+
+WORKDIR /app/packages/knowledge-builder
+RUN chown -R appuser /app/packages/knowledge-builder
 
 USER appuser
 
