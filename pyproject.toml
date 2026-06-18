@@ -33,6 +33,7 @@ members = [
     "packages/shared",
     "packages/go-enrich",
     "packages/knowledge-builder",
+    "packages/snakemake-storage-plugin-swift"
 ]
 
 [tool.uv.sources]

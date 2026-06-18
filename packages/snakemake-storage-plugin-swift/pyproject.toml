@@ -1,0 +1,26 @@
+[project]
+name = "snakemake-storage-plugin-swift"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "snakemake-interface-common>=1.23.0,<2",
+    "snakemake-interface-storage-plugins>=4.4.1,<5",
+    "shared",
+]
+
+[[project.authors]]
+name = "Jamie McCann"
+email = "jamie.mccann@umu.se"
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[dependency-groups]
+dev = ["pytest", "ruff"]
+
+[tool.uv.sources]
+shared = { workspace = true }
+
+[project.entry-points."snakemake.plugins.storage"]
+swift = "snakemake_storage_plugin_swift"
