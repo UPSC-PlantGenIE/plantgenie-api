@@ -5,12 +5,18 @@ import json
 import os
 from functools import wraps
 from pathlib import Path
-from typing import Dict, Iterable, List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
 import pendulum
 import requests
 from pendulum import DateTime
-from pydantic import BaseModel, ConfigDict, Field, field_validator, ValidationError
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+)
 from rich.progress import (
     BarColumn,
     DownloadColumn,
@@ -200,11 +206,14 @@ class SwiftClient:
             headers={"Content-Type": "application/json"},
         )
 
+        json_response = response.json()
+
         try:
-            json_response = response.json()
             self.token_response = KeystoneTokenResponse(**json_response)
         except ValidationError:
-            raise NoAuthException(f"Authentication failed with response\n{json_response}")
+            raise NoAuthException(
+                f"Authentication failed with response\n{json_response}"
+            )
 
         self.token = response.headers.get("x-subject-token")
         self.token_expiration_time = self.token_response.token.expires_at
@@ -397,6 +406,21 @@ class SwiftClient:
             data=json.dumps(manifest),
         )
         response.raise_for_status()
+
+    @authenticated
+    def head_object(
+        self, container: str, object_name: str
+    ) -> Optional[Dict[str, str]]:
+        response = requests.head(
+            f"{self.storage_service_url}/{container}/{object_name}",
+            headers={"X-Auth-Token": self.token},
+        )
+
+        if response.status_code == 404:
+            return None
+
+        response.raise_for_status()
+        return dict(response.headers)
 
     @authenticated
     def list_objects(self, container: str) -> List[Dict]:
