@@ -1,0 +1,32 @@
+#cloud-config
+package_update: true
+
+apt:
+  sources:
+    docker.list:
+      source: deb https://download.docker.com/linux/ubuntu noble stable
+      keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+      arches: [ amd64 ]
+
+packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+
+runcmd:
+  - systemctl enable docker
+  - systemctl start docker
+  - |
+    echo "{{ ghcr_pat }}" |\
+    docker login ghcr.io -u "{{ ghcr_user }}" --password-stdin
+  - |
+    docker run --rm \
+      --entrypoint snakemake \
+      -e OS_AUTH_TYPE={{ os_auth_type }} \
+      -e OS_AUTH_URL={{ os_auth_url }} \
+      -e OS_APPLICATION_CREDENTIAL_ID={{ os_app_cred_id }} \
+      -e OS_APPLICATION_CREDENTIAL_SECRET={{ os_app_cred_secret }} \
+      ghcr.io/upsc-plantgenie/plantgenie-api/knowledge-builder:{{ kb_image_tag }} \
+      --cores all \
+      --config run_id={{ run_id }} bucket={{ bucket }}
+  - poweroff

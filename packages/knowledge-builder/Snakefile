@@ -1,7 +1,34 @@
 configfile: "config.yaml"
 
+from pathlib import Path
+from shared.services.openstack import SwiftClient
+
 
 CONTAINER = config["container"]
+
+
+def upload_build_artifacts(status: str, snakemake_log: str) -> None:
+    run_id = config.get("run_id")
+    if not run_id:
+        return
+    client = SwiftClient()
+    prefix = f"builds/{run_id}"
+    client.upload(
+        CONTAINER, f"{prefix}/{status}-{run_id}", Path(snakemake_log)
+    )
+    log_dir = Path(".snakemake/log")
+    for path in log_dir.rglob("*"):
+        if path.is_file():
+            rel = path.relative_to(log_dir)
+            client.upload(CONTAINER, f"{prefix}/logs/{rel}", path)
+
+
+onsuccess:
+    upload_build_artifacts("SUCCESS", log)
+
+
+onerror:
+    upload_build_artifacts("FAILED", log)
 
 GENOMES = [
     "Bepen_v1p2_genome.fa",
