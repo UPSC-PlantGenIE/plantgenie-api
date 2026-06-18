@@ -11,11 +11,15 @@
 
 bucket: https://north-1.cloud.snic.se:8080/swift/v1/AUTH_d9d5ac98cb2b4a3091b60040077e8efc/plantgenie-knowledge
 
-shared:
-  assets:
-    - id: shared/go-basic
-      format: json
-      source_url: https://current.geneontology.org/ontology/go-basic.json
+data_sources:
+  - id: shared/go-basic
+    format: json
+    url: https://current.geneontology.org/ontology/go-basic.json
+    compression: null
+  - id: betpe/v1/genome-source
+    format: fasta
+    url: https://genomevolution.org/coge/api/v1/genomes/68624/sequence
+    compression: null
 
 taxa:
   - abbreviation: picab
@@ -177,8 +181,13 @@ taxa:
         assets:
           - name: genome
             format: fasta
-            object: Bepen_v1p2_genome.fa
-            source_url: https://genomevolution.org/coge/api/v1/genomes/68624/sequence
+            object: Bepen_v1p2_genome.fa.gz
+          - name: genome-fai
+            format: fai
+            object: Bepen_v1p2_genome.fa.gz.fai
+          - name: genome-gzi
+            format: gzi
+            object: Bepen_v1p2_genome.fa.gz.gzi
         annotations:
           - slug: v1.2
             geneCount: 28147
@@ -206,6 +215,20 @@ steps:
     writes:
       - id: shared/go-terms
         format: csv
+
+  - id: betpe/v1/build-genome-bgz-fai
+    reads:
+      - betpe/v1/genome-source
+    writes:
+      - id: betpe/v1/genome
+        format: fasta
+        object: Bepen_v1p2_genome.fa.gz
+      - id: betpe/v1/genome-fai
+        format: fai
+        object: Bepen_v1p2_genome.fa.gz.fai
+      - id: betpe/v1/genome-gzi
+        format: gzi
+        object: Bepen_v1p2_genome.fa.gz.gzi
 
   - id: betpe/v1/v1.2/build-gene-records
     reads:

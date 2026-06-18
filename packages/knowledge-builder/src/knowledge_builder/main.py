@@ -4,8 +4,10 @@ import json
 import os
 import subprocess
 import time
+from dataclasses import dataclass
 from ftplib import FTP
 from pathlib import Path
+from typing import Literal, Optional
 from urllib.parse import urlsplit
 
 import duckdb
@@ -34,6 +36,36 @@ load_dotenv()
 app = typer.Typer()
 
 
+@dataclass
+class DataSource:
+    id: str
+    url: str
+    format: Literal["json", "fasta", "gff", "csv", "tsv"]
+    compression: Optional[Literal["gz", "bgz"]] = None
+
+
+@dataclass
+class KnowledgeConfig:
+    bucket: str
+    data_sources: list[DataSource]
+
+    @classmethod
+    def load(cls, path: Path = CONFIG_PATH) -> KnowledgeConfig:
+        raw = yaml.safe_load(path.read_text())
+        return cls(
+            bucket=raw["bucket"],
+            data_sources=[
+                DataSource(
+                    id=ds["id"],
+                    url=ds["url"],
+                    format=ds["format"],
+                    compression=ds.get("compression"),
+                )
+                for ds in raw.get("data_sources", [])
+            ],
+        )
+
+
 def fetch_arath_genome(client, container, object_name, source_url):
     local = Path("/tmp/knowledge-builder/arath-genome.fa.gz")
     local.parent.mkdir(parents=True, exist_ok=True)
@@ -54,7 +86,9 @@ def fetch_betpe_genome(client, container, object_name, source_url):
     local = Path("/tmp/knowledge-builder/betpe-genome.fa")
     local.parent.mkdir(parents=True, exist_ok=True)
     typer.echo(f"downloading betpe genome from {source_url}")
-    with httpx.stream("GET", source_url, follow_redirects=True) as response:
+    with httpx.stream(
+        "GET", source_url, follow_redirects=True
+    ) as response:
         response.raise_for_status()
         with local.open("wb") as f:
             for chunk in response.iter_bytes():
@@ -95,21 +129,64 @@ def fetch_pruav_genome(client, container, object_name, source_url):
     local.unlink()
 
 
+def build_betpe_v1_genome_bgz_fai(client, container):
+    work = Path("/tmp/knowledge-builder/betpe-genome-bgz-fai")
+    work.mkdir(parents=True, exist_ok=True)
+
+    source = work / "Bepen_v1p2_genome.fa"
+    typer.echo(f"downloading {source.name}")
+    client.download_object(container, source.name, source)
+
+    typer.echo(f"stripping lcl| prefix from {source.name} headers")
+    subprocess.run(["sed", "-i", "s/^>lcl|/>/", str(source)], check=True)
+
+    bgz = Path(str(source) + ".gz")
+    fai = Path(str(bgz) + ".fai")
+    gzi = Path(str(bgz) + ".gzi")
+
+    typer.echo(f"bgzip {source.name}")
+    subprocess.run(["bgzip", "-f", str(source)], check=True)
+
+    typer.echo(f"samtools faidx {bgz.name}")
+    subprocess.run(["samtools", "faidx", str(bgz)], check=True)
+
+    for path in (bgz, fai, gzi):
+        typer.echo(f"uploading {path.name}")
+        client.upload(container, path.name, path)
+
+
 def build_betpe_v1_v1_2_gffread(client, container):
     work = Path("/tmp/knowledge-builder/betpe-gffread")
     work.mkdir(parents=True, exist_ok=True)
 
-    genome = work / "Bepen_v1p2_genome.fa"
+    genome_names = (
+        "Bepen_v1p2_genome.fa.gz",
+        "Bepen_v1p2_genome.fa.gz.fai",
+        "Bepen_v1p2_genome.fa.gz.gzi",
+    )
+    bgz_work = Path("/tmp/knowledge-builder/betpe-genome-bgz-fai")
+    if all((bgz_work / name).exists() for name in genome_names):
+        typer.echo(f"reusing genome from {bgz_work}")
+        genome = bgz_work / genome_names[0]
+    else:
+        genome = work / genome_names[0]
+        for name in genome_names:
+            path = work / name
+            typer.echo(f"downloading {path.name}")
+            client.download_object(container, path.name, path)
+
+    genome_fa = work / "Bepen_v1p2_genome.fa"
+    typer.echo(f"decompressing {genome.name} -> {genome_fa.name}")
+    with genome_fa.open("wb") as out:
+        subprocess.run(
+            ["bgzip", "-d", "-c", str(genome)], stdout=out, check=True
+        )
+
     gff_gz = work / "Bepen_v1p2_coge_sorted.gff3.gz"
     gff = work / "Bepen_v1p2_coge_sorted.gff3"
 
-    typer.echo(f"downloading {genome.name}")
-    client.download_object(container, genome.name, genome)
     typer.echo(f"downloading {gff_gz.name}")
     client.download_object(container, gff_gz.name, gff_gz)
-
-    typer.echo(f"stripping lcl| prefix from {genome.name} headers")
-    subprocess.run(["sed", "-i", "s/^>lcl|/>/", str(genome)], check=True)
 
     typer.echo(f"decompressing {gff_gz.name}")
     subprocess.run(["gunzip", "-f", "-k", str(gff_gz)], check=True)
@@ -121,11 +198,16 @@ def build_betpe_v1_v1_2_gffread(client, container):
     typer.echo("running gffread")
     subprocess.run(
         [
-            "gffread", str(gff),
-            "-g", str(genome),
-            "-x", str(cds),
-            "-w", str(mrna),
-            "-y", str(protein),
+            "gffread",
+            str(gff),
+            "-g",
+            str(genome_fa),
+            "-x",
+            str(cds),
+            "-w",
+            str(mrna),
+            "-y",
+            str(protein),
         ],
         check=True,
     )
@@ -147,13 +229,16 @@ def build_betpe_v1_v1_2_gffread(client, container):
 
 
 STEP_BUILDERS = {
+    "betpe/v1/build-genome-bgz-fai": build_betpe_v1_genome_bgz_fai,
     "betpe/v1/v1.2/build-gffread": build_betpe_v1_v1_2_gffread,
 }
 
 
 @app.command(name="sync")
 def sync() -> None:
-    missing = [name for name in SYNC_REQUIRED_ENV if not os.environ.get(name)]
+    missing = [
+        name for name in SYNC_REQUIRED_ENV if not os.environ.get(name)
+    ]
     if missing:
         raise RuntimeError(
             f"Required env vars not set: {', '.join(missing)}"
@@ -166,8 +251,12 @@ def sync() -> None:
     client = SwiftClient(
         openstack_auth_type=os.environ["OS_AUTH_TYPE"],
         openstack_auth_url=os.environ["OS_AUTH_URL"],
-        application_credential_id=os.environ["OS_APPLICATION_CREDENTIAL_ID"],
-        application_credential_secret=os.environ["OS_APPLICATION_CREDENTIAL_SECRET"],
+        application_credential_id=os.environ[
+            "OS_APPLICATION_CREDENTIAL_ID"
+        ],
+        application_credential_secret=os.environ[
+            "OS_APPLICATION_CREDENTIAL_SECRET"
+        ],
     )
     typer.echo(f"authenticated to {client.storage_service_url}")
 
@@ -270,7 +359,9 @@ def build() -> None:
                     "name": asset.get("name"),
                     "format": asset["format"],
                     "object": object_name,
-                    "bucketUri": f"{bucket}/{object_name}" if object_name else None,
+                    "bucketUri": f"{bucket}/{object_name}"
+                    if object_name
+                    else None,
                     "sourceUrl": asset.get("source_url"),
                 }
             )
@@ -311,7 +402,9 @@ def build() -> None:
                             "name": asset["name"],
                             "format": asset["format"],
                             "object": object_name,
-                            "bucketUri": f"{bucket}/{object_name}" if object_name else None,
+                            "bucketUri": f"{bucket}/{object_name}"
+                            if object_name
+                            else None,
                             "sourceUrl": asset.get("source_url"),
                         }
                     )
@@ -338,12 +431,17 @@ def build() -> None:
                                 "name": asset["name"],
                                 "format": asset["format"],
                                 "object": object_name,
-                                "bucketUri": f"{bucket}/{object_name}" if object_name else None,
+                                "bucketUri": f"{bucket}/{object_name}"
+                                if object_name
+                                else None,
                                 "sourceUrl": asset.get("source_url"),
                             }
                         )
                         annotation_from_rows.append(
-                            {"assetId": asset_id, "annotationId": annotation_id}
+                            {
+                                "assetId": asset_id,
+                                "annotationId": annotation_id,
+                            }
                         )
             for use in taxon.get("uses") or []:
                 used_id = use["assembly"]
@@ -363,7 +461,9 @@ def build() -> None:
         for step in config.get("steps", []) or []:
             build_step_rows.append({"id": step["id"]})
             for read_id in step.get("reads", []) or []:
-                build_read_rows.append({"assetId": read_id, "stepId": step["id"]})
+                build_read_rows.append(
+                    {"assetId": read_id, "stepId": step["id"]}
+                )
             for write in step.get("writes", []) or []:
                 object_name = write.get("object")
                 asset_rows.append(
@@ -372,11 +472,15 @@ def build() -> None:
                         "name": None,
                         "format": write.get("format"),
                         "object": object_name,
-                        "bucketUri": f"{bucket}/{object_name}" if object_name else None,
+                        "bucketUri": f"{bucket}/{object_name}"
+                        if object_name
+                        else None,
                         "sourceUrl": None,
                     }
                 )
-                build_write_rows.append({"stepId": step["id"], "assetId": write["id"]})
+                build_write_rows.append(
+                    {"stepId": step["id"], "assetId": write["id"]}
+                )
 
         load_step_rows = []
         load_read_rows = []
@@ -384,17 +488,25 @@ def build() -> None:
         for load in config.get("loads", []) or []:
             load_step_rows.append({"id": load["id"]})
             for read_id in load.get("reads", []) or []:
-                load_read_rows.append({"assetId": read_id, "stepId": load["id"]})
+                load_read_rows.append(
+                    {"assetId": read_id, "stepId": load["id"]}
+                )
             for required_id in load.get("requires", []) or []:
-                requires_rows.append({"fromId": load["id"], "toId": required_id})
+                requires_rows.append(
+                    {"fromId": load["id"], "toId": required_id}
+                )
 
         domain_cypher = (CYPHER_DIR / "merge_domain.cypher").read_text()
         build_cypher = (CYPHER_DIR / "merge_build.cypher").read_text()
         domain_statements = [
-            s for s in (stmt.strip() for stmt in domain_cypher.split(";")) if s
+            s
+            for s in (stmt.strip() for stmt in domain_cypher.split(";"))
+            if s
         ]
         build_statements = [
-            s for s in (stmt.strip() for stmt in build_cypher.split(";")) if s
+            s
+            for s in (stmt.strip() for stmt in build_cypher.split(";"))
+            if s
         ]
         params = {
             "taxon_rows": taxon_rows,
@@ -432,8 +544,12 @@ def build() -> None:
         client = SwiftClient(
             openstack_auth_type=os.environ["OS_AUTH_TYPE"],
             openstack_auth_url=os.environ["OS_AUTH_URL"],
-            application_credential_id=os.environ["OS_APPLICATION_CREDENTIAL_ID"],
-            application_credential_secret=os.environ["OS_APPLICATION_CREDENTIAL_SECRET"],
+            application_credential_id=os.environ[
+                "OS_APPLICATION_CREDENTIAL_ID"
+            ],
+            application_credential_secret=os.environ[
+                "OS_APPLICATION_CREDENTIAL_SECRET"
+            ],
         )
         for step in config.get("steps", []) or []:
             builder = STEP_BUILDERS.get(step["id"])
@@ -488,27 +604,43 @@ def build() -> None:
         con.execute("PRAGMA enable_progress_bar")
         con.execute(build_sql)
         con.close()
-        typer.echo(f"build.sql: finished ({time.perf_counter() - t0:.1f}s)")
+        typer.echo(
+            f"build.sql: finished ({time.perf_counter() - t0:.1f}s)"
+        )
 
         load_cypher = (CYPHER_DIR / "load.cypher").read_text()
         load_statements = [
-            s for s in (stmt.strip() for stmt in load_cypher.split(";")) if s
+            s
+            for s in (stmt.strip() for stmt in load_cypher.split(";"))
+            if s
         ]
-        typer.echo(f"load.cypher: started ({len(load_statements)} statements)")
+        typer.echo(
+            f"load.cypher: started ({len(load_statements)} statements)"
+        )
         t0 = time.perf_counter()
         with driver.session() as session:
             for statement in load_statements:
                 session.run(statement)
-        typer.echo(f"load.cypher: finished ({time.perf_counter() - t0:.1f}s)")
+        typer.echo(
+            f"load.cypher: finished ({time.perf_counter() - t0:.1f}s)"
+        )
 
         typer.echo("")
         typer.echo("graph report:")
         with driver.session() as session:
             for label in (
-                "Taxon", "Assembly", "Annotation", "Asset",
-                "BuildStep", "LoadStep", "Gene", "GoTerm",
+                "Taxon",
+                "Assembly",
+                "Annotation",
+                "Asset",
+                "BuildStep",
+                "LoadStep",
+                "Gene",
+                "GoTerm",
             ):
-                n = session.run(f"MATCH (n:{label}) RETURN count(n) AS n").single()["n"]
+                n = session.run(
+                    f"MATCH (n:{label}) RETURN count(n) AS n"
+                ).single()["n"]
                 typer.echo(f"  {label:12} {n:>10,}")
             typer.echo("")
             rows = session.run("""
@@ -520,4 +652,6 @@ def build() -> None:
             """).data()
             typer.echo(f"  {'annotation':30} {'genes':>10} {'has_go':>12}")
             for r in rows:
-                typer.echo(f"  {r['annotation']:30} {r['genes']:>10,} {r['has_go']:>12,}")
+                typer.echo(
+                    f"  {r['annotation']:30} {r['genes']:>10,} {r['has_go']:>12,}"
+                )
