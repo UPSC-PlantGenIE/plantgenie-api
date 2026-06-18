@@ -159,7 +159,7 @@ def authenticated(method):
     return wrapper
 
 
-class SwiftClient:
+class OpenStackClient:
     def __init__(
         self,
         openstack_auth_type: Optional[str] = os.environ.get(
@@ -200,8 +200,11 @@ class SwiftClient:
             }
         }
 
+        self.authenticate()
+
+    def authenticate(self) -> None:
         response = requests.post(
-            f"{openstack_auth_url}/v3/auth/tokens",
+            f"{self.openstack_auth_url}/v3/auth/tokens",
             json=self.auth_body,
             headers={"Content-Type": "application/json"},
         )
@@ -217,61 +220,31 @@ class SwiftClient:
 
         self.token = response.headers.get("x-subject-token")
         self.token_expiration_time = self.token_response.token.expires_at
-
         self.is_authenticated = self.token is not None
 
-        self.storage_service: Optional[Service] = None
-
+    def service_endpoint(
+        self, service_type: str, interface: str = "public"
+    ) -> Optional[str]:
         for service in self.token_response.token.catalog:
-            if service.type == "object-store":
-                self.storage_service = service
+            if service.type != service_type:
+                continue
+            for endpoint in service.endpoints:
+                if endpoint.interface == interface:
+                    return endpoint.url
+        return None
 
-        if self.storage_service is None:
-            raise SwiftNotFoundException(
-                "An object storage service was not found"
-            )
 
-    def authenticate(self):
-        auth_body = {
-            "auth": {
-                "identity": {
-                    "methods": ["application_credential"],
-                    "application_credential": {
-                        "id": self.application_credential_id,
-                        "secret": self.application_credential_secret,
-                    },
-                }
-            }
-        }
-
-        response = requests.post(
-            f"{self.openstack_auth_url}/v3/auth/tokens",
-            json=auth_body,
-            headers={"Content-Type": "application/json"},
-        )
-
-        self.token_response = KeystoneTokenResponse(**response.json())
-
-        self.token: str | None = response.headers.get("x-subject-token")
-        self.token_expiration_time = self.token_response.token.expires_at
-        self.is_authenticated = self.token is not None
-
-        for service in self.token_response.token.catalog:
-            if service.type == "object-store":
-                self.storage_service = service
-
-        if self.storage_service is None:
+class SwiftClient(OpenStackClient):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.service_endpoint("object-store") is None:
             raise SwiftNotFoundException(
                 "An object storage service was not found"
             )
 
     @property
     def storage_service_url(self) -> Optional[str]:
-        if self.storage_service is None:
-            return None
-        for endpoint in self.storage_service.endpoints:
-            if endpoint.interface == "public":
-                return endpoint.url
+        return self.service_endpoint("object-store")
 
     @authenticated
     def create_container(self, container: str) -> requests.Response | None:
