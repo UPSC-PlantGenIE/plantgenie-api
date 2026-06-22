@@ -29,16 +29,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Docker image
-        run: |
-          repo_name=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')
-          docker build \
-            -t ghcr.io/$repo_name/knowledge-builder:latest \
-            -t ghcr.io/$repo_name/knowledge-builder:${{ github.sha }} \
-            -f packages/knowledge-builder/Dockerfile .
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Push Docker image to GHCR
-        run: |
-          repo_name=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')
-          docker push ghcr.io/$repo_name/knowledge-builder:latest
-          docker push ghcr.io/$repo_name/knowledge-builder:${{ github.sha }}
+      - name: Compute image name
+        run: echo "IMAGE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')/knowledge-builder" >> "$GITHUB_ENV"
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packages/knowledge-builder/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

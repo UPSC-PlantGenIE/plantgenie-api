@@ -7,14 +7,15 @@ from shared.services.openstack import SwiftClient
 CONTAINER = config["container"]
 
 
-def upload_build_artifacts(status: str, snakemake_log: str) -> None:
+def upload_build_artifacts(status: str, snakemake_log) -> None:
     run_id = config.get("run_id")
     if not run_id:
         return
+    log_path = snakemake_log[0] if isinstance(snakemake_log, list) else snakemake_log
     client = SwiftClient()
     prefix = f"builds/{run_id}"
     client.upload(
-        CONTAINER, f"{prefix}/{status}-{run_id}", Path(snakemake_log)
+        CONTAINER, f"{prefix}/{status}-{run_id}", Path(log_path)
     )
     log_dir = Path(".snakemake/log")
     for path in log_dir.rglob("*"):
