@@ -71,3 +71,7 @@ def launch() -> str:
     finally:
         compute.delete_server(server.id)
         print(f"deleted server={server.id}")
+
+
+if __name__ == "__main__":
+    launch()

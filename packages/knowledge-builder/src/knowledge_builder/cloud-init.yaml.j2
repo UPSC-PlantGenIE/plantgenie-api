@@ -28,5 +28,5 @@ runcmd:
       -e OS_APPLICATION_CREDENTIAL_SECRET={{ os_app_cred_secret }} \
       ghcr.io/upsc-plantgenie/plantgenie-api/knowledge-builder:{{ kb_image_tag }} \
       --cores all \
-      --config run_id={{ run_id }} bucket={{ bucket }}
-  - poweroff
+      --config run_id={{ run_id }} container={{ bucket }}
+  # - poweroff   # disabled for debugging; VM stays up so we can read logs
