@@ -5,6 +5,7 @@ from shared.services.openstack import SwiftClient
 
 
 CONTAINER = config["container"]
+BUCKET_URL = config["bucket_url"]
 
 
 def upload_build_artifacts(status: str, snakemake_log) -> None:
@@ -38,6 +39,17 @@ GENOMES = [
     # "Potra02_genome.fasta",  # FTP source (port 980) unreachable for now
 ]
 
+# gff objects pulled (gunzipped) from the public bucket as their "original
+# source" for now; gffread can't read compressed gff, so store plain locally
+GFFS = [
+    "Bepen_v1p2_coge_sorted.gff3",
+    "TAIR10_GFF3_genes_sorted.gff3",
+    "TAIR10_araport11_sorted.gff3",
+    "Tieton02_original_sorted.gff3",
+]
+
+GFF_FEATURE_TYPES = ["cds", "mrna", "protein"]
+
 
 rule all:
     input:
@@ -49,6 +61,31 @@ rule all:
                 ext=["", ".fai", ".gzi"],
             )
         ],
+        [
+            storage(f"swift://{CONTAINER}/blast/nucl/{stem}.tar.gz")
+            for stem in GENOMES
+        ],
+        # transcript triplets, enable once gffread -> index is verified:
+        # [
+        #     storage(f"swift://{CONTAINER}/betpe.{t}.fa.gz{ext}")
+        #     for t in GFF_FEATURE_TYPES
+        #     for ext in ["", ".fai", ".gzi"]
+        # ],
+        # [
+        #     storage(f"swift://{CONTAINER}/arath_tair10.{t}.fa.gz{ext}")
+        #     for t in GFF_FEATURE_TYPES
+        #     for ext in ["", ".fai", ".gzi"]
+        # ],
+        # [
+        #     storage(f"swift://{CONTAINER}/arath_araport11.{t}.fa.gz{ext}")
+        #     for t in GFF_FEATURE_TYPES
+        #     for ext in ["", ".fai", ".gzi"]
+        # ],
+        # [
+        #     storage(f"swift://{CONTAINER}/pruav.{t}.fa.gz{ext}")
+        #     for t in GFF_FEATURE_TYPES
+        #     for ext in ["", ".fai", ".gzi"]
+        # ],
 
 
 rule index_genome:
@@ -62,6 +99,34 @@ rule index_genome:
         """
         bgzip -c {input} > {output.gz}
         samtools faidx {output.gz}
+        """
+
+
+rule index_transcript:
+    input:
+        "gffread/{name}.fa",
+    output:
+        gz=storage(f"swift://{CONTAINER}/{{name}}.fa.gz"),
+        fai=storage(f"swift://{CONTAINER}/{{name}}.fa.gz.fai"),
+        gzi=storage(f"swift://{CONTAINER}/{{name}}.fa.gz.gzi"),
+    shell:
+        """
+        bgzip -c {input} > {output.gz}
+        samtools faidx {output.gz}
+        """
+
+
+rule blastdb_nucl:
+    input:
+        "normalized/{stem}",
+    output:
+        storage(f"swift://{CONTAINER}/blast/nucl/{{stem}}.tar.gz"),
+    shell:
+        """
+        tmp=$(mktemp -d)
+        makeblastdb -in {input} -dbtype nucl -out $tmp/{wildcards.stem}
+        tar -czf {output} -C $tmp .
+        rm -rf $tmp
         """
 
 
@@ -99,3 +164,66 @@ rule download_pruav:
 #         url="ftp://plantgenie.org:980/Data/PlantGenIE/Populus_tremula/v2.2/fasta/Potra02_genome.fasta.gz",
 #     shell:
 #         "curl -fsSLk '{params.url}' | gunzip -c > {output}"
+
+
+rule download_gff:
+    output:
+        temp("gff/{gff}"),
+    wildcard_constraints:
+        gff=r"[^/]+\.gff3",
+    params:
+        url=lambda wc: f"{BUCKET_URL}/{wc.gff}.gz",
+    shell:
+        "curl -fsSL '{params.url}' | gunzip -c > {output}"
+
+
+rule gffread_betpe:
+    input:
+        genome="normalized/Bepen_v1p2_genome.fa",
+        gff="gff/Bepen_v1p2_coge_sorted.gff3",
+    output:
+        cds=temp("gffread/betpe.cds.fa"),
+        mrna=temp("gffread/betpe.mrna.fa"),
+        protein=temp("gffread/betpe.protein.fa"),
+    shell:
+        "gffread {input.gff} -g {input.genome} "
+        "-x {output.cds} -w {output.mrna} -y {output.protein}"
+
+
+rule gffread_arath_tair10:
+    input:
+        genome="normalized/Arabidopsis_thaliana.TAIR10.dna.toplevel.fa",
+        gff="gff/TAIR10_GFF3_genes_sorted.gff3",
+    output:
+        cds=temp("gffread/arath_tair10.cds.fa"),
+        mrna=temp("gffread/arath_tair10.mrna.fa"),
+        protein=temp("gffread/arath_tair10.protein.fa"),
+    shell:
+        "gffread {input.gff} -g {input.genome} "
+        "-x {output.cds} -w {output.mrna} -y {output.protein}"
+
+
+rule gffread_arath_araport11:
+    input:
+        genome="normalized/Arabidopsis_thaliana.TAIR10.dna.toplevel.fa",
+        gff="gff/TAIR10_araport11_sorted.gff3",
+    output:
+        cds=temp("gffread/arath_araport11.cds.fa"),
+        mrna=temp("gffread/arath_araport11.mrna.fa"),
+        protein=temp("gffread/arath_araport11.protein.fa"),
+    shell:
+        "gffread {input.gff} -g {input.genome} "
+        "-x {output.cds} -w {output.mrna} -y {output.protein}"
+
+
+rule gffread_pruav:
+    input:
+        genome="normalized/Tieton02_genome.fasta",
+        gff="gff/Tieton02_original_sorted.gff3",
+    output:
+        cds=temp("gffread/pruav.cds.fa"),
+        mrna=temp("gffread/pruav.mrna.fa"),
+        protein=temp("gffread/pruav.protein.fa"),
+    shell:
+        "gffread {input.gff} -g {input.genome} "
+        "-x {output.cds} -w {output.mrna} -y {output.protein}"
