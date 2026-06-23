@@ -276,8 +276,6 @@ rule gffread_betpe:
         mrna=temp("gffread/betpe/v1/v1.2/mrna.fa"),
         protein=temp("gffread/betpe/v1/v1.2/protein.fa"),
     shell:
-        # betpe's gff yields gffread gap chars (.) that makeblastdb rejects;
-        # rewrite them to X (protein) / N (nucleotide) on sequence lines
         r"""
         gffread {input.gff} -g {input.genome} \
             -x {output.cds} -w {output.mrna} -y {output.protein}
@@ -295,8 +293,12 @@ rule gffread_arath_tair10:
         mrna=temp("gffread/arath/tair10/tair10/mrna.fa"),
         protein=temp("gffread/arath/tair10/tair10/protein.fa"),
     shell:
-        "gffread {input.gff} -g {input.genome} "
-        "-x {output.cds} -w {output.mrna} -y {output.protein}"
+        r"""
+        gffread {input.gff} -g {input.genome} \
+            -x {output.cds} -w {output.mrna} -y {output.protein}
+        sed -i '/^>/!s/\./X/g' {output.protein}
+        sed -i '/^>/!s/\./N/g' {output.cds} {output.mrna}
+        """
 
 
 rule gffread_arath_araport11:
@@ -308,8 +310,12 @@ rule gffread_arath_araport11:
         mrna=temp("gffread/arath/tair10/araport11/mrna.fa"),
         protein=temp("gffread/arath/tair10/araport11/protein.fa"),
     shell:
-        "gffread {input.gff} -g {input.genome} "
-        "-x {output.cds} -w {output.mrna} -y {output.protein}"
+        r"""
+        gffread {input.gff} -g {input.genome} \
+            -x {output.cds} -w {output.mrna} -y {output.protein}
+        sed -i '/^>/!s/\./X/g' {output.protein}
+        sed -i '/^>/!s/\./N/g' {output.cds} {output.mrna}
+        """
 
 
 rule gffread_pruav:
@@ -321,5 +327,9 @@ rule gffread_pruav:
         mrna=temp("gffread/pruav/v2/v2.0/mrna.fa"),
         protein=temp("gffread/pruav/v2/v2.0/protein.fa"),
     shell:
-        "gffread {input.gff} -g {input.genome} "
-        "-x {output.cds} -w {output.mrna} -y {output.protein}"
+        r"""
+        gffread {input.gff} -g {input.genome} \
+            -x {output.cds} -w {output.mrna} -y {output.protein}
+        sed -i '/^>/!s/\./X/g' {output.protein}
+        sed -i '/^>/!s/\./N/g' {output.cds} {output.mrna}
+        """
