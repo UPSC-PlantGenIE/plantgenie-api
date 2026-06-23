@@ -65,27 +65,26 @@ rule all:
             storage(f"swift://{CONTAINER}/blast/nucl/{stem}.tar.gz")
             for stem in GENOMES
         ],
-        # transcript triplets, enable once gffread -> index is verified:
-        # [
-        #     storage(f"swift://{CONTAINER}/betpe.{t}.fa.gz{ext}")
-        #     for t in GFF_FEATURE_TYPES
-        #     for ext in ["", ".fai", ".gzi"]
-        # ],
-        # [
-        #     storage(f"swift://{CONTAINER}/arath_tair10.{t}.fa.gz{ext}")
-        #     for t in GFF_FEATURE_TYPES
-        #     for ext in ["", ".fai", ".gzi"]
-        # ],
-        # [
-        #     storage(f"swift://{CONTAINER}/arath_araport11.{t}.fa.gz{ext}")
-        #     for t in GFF_FEATURE_TYPES
-        #     for ext in ["", ".fai", ".gzi"]
-        # ],
-        # [
-        #     storage(f"swift://{CONTAINER}/pruav.{t}.fa.gz{ext}")
-        #     for t in GFF_FEATURE_TYPES
-        #     for ext in ["", ".fai", ".gzi"]
-        # ],
+        [
+            storage(f"swift://{CONTAINER}/betpe.{t}.fa.gz{ext}")
+            for t in GFF_FEATURE_TYPES
+            for ext in ["", ".fai", ".gzi"]
+        ],
+        [
+            storage(f"swift://{CONTAINER}/arath_tair10.{t}.fa.gz{ext}")
+            for t in GFF_FEATURE_TYPES
+            for ext in ["", ".fai", ".gzi"]
+        ],
+        [
+            storage(f"swift://{CONTAINER}/arath_araport11.{t}.fa.gz{ext}")
+            for t in GFF_FEATURE_TYPES
+            for ext in ["", ".fai", ".gzi"]
+        ],
+        [
+            storage(f"swift://{CONTAINER}/pruav.{t}.fa.gz{ext}")
+            for t in GFF_FEATURE_TYPES
+            for ext in ["", ".fai", ".gzi"]
+        ],
 
 
 rule index_genome:
