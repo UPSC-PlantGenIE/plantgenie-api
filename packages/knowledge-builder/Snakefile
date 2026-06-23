@@ -255,8 +255,14 @@ rule gffread_betpe:
         mrna=temp("gffread/betpe.mrna.fa"),
         protein=temp("gffread/betpe.protein.fa"),
     shell:
-        "gffread {input.gff} -g {input.genome} "
-        "-x {output.cds} -w {output.mrna} -y {output.protein}"
+        # betpe's gff yields gffread gap chars (.) that makeblastdb rejects;
+        # rewrite them to X (protein) / N (nucleotide) on sequence lines
+        r"""
+        gffread {input.gff} -g {input.genome} \
+            -x {output.cds} -w {output.mrna} -y {output.protein}
+        sed -i '/^>/!s/\./X/g' {output.protein}
+        sed -i '/^>/!s/\./N/g' {output.cds} {output.mrna}
+        """
 
 
 rule gffread_arath_tair10:
