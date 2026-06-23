@@ -20,13 +20,23 @@ runcmd:
     echo "{{ ghcr_pat }}" |\
     docker login ghcr.io -u "{{ ghcr_user }}" --password-stdin
   - |
+    IMAGE=ghcr.io/upsc-plantgenie/plantgenie-api/knowledge-builder:{{ kb_image_tag }}
     docker run --rm \
       --entrypoint snakemake \
       -e OS_AUTH_TYPE={{ os_auth_type }} \
       -e OS_AUTH_URL={{ os_auth_url }} \
       -e OS_APPLICATION_CREDENTIAL_ID={{ os_app_cred_id }} \
       -e OS_APPLICATION_CREDENTIAL_SECRET={{ os_app_cred_secret }} \
-      ghcr.io/upsc-plantgenie/plantgenie-api/knowledge-builder:{{ kb_image_tag }} \
+      "$IMAGE" \
       --cores all \
-      --config run_id={{ run_id }} container={{ bucket }}
+      --config run_id={{ run_id }} container={{ bucket }} || true
+    docker run --rm \
+      --entrypoint kb-upload \
+      -e OS_AUTH_TYPE={{ os_auth_type }} \
+      -e OS_AUTH_URL={{ os_auth_url }} \
+      -e OS_APPLICATION_CREDENTIAL_ID={{ os_app_cred_id }} \
+      -e OS_APPLICATION_CREDENTIAL_SECRET={{ os_app_cred_secret }} \
+      -v /var/log/cloud-init-output.log:/tmp/ci.log:ro \
+      "$IMAGE" \
+      {{ bucket }} builds/{{ run_id }}/cloud-init.log /tmp/ci.log
   # - poweroff   # disabled for debugging; VM stays up so we can read logs

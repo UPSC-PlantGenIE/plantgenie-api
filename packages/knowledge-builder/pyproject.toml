@@ -23,6 +23,7 @@ dependencies = [
 [project.scripts]
 knowledge-builder = "knowledge_builder:main"
 kb = "knowledge_builder:main"
+kb-upload = "knowledge_builder.upload:main"
 
 [build-system]
 requires = ["uv_build>=0.11.3,<0.12.0"]

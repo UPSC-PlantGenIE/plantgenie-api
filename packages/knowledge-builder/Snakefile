@@ -1,5 +1,6 @@
 configfile: "config.yaml"
 
+import base64
 from pathlib import Path
 from shared.services.openstack import SwiftClient
 
@@ -23,6 +24,14 @@ def upload_build_artifacts(status: str, snakemake_log) -> None:
         if path.is_file():
             rel = path.relative_to(log_dir)
             client.upload(CONTAINER, f"{prefix}/logs/{rel}", path)
+    meta_dir = Path(".snakemake/metadata")
+    for path in meta_dir.iterdir() if meta_dir.is_dir() else []:
+        if not path.is_file():
+            continue
+        output_path = base64.urlsafe_b64decode(path.name).decode()
+        if output_path.startswith("swift://"):
+            output_path = output_path.split("/", 3)[-1]
+        client.upload(CONTAINER, f"{prefix}/metadata/{output_path}.json", path)
 
 
 onsuccess:
