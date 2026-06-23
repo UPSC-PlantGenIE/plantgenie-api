@@ -39,15 +39,6 @@ GENOMES = [
     # "Potra02_genome.fasta",  # FTP source (port 980) unreachable for now
 ]
 
-# gff objects pulled (gunzipped) from the public bucket as their "original
-# source" for now; gffread can't read compressed gff, so store plain locally
-GFFS = [
-    "Bepen_v1p2_coge_sorted.gff3",
-    "TAIR10_GFF3_genes_sorted.gff3",
-    "TAIR10_araport11_sorted.gff3",
-    "Tieton02_original_sorted.gff3",
-]
-
 GFF_FEATURE_TYPES = ["cds", "mrna", "protein"]
 
 
@@ -165,13 +156,42 @@ rule download_pruav:
 #         "curl -fsSLk '{params.url}' | gunzip -c > {output}"
 
 
-rule download_gff:
+rule download_gff_betpe:
     output:
-        temp("gff/{gff}"),
-    wildcard_constraints:
-        gff=r"[^/]+\.gff3",
+        temp("gff/Bepen_v1p2_coge_sorted.gff3"),
     params:
-        url=lambda wc: f"{BUCKET_URL}/{wc.gff}.gz",
+        url=f"{BUCKET_URL}/Bepen_v1p2_coge_sorted.gff3.gz",
+    shell:
+        "curl -fsSL '{params.url}' | gunzip -c > {output}"
+
+
+rule download_gff_tair10:
+    output:
+        temp("gff/TAIR10_GFF3_genes_sorted.gff3"),
+    params:
+        url=f"{BUCKET_URL}/TAIR10_GFF3_genes_sorted.gff3.gz",
+    shell:
+        # gff seqids are Chr1..Chr5/ChrC/ChrM; the Ensembl genome uses
+        # 1..5/Pt/Mt, so rewrite the seqid column to match
+        "curl -fsSL '{params.url}' | gunzip -c | "
+        r"sed -E '/^#/!{{s/^Chr([1-5])\t/\1\t/; s/^ChrC\t/Pt\t/; s/^ChrM\t/Mt\t/}}'"
+        " > {output}"
+
+
+rule download_gff_araport11:
+    output:
+        temp("gff/TAIR10_araport11_sorted.gff3"),
+    params:
+        url=f"{BUCKET_URL}/TAIR10_araport11_sorted.gff3.gz",
+    shell:
+        "curl -fsSL '{params.url}' | gunzip -c > {output}"
+
+
+rule download_gff_pruav:
+    output:
+        temp("gff/Tieton02_original_sorted.gff3"),
+    params:
+        url=f"{BUCKET_URL}/Tieton02_original_sorted.gff3.gz",
     shell:
         "curl -fsSL '{params.url}' | gunzip -c > {output}"
 
