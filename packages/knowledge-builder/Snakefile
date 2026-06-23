@@ -32,79 +32,80 @@ onsuccess:
 onerror:
     upload_build_artifacts("FAILED", log)
 
-GENOMES = [
-    "Bepen_v1p2_genome.fa",
-    "Arabidopsis_thaliana.TAIR10.dna.toplevel.fa",
-    "Tieton02_genome.fasta",
-    # "Potra02_genome.fasta",  # FTP source (port 980) unreachable for now
-]
 
 GFF_FEATURE_TYPES = ["cds", "mrna", "protein"]
 
 
+# Bucket layout mirrors the graph ids: <taxon>/<assembly>/[<annotation>/].
+# Genome assets live at the assembly level, transcript assets at the
+# annotation level.
 rule all:
     input:
+        # --- betpe/v1 (annotation v1.2) ---
         [
-            storage(q)
-            for q in expand(
-                f"swift://{CONTAINER}/{{stem}}.gz{{ext}}",
-                stem=GENOMES,
-                ext=["", ".fai", ".gzi"],
-            )
+            storage(f"swift://{CONTAINER}/betpe/v1/genome.fa.gz{ext}")
+            for ext in ["", ".fai", ".gzi"]
         ],
+        storage(f"swift://{CONTAINER}/betpe/v1/blast/nucl/genome.tar.gz"),
         [
-            storage(f"swift://{CONTAINER}/blast/nucl/{stem}.tar.gz")
-            for stem in GENOMES
-        ],
-        [
-            storage(f"swift://{CONTAINER}/betpe.{t}.fa.gz{ext}")
+            storage(f"swift://{CONTAINER}/betpe/v1/v1.2/{t}.fa.gz{ext}")
             for t in GFF_FEATURE_TYPES
             for ext in ["", ".fai", ".gzi"]
         ],
+        storage(f"swift://{CONTAINER}/betpe/v1/v1.2/blast/nucl/cds.tar.gz"),
+        storage(f"swift://{CONTAINER}/betpe/v1/v1.2/blast/nucl/mrna.tar.gz"),
+        storage(f"swift://{CONTAINER}/betpe/v1/v1.2/blast/prot/protein.tar.gz"),
+        storage(f"swift://{CONTAINER}/betpe/v1/v1.2/diamond/protein.dmnd"),
+        # --- arath/tair10 (annotations tair10, araport11) ---
         [
-            storage(f"swift://{CONTAINER}/arath_tair10.{t}.fa.gz{ext}")
+            storage(f"swift://{CONTAINER}/arath/tair10/genome.fa.gz{ext}")
+            for ext in ["", ".fai", ".gzi"]
+        ],
+        storage(f"swift://{CONTAINER}/arath/tair10/blast/nucl/genome.tar.gz"),
+        [
+            storage(f"swift://{CONTAINER}/arath/tair10/tair10/{t}.fa.gz{ext}")
             for t in GFF_FEATURE_TYPES
             for ext in ["", ".fai", ".gzi"]
         ],
+        storage(f"swift://{CONTAINER}/arath/tair10/tair10/blast/nucl/cds.tar.gz"),
+        storage(f"swift://{CONTAINER}/arath/tair10/tair10/blast/nucl/mrna.tar.gz"),
+        storage(f"swift://{CONTAINER}/arath/tair10/tair10/blast/prot/protein.tar.gz"),
+        storage(f"swift://{CONTAINER}/arath/tair10/tair10/diamond/protein.dmnd"),
         [
-            storage(f"swift://{CONTAINER}/arath_araport11.{t}.fa.gz{ext}")
+            storage(f"swift://{CONTAINER}/arath/tair10/araport11/{t}.fa.gz{ext}")
             for t in GFF_FEATURE_TYPES
             for ext in ["", ".fai", ".gzi"]
         ],
+        storage(f"swift://{CONTAINER}/arath/tair10/araport11/blast/nucl/cds.tar.gz"),
+        storage(f"swift://{CONTAINER}/arath/tair10/araport11/blast/nucl/mrna.tar.gz"),
+        storage(f"swift://{CONTAINER}/arath/tair10/araport11/blast/prot/protein.tar.gz"),
+        storage(f"swift://{CONTAINER}/arath/tair10/araport11/diamond/protein.dmnd"),
+        # --- pruav/v2 (annotation v2.0) ---
         [
-            storage(f"swift://{CONTAINER}/pruav.{t}.fa.gz{ext}")
+            storage(f"swift://{CONTAINER}/pruav/v2/genome.fa.gz{ext}")
+            for ext in ["", ".fai", ".gzi"]
+        ],
+        storage(f"swift://{CONTAINER}/pruav/v2/blast/nucl/genome.tar.gz"),
+        [
+            storage(f"swift://{CONTAINER}/pruav/v2/v2.0/{t}.fa.gz{ext}")
             for t in GFF_FEATURE_TYPES
             for ext in ["", ".fai", ".gzi"]
         ],
-        [
-            storage(f"swift://{CONTAINER}/blast/nucl/betpe.cds.tar.gz"),
-            storage(f"swift://{CONTAINER}/blast/nucl/betpe.mrna.tar.gz"),
-            storage(f"swift://{CONTAINER}/blast/prot/betpe.protein.tar.gz"),
-        ],
-        [
-            storage(f"swift://{CONTAINER}/blast/nucl/arath_tair10.cds.tar.gz"),
-            storage(f"swift://{CONTAINER}/blast/nucl/arath_tair10.mrna.tar.gz"),
-            storage(f"swift://{CONTAINER}/blast/prot/arath_tair10.protein.tar.gz"),
-        ],
-        [
-            storage(f"swift://{CONTAINER}/blast/nucl/arath_araport11.cds.tar.gz"),
-            storage(f"swift://{CONTAINER}/blast/nucl/arath_araport11.mrna.tar.gz"),
-            storage(f"swift://{CONTAINER}/blast/prot/arath_araport11.protein.tar.gz"),
-        ],
-        [
-            storage(f"swift://{CONTAINER}/blast/nucl/pruav.cds.tar.gz"),
-            storage(f"swift://{CONTAINER}/blast/nucl/pruav.mrna.tar.gz"),
-            storage(f"swift://{CONTAINER}/blast/prot/pruav.protein.tar.gz"),
-        ],
+        storage(f"swift://{CONTAINER}/pruav/v2/v2.0/blast/nucl/cds.tar.gz"),
+        storage(f"swift://{CONTAINER}/pruav/v2/v2.0/blast/nucl/mrna.tar.gz"),
+        storage(f"swift://{CONTAINER}/pruav/v2/v2.0/blast/prot/protein.tar.gz"),
+        storage(f"swift://{CONTAINER}/pruav/v2/v2.0/diamond/protein.dmnd"),
 
+
+# --- mechanical rules: mirror a local path to the same bucket path ---
 
 rule index_genome:
     input:
-        "normalized/{stem}",
+        "normalized/{path}/genome.fa",
     output:
-        gz=storage(f"swift://{CONTAINER}/{{stem}}.gz"),
-        fai=storage(f"swift://{CONTAINER}/{{stem}}.gz.fai"),
-        gzi=storage(f"swift://{CONTAINER}/{{stem}}.gz.gzi"),
+        gz=storage(f"swift://{CONTAINER}/{{path}}/genome.fa.gz"),
+        fai=storage(f"swift://{CONTAINER}/{{path}}/genome.fa.gz.fai"),
+        gzi=storage(f"swift://{CONTAINER}/{{path}}/genome.fa.gz.gzi"),
     shell:
         """
         bgzip -c {input} > {output.gz}
@@ -114,11 +115,13 @@ rule index_genome:
 
 rule index_transcript:
     input:
-        "gffread/{name}.fa",
+        "gffread/{path}/{ftype}.fa",
     output:
-        gz=storage(f"swift://{CONTAINER}/{{name}}.fa.gz"),
-        fai=storage(f"swift://{CONTAINER}/{{name}}.fa.gz.fai"),
-        gzi=storage(f"swift://{CONTAINER}/{{name}}.fa.gz.gzi"),
+        gz=storage(f"swift://{CONTAINER}/{{path}}/{{ftype}}.fa.gz"),
+        fai=storage(f"swift://{CONTAINER}/{{path}}/{{ftype}}.fa.gz.fai"),
+        gzi=storage(f"swift://{CONTAINER}/{{path}}/{{ftype}}.fa.gz.gzi"),
+    wildcard_constraints:
+        ftype="cds|mrna|protein",
     shell:
         """
         bgzip -c {input} > {output.gz}
@@ -126,15 +129,15 @@ rule index_transcript:
         """
 
 
-rule blastdb_nucl:
+rule blastdb_genome:
     input:
-        "normalized/{stem}",
+        "normalized/{path}/genome.fa",
     output:
-        storage(f"swift://{CONTAINER}/blast/nucl/{{stem}}.tar.gz"),
+        storage(f"swift://{CONTAINER}/{{path}}/blast/nucl/genome.tar.gz"),
     shell:
         """
         tmp=$(mktemp -d)
-        makeblastdb -in {input} -dbtype nucl -out $tmp/{wildcards.stem}
+        makeblastdb -in {input} -dbtype nucl -out $tmp/genome
         tar -czf {output} -C $tmp .
         rm -rf $tmp
         """
@@ -142,15 +145,15 @@ rule blastdb_nucl:
 
 rule blastdb_transcript_nucl:
     input:
-        "gffread/{ann}.{ftype}.fa",
+        "gffread/{path}/{ftype}.fa",
     output:
-        storage(f"swift://{CONTAINER}/blast/nucl/{{ann}}.{{ftype}}.tar.gz"),
+        storage(f"swift://{CONTAINER}/{{path}}/blast/nucl/{{ftype}}.tar.gz"),
     wildcard_constraints:
         ftype="cds|mrna",
     shell:
         """
         tmp=$(mktemp -d)
-        makeblastdb -in {input} -dbtype nucl -out $tmp/{wildcards.ann}.{wildcards.ftype}
+        makeblastdb -in {input} -dbtype nucl -out $tmp/{wildcards.ftype}
         tar -czf {output} -C $tmp .
         rm -rf $tmp
         """
@@ -158,21 +161,35 @@ rule blastdb_transcript_nucl:
 
 rule blastdb_protein:
     input:
-        "gffread/{ann}.protein.fa",
+        "gffread/{path}/protein.fa",
     output:
-        storage(f"swift://{CONTAINER}/blast/prot/{{ann}}.protein.tar.gz"),
+        storage(f"swift://{CONTAINER}/{{path}}/blast/prot/protein.tar.gz"),
     shell:
         """
         tmp=$(mktemp -d)
-        makeblastdb -in {input} -dbtype prot -out $tmp/{wildcards.ann}.protein
+        makeblastdb -in {input} -dbtype prot -out $tmp/protein
         tar -czf {output} -C $tmp .
         rm -rf $tmp
         """
 
 
+rule diamond_protein:
+    input:
+        "gffread/{path}/protein.fa",
+    output:
+        storage(f"swift://{CONTAINER}/{{path}}/diamond/protein.dmnd"),
+    shell:
+        """
+        out={output}
+        diamond makedb --in {input} -d "${{out%.dmnd}}"
+        """
+
+
+# --- explicit per-genome downloads (carry source-specific normalization) ---
+
 rule download_betpe:
     output:
-        temp("normalized/Bepen_v1p2_genome.fa"),
+        temp("normalized/betpe/v1/genome.fa"),
     params:
         url="https://genomevolution.org/coge/api/v1/genomes/68624/sequence",
     shell:
@@ -181,7 +198,7 @@ rule download_betpe:
 
 rule download_arath:
     output:
-        temp("normalized/Arabidopsis_thaliana.TAIR10.dna.toplevel.fa"),
+        temp("normalized/arath/tair10/genome.fa"),
     params:
         url="https://ftp.ensemblgenomes.org/pub/plants/release-62/fasta/arabidopsis_thaliana/dna/Arabidopsis_thaliana.TAIR10.dna.toplevel.fa.gz",
     shell:
@@ -190,7 +207,7 @@ rule download_arath:
 
 rule download_pruav:
     output:
-        temp("normalized/Tieton02_genome.fasta"),
+        temp("normalized/pruav/v2/genome.fa"),
     params:
         url="https://www.rosaceae.org/rosaceae_downloads/Prunus_avium/Prunus_avium_Tieton.v2.0.a1/assembly/Prunus_avium_Tieton.chr.fasta.gz",
     shell:
@@ -199,12 +216,14 @@ rule download_pruav:
 
 # rule download_potra:
 #     output:
-#         temp("normalized/Potra02_genome.fasta"),
+#         temp("normalized/potra/v2/genome.fa"),
 #     params:
 #         url="ftp://plantgenie.org:980/Data/PlantGenIE/Populus_tremula/v2.2/fasta/Potra02_genome.fasta.gz",
 #     shell:
 #         "curl -fsSLk '{params.url}' | gunzip -c > {output}"
 
+
+# --- explicit per-annotation gff downloads ---
 
 rule download_gff_betpe:
     output:
@@ -246,14 +265,16 @@ rule download_gff_pruav:
         "curl -fsSL '{params.url}' | gunzip -c > {output}"
 
 
+# --- explicit per-annotation gffread (genome + gff -> cds/mrna/protein) ---
+
 rule gffread_betpe:
     input:
-        genome="normalized/Bepen_v1p2_genome.fa",
+        genome="normalized/betpe/v1/genome.fa",
         gff="gff/Bepen_v1p2_coge_sorted.gff3",
     output:
-        cds=temp("gffread/betpe.cds.fa"),
-        mrna=temp("gffread/betpe.mrna.fa"),
-        protein=temp("gffread/betpe.protein.fa"),
+        cds=temp("gffread/betpe/v1/v1.2/cds.fa"),
+        mrna=temp("gffread/betpe/v1/v1.2/mrna.fa"),
+        protein=temp("gffread/betpe/v1/v1.2/protein.fa"),
     shell:
         # betpe's gff yields gffread gap chars (.) that makeblastdb rejects;
         # rewrite them to X (protein) / N (nucleotide) on sequence lines
@@ -267,12 +288,12 @@ rule gffread_betpe:
 
 rule gffread_arath_tair10:
     input:
-        genome="normalized/Arabidopsis_thaliana.TAIR10.dna.toplevel.fa",
+        genome="normalized/arath/tair10/genome.fa",
         gff="gff/TAIR10_GFF3_genes_sorted.gff3",
     output:
-        cds=temp("gffread/arath_tair10.cds.fa"),
-        mrna=temp("gffread/arath_tair10.mrna.fa"),
-        protein=temp("gffread/arath_tair10.protein.fa"),
+        cds=temp("gffread/arath/tair10/tair10/cds.fa"),
+        mrna=temp("gffread/arath/tair10/tair10/mrna.fa"),
+        protein=temp("gffread/arath/tair10/tair10/protein.fa"),
     shell:
         "gffread {input.gff} -g {input.genome} "
         "-x {output.cds} -w {output.mrna} -y {output.protein}"
@@ -280,12 +301,12 @@ rule gffread_arath_tair10:
 
 rule gffread_arath_araport11:
     input:
-        genome="normalized/Arabidopsis_thaliana.TAIR10.dna.toplevel.fa",
+        genome="normalized/arath/tair10/genome.fa",
         gff="gff/TAIR10_araport11_sorted.gff3",
     output:
-        cds=temp("gffread/arath_araport11.cds.fa"),
-        mrna=temp("gffread/arath_araport11.mrna.fa"),
-        protein=temp("gffread/arath_araport11.protein.fa"),
+        cds=temp("gffread/arath/tair10/araport11/cds.fa"),
+        mrna=temp("gffread/arath/tair10/araport11/mrna.fa"),
+        protein=temp("gffread/arath/tair10/araport11/protein.fa"),
     shell:
         "gffread {input.gff} -g {input.genome} "
         "-x {output.cds} -w {output.mrna} -y {output.protein}"
@@ -293,12 +314,12 @@ rule gffread_arath_araport11:
 
 rule gffread_pruav:
     input:
-        genome="normalized/Tieton02_genome.fasta",
+        genome="normalized/pruav/v2/genome.fa",
         gff="gff/Tieton02_original_sorted.gff3",
     output:
-        cds=temp("gffread/pruav.cds.fa"),
-        mrna=temp("gffread/pruav.mrna.fa"),
-        protein=temp("gffread/pruav.protein.fa"),
+        cds=temp("gffread/pruav/v2/v2.0/cds.fa"),
+        mrna=temp("gffread/pruav/v2/v2.0/mrna.fa"),
+        protein=temp("gffread/pruav/v2/v2.0/protein.fa"),
     shell:
         "gffread {input.gff} -g {input.genome} "
         "-x {output.cds} -w {output.mrna} -y {output.protein}"
