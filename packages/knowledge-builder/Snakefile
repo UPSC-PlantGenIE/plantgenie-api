@@ -76,6 +76,26 @@ rule all:
             for t in GFF_FEATURE_TYPES
             for ext in ["", ".fai", ".gzi"]
         ],
+        [
+            storage(f"swift://{CONTAINER}/blast/nucl/betpe.cds.tar.gz"),
+            storage(f"swift://{CONTAINER}/blast/nucl/betpe.mrna.tar.gz"),
+            storage(f"swift://{CONTAINER}/blast/prot/betpe.protein.tar.gz"),
+        ],
+        [
+            storage(f"swift://{CONTAINER}/blast/nucl/arath_tair10.cds.tar.gz"),
+            storage(f"swift://{CONTAINER}/blast/nucl/arath_tair10.mrna.tar.gz"),
+            storage(f"swift://{CONTAINER}/blast/prot/arath_tair10.protein.tar.gz"),
+        ],
+        [
+            storage(f"swift://{CONTAINER}/blast/nucl/arath_araport11.cds.tar.gz"),
+            storage(f"swift://{CONTAINER}/blast/nucl/arath_araport11.mrna.tar.gz"),
+            storage(f"swift://{CONTAINER}/blast/prot/arath_araport11.protein.tar.gz"),
+        ],
+        [
+            storage(f"swift://{CONTAINER}/blast/nucl/pruav.cds.tar.gz"),
+            storage(f"swift://{CONTAINER}/blast/nucl/pruav.mrna.tar.gz"),
+            storage(f"swift://{CONTAINER}/blast/prot/pruav.protein.tar.gz"),
+        ],
 
 
 rule index_genome:
@@ -115,6 +135,36 @@ rule blastdb_nucl:
         """
         tmp=$(mktemp -d)
         makeblastdb -in {input} -dbtype nucl -out $tmp/{wildcards.stem}
+        tar -czf {output} -C $tmp .
+        rm -rf $tmp
+        """
+
+
+rule blastdb_transcript_nucl:
+    input:
+        "gffread/{ann}.{ftype}.fa",
+    output:
+        storage(f"swift://{CONTAINER}/blast/nucl/{{ann}}.{{ftype}}.tar.gz"),
+    wildcard_constraints:
+        ftype="cds|mrna",
+    shell:
+        """
+        tmp=$(mktemp -d)
+        makeblastdb -in {input} -dbtype nucl -out $tmp/{wildcards.ann}.{wildcards.ftype}
+        tar -czf {output} -C $tmp .
+        rm -rf $tmp
+        """
+
+
+rule blastdb_protein:
+    input:
+        "gffread/{ann}.protein.fa",
+    output:
+        storage(f"swift://{CONTAINER}/blast/prot/{{ann}}.protein.tar.gz"),
+    shell:
+        """
+        tmp=$(mktemp -d)
+        makeblastdb -in {input} -dbtype prot -out $tmp/{wildcards.ann}.protein
         tar -czf {output} -C $tmp .
         rm -rf $tmp
         """
