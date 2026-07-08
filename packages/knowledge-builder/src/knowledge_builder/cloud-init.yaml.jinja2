@@ -12,6 +12,7 @@ packages:
   - docker-ce
   - docker-ce-cli
   - containerd.io
+  - python3-openstackclient
 
 runcmd:
   - systemctl enable docker
@@ -29,14 +30,21 @@ runcmd:
       -e OS_APPLICATION_CREDENTIAL_SECRET={{ os_app_cred_secret }} \
       "$IMAGE" \
       --cores all \
-      --config run_id={{ run_id }} container={{ bucket }} || true
-    docker run --rm \
-      --entrypoint kb-upload \
-      -e OS_AUTH_TYPE={{ os_auth_type }} \
-      -e OS_AUTH_URL={{ os_auth_url }} \
-      -e OS_APPLICATION_CREDENTIAL_ID={{ os_app_cred_id }} \
-      -e OS_APPLICATION_CREDENTIAL_SECRET={{ os_app_cred_secret }} \
-      -v /var/log/cloud-init-output.log:/tmp/ci.log:ro \
-      "$IMAGE" \
-      {{ bucket }} builds/{{ run_id }}/cloud-init.log /tmp/ci.log
-  # - poweroff   # disabled for debugging; VM stays up so we can read logs
+      --config run_id={{ run_id }} container={{ bucket }}
+  - STATUS=$?
+
+  - export OS_AUTH_TYPE={{ os_auth_type }}
+  - export OS_AUTH_URL={{ os_auth_url }}
+  - export OS_APPLICATION_CREDENTIAL_ID={{ os_app_cred_id }}
+  - export OS_APPLICATION_CREDENTIAL_SECRET={{ os_app_cred_secret }}
+  - openstack object create {{ bucket }} /var/log/cloud-init-output.log --name builds/{{ run_id }}/cloud-init.log
+  - |
+    if [ "${STATUS}" -eq 0 ]
+        then
+            touch /tmp/SUCCESS
+            openstack object create {{ bucket }} /tmp/SUCCESS --name builds/{{ run_id }}/SUCCESS
+        else
+            touch /tmp/FAILED
+            openstack object create {{ bucket }} /tmp/FAILED --name builds/{{ run_id }}/FAILED
+    fi
+    # - poweroff   # disabled for debugging; VM stays up so we can read logs
