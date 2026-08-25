@@ -1,14 +1,14 @@
-import { useAppDispatch, useAppSelector } from '../../../store/hooks'
-import { next, setDescription, setName } from '../../../store/wizardSlice'
+import { useAppDispatch, useAppSelector } from "../../../store/hooks";
+import { next, setDescription, setName } from "../../../store/wizardSlice";
 
 export default function ListName() {
-  const dispatch = useAppDispatch()
-  const step = useAppSelector((s) => s.wizard.step)
-  const name = useAppSelector((s) => s.wizard.name)
-  const description = useAppSelector((s) => s.wizard.description)
+  const dispatch = useAppDispatch();
+  const step = useAppSelector((s) => s.wizard.step);
+  const name = useAppSelector((s) => s.wizard.name);
+  const description = useAppSelector((s) => s.wizard.description);
 
-  const active = step === 1
-  const canContinue = name.trim().length > 0
+  const active = step === 1;
+  const canContinue = name.trim().length > 0;
 
   return (
     <section
@@ -71,5 +71,5 @@ export default function ListName() {
         </div>
       </div>
     </section>
-  )
+  );
 }

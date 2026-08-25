@@ -1,97 +1,174 @@
-import { describe, it, expect } from 'vitest'
-import { screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { renderWithStore } from '../../test-utils'
-import Wizard from './Wizard'
+import { describe, it, expect } from "vitest";
+import { screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { renderWithStore } from "../../test-utils";
+import Wizard from "./Wizard";
+import { memoryLocation } from "wouter/memory-location";
+import { Router } from "wouter";
 
-describe('Wizard', () => {
-  it('disables Continue on step 1 when name is empty', () => {
-    renderWithStore(<Wizard />)
-    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled()
-  })
+describe("Wizard", () => {
+  it("disables Continue on step 1 when name is empty", () => {
+    renderWithStore(<Wizard />);
+    expect(screen.getByRole("button", { name: /continue/i })).toBeDisabled();
+  });
 
-  it('enables Continue after typing a name', async () => {
-    const user = userEvent.setup()
-    renderWithStore(<Wizard />)
-    await user.type(screen.getByLabelText(/list name/i), 'My list')
-    expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled()
-  })
+  it("enables Continue after typing a name", async () => {
+    const user = userEvent.setup();
+    renderWithStore(<Wizard />);
+    await user.type(screen.getByLabelText(/list name/i), "My list");
+    expect(screen.getByRole("button", { name: /continue/i })).toBeEnabled();
+  });
 
-  it('advances to step 2 when Continue is clicked on step 1', async () => {
-    const user = userEvent.setup()
+  it("advances to step 2 when Continue is clicked on step 1", async () => {
+    const user = userEvent.setup();
     renderWithStore(<Wizard />, {
       preloadedState: {
         wizard: {
           step: 1,
-          name: 'My list',
-          description: '',
+          name: "My list",
+          description: "",
           taxonId: null,
-          genomeId: null,
+          annotationId: null,
         },
       },
-    })
-    await user.click(screen.getByRole('button', { name: /continue/i }))
+    });
+    await user.click(screen.getByRole("button", { name: /continue/i }));
     expect(
-      screen.getByRole('heading', { name: /select a taxon/i }),
-    ).toBeInTheDocument()
-    expect(screen.getAllByRole('radio')).toHaveLength(7)
-  })
+      screen.getByRole("heading", { name: /select a taxon/i })
+    ).toBeInTheDocument();
+    expect(await screen.findAllByRole("radio")).toHaveLength(2);
+  });
 
-  it('Back on step 2 returns to step 1 with name preserved', async () => {
-    const user = userEvent.setup()
+  it("Back on step 2 returns to step 1 with name preserved", async () => {
+    const user = userEvent.setup();
     renderWithStore(<Wizard />, {
       preloadedState: {
         wizard: {
           step: 2,
-          name: 'My list',
-          description: '',
-          taxonId: 'pinus-sylvestris',
-          genomeId: null,
+          name: "My list",
+          description: "",
+          taxonId: "pinsy",
+          annotationId: null,
         },
       },
-    })
-    await user.click(screen.getByRole('button', { name: /back/i }))
+    });
+    await user.click(screen.getByRole("button", { name: /back/i }));
     expect(
-      screen.getByRole('heading', { name: /name your list/i }),
-    ).toBeInTheDocument()
-    expect(screen.getByLabelText(/list name/i)).toHaveValue('My list')
-  })
+      screen.getByRole("heading", { name: /name your list/i })
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/list name/i)).toHaveValue("My list");
+  });
 
-  it('step 3 shows the selected taxon and a Create list button', () => {
+  it("step 3 shows the selected taxon and a Create list button", async () => {
     renderWithStore(<Wizard />, {
       preloadedState: {
         wizard: {
           step: 3,
-          name: 'My list',
-          description: '',
-          taxonId: 'pinus-sylvestris',
-          genomeId: null,
+          name: "My list",
+          description: "",
+          taxonId: "pinsy",
+          annotationId: null,
         },
       },
-    })
+    });
     expect(
-      screen.getByText(/new gene list.*pinus sylvestris/i),
-    ).toBeInTheDocument()
+      await screen.findByText(/new gene list.*pinus sylvestris/i)
+    ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /create list/i }),
-    ).toBeInTheDocument()
-  })
+      screen.getByRole("button", { name: /create list/i })
+    ).toBeInTheDocument();
+  });
 
-  it('step 2 Continue is disabled until a taxon is picked', async () => {
-    const user = userEvent.setup()
+  it("clicking Create list on step 3 POSTs and navigates to the new list", async () => {
+    // TODO: import memoryLocation from 'wouter/memory-location' and Router from 'wouter'
+    // TODO: const { hook, history } = memoryLocation({ path: '/', record: true })
+    const { hook, history } = memoryLocation({ path: "/", record: true });
+
+    const user = userEvent.setup();
+
+    // TODO: render <Wizard /> wrapped in <Router hook={hook}> + the existing store,
+    // with preloadedState wizard at step 3, name='My list', taxonId='pinsy',
+    // annotationId='pinsy-Araport11'
+    renderWithStore(
+      <Router hook={hook}>
+        <Wizard />
+      </Router>,
+      {
+        preloadedState: {
+          wizard: {
+            step: 3,
+            name: "My list",
+            description: "",
+            taxonId: "pinsy",
+            annotationId: "pinsy-Araport11",
+          },
+        },
+      }
+    );
+
+    const createButton = await screen.findByRole("button", {
+      name: /create list/i,
+    });
+    await waitFor(() => expect(createButton).toBeEnabled());
+    await user.click(createButton);
+
+    await waitFor(() => {
+      expect(history?.at(-1)).toBe("/lists/fake-list-123");
+    });
+  });
+
+  it("resets wizard state after a successful create so a fresh visit starts at step 1", async () => {
+    const { hook } = memoryLocation({ path: "/lists/new" });
+    const user = userEvent.setup();
+    const { store } = renderWithStore(
+      <Router hook={hook}>
+        <Wizard />
+      </Router>,
+      {
+        preloadedState: {
+          wizard: {
+            step: 3,
+            name: "My list",
+            description: "old description",
+            taxonId: "pinsy",
+            annotationId: "pinsy-Araport11",
+          },
+        },
+      }
+    );
+
+    const createButton = await screen.findByRole("button", {
+      name: /create list/i,
+    });
+    await waitFor(() => expect(createButton).toBeEnabled());
+    await user.click(createButton);
+
+    await waitFor(() => {
+      expect(store.getState().wizard.step).toBe(1);
+    });
+    expect(store.getState().wizard.name).toBe("");
+    expect(store.getState().wizard.description).toBe("");
+    expect(store.getState().wizard.taxonId).toBeNull();
+    expect(store.getState().wizard.annotationId).toBeNull();
+  });
+
+  it("step 2 Continue is disabled until a taxon is picked", async () => {
+    const user = userEvent.setup();
     renderWithStore(<Wizard />, {
       preloadedState: {
         wizard: {
           step: 2,
-          name: 'My list',
-          description: '',
+          name: "My list",
+          description: "",
           taxonId: null,
-          genomeId: null,
+          annotationId: null,
         },
       },
-    })
-    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled()
-    await user.click(screen.getByRole('radio', { name: /pinus sylvestris/i }))
-    expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled()
-  })
-})
+    });
+    expect(screen.getByRole("button", { name: /continue/i })).toBeDisabled();
+    await user.click(
+      await screen.findByRole("radio", { name: /pinus sylvestris/i })
+    );
+    expect(screen.getByRole("button", { name: /continue/i })).toBeEnabled();
+  });
+});

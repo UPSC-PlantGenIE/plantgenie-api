@@ -11,7 +11,7 @@ from plantgenie_api.api.v1.annotation.models import (
 )
 from plantgenie_api.dependencies import DatabaseDep
 
-router = APIRouter(prefix="/annotations", tags=["v1", "annotations"])
+router = APIRouter(prefix="/annotations", tags=["annotations"])
 
 
 @router.post("")
@@ -48,13 +48,11 @@ async def get_annotations(
         query=query,
     )
     logger.debug("\n" + query_relation.__str__())
-    results: List[Tuple[int, str, str]] = query_relation.fetchall()
+    results: List[Tuple[str, str, str]] = query_relation.fetchall()
 
     return AnnotationsResponse(
         results=[
-            GeneAnnotation(
-                gene_id=r[0], gene_name=r[1], description=r[2]
-            )
+            GeneAnnotation(gene_id=r[0], gene_name=r[1], description=r[2])
             for r in results
         ]
     )
