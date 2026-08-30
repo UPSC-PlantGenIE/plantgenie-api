@@ -84,6 +84,34 @@ write_files:
           include /etc/nginx/stream.conf.d/*.conf;
       }
 
+      http {
+          include      mime.types;
+          default_type application/octet-stream;
+          sendfile     on;
+          keepalive_timeout 65;
+
+          server {
+              listen 80;
+              server_name _;
+
+              location /api/ {
+                  proxy_pass http://${application_internal_ip}:8000/;
+                  proxy_http_version 1.1;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+
+              location /rabbitmq/ {
+                  proxy_pass http://${rabbitmq_internal_ip}:15672/;
+                  proxy_http_version 1.1;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+              }
+          }
+      }
+
   - path: /etc/ssh/sshd_config
     content: |
       Port 22
@@ -120,6 +148,7 @@ runcmd:
   - ufw default deny incoming
   - ufw default allow outgoing
   - ufw allow 22/tcp comment 'SSH'
+  - ufw allow 80/tcp comment 'HTTP'
   - ufw allow 7687/tcp comment 'Neo4j Bolt'
   - ufw allow proto tcp from ${internal_subnet_cidr} to any port 2049 comment 'NFS'
   - ufw enable

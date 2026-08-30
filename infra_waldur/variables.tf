@@ -85,6 +85,11 @@ variable "queue_flavor_name" {
   type        = string
 }
 
+variable "application_flavor_name" {
+  description = "Flavor for the fastapi backend instance"
+  type        = string
+}
+
 variable "github_pat" {
   description = "GitHub personal access token for pulling images from GHCR"
   type        = string
@@ -98,6 +103,11 @@ variable "github_username" {
 
 variable "celery_worker_image_tag" {
   description = "Docker image tag for the celery worker (e.g. v0.4.5)"
+  type        = string
+}
+
+variable "fastapi_image_tag" {
+  description = "Docker image tag for the fastapi backend (e.g. v0.4.5)"
   type        = string
 }
 

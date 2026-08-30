@@ -24,6 +24,11 @@ data "waldur_openstack_network" "internal" {
   id = "d562b9c5dd2c4fa88f10fa1486ee97b8"
 }
 
+locals {
+  nginx_pinned_ip       = "192.168.42.11"
+  application_pinned_ip = "192.168.42.12"
+}
+
 output "internal_network" {
   value = {
     name    = data.waldur_openstack_network.internal.name

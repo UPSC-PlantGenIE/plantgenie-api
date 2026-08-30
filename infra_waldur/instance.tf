@@ -82,6 +82,12 @@ resource "waldur_openstack_instance" "test" {
   ports = [
     {
       subnet = data.waldur_openstack_subnet.internal.url
+      fixed_ips = [
+        {
+          ip_address = "192.168.42.10"
+          subnet_id  = data.waldur_openstack_subnet.internal.backend_id
+        },
+      ]
     },
   ]
 

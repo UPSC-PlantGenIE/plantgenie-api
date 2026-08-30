@@ -32,10 +32,10 @@ mounts:
   - [ "${nfs_internal_ip}:/srv/shared", /opt/app-data, "nfs", "defaults,nfsvers=4,nofail", "0", "0" ]
 
 write_files:
-  - path: /etc/systemd/system/celery-worker.service
+  - path: /etc/systemd/system/fastapi.service
     content: |
       [Unit]
-      Description=PlantGenIE celery worker
+      Description=PlantGenIE FastAPI backend
       Requires=docker.service
       After=docker.service
       RequiresMountsFor=/opt/app-data
@@ -43,13 +43,16 @@ write_files:
       [Service]
       Restart=always
       RestartSec=10
-      ExecStartPre=-/usr/bin/docker rm -f celery-worker
+      ExecStartPre=-/usr/bin/docker rm -f fastapi
       ExecStart=/usr/bin/docker run --rm \
-        --name celery-worker \
+        --name fastapi \
         -e CELERY_BROKER_URL=amqp://${rabbitmq_username}:${rabbitmq_password}@${rabbitmq_internal_ip}:5672// \
         -e CELERY_RESULT_BACKEND=redis://${redis_internal_ip}:6379/0 \
         -e DATA_PATH=/opt/app-data \
         -e DATABASE_NAME=plantgenie-backend.db \
+        -e NEO4J_URI=bolt://${neo4j_internal_ip}:7687 \
+        -e NEO4J_USER=${neo4j_username} \
+        -e NEO4J_PASSWORD=${neo4j_password} \
         -e OS_AUTH_TYPE=v3applicationcredential \
         -e OS_AUTH_URL=${os_auth_url} \
         -e OS_IDENTITY_API_VERSION=3 \
@@ -57,9 +60,10 @@ write_files:
         -e OS_INTERFACE=public \
         -e OS_APPLICATION_CREDENTIAL_ID=${os_application_credential_id} \
         -e OS_APPLICATION_CREDENTIAL_SECRET=${os_application_credential_secret} \
+        -p 8000:8000 \
         -v /opt/app-data:/opt/app-data \
-        ghcr.io/upsc-plantgenie/plantgenie-api/celery-worker:${celery_worker_image_tag}
-      ExecStop=/usr/bin/docker stop celery-worker
+        ghcr.io/upsc-plantgenie/plantgenie-api/fastapi-backend:${fastapi_image_tag}
+      ExecStop=/usr/bin/docker stop fastapi
 
       [Install]
       WantedBy=multi-user.target
@@ -108,5 +112,5 @@ runcmd:
     echo "${github_pat}" |\
     docker login ghcr.io -u "${github_username}" --password-stdin
   - systemctl daemon-reload
-  - systemctl enable celery-worker
-  - systemctl start celery-worker
+  - systemctl enable fastapi
+  - systemctl start fastapi
