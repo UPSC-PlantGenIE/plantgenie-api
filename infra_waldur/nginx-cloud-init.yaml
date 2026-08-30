@@ -7,6 +7,7 @@ packages:
   - fail2ban
   - nginx
   - libnginx-mod-stream
+  - nfs-kernel-server
 
 users:
   - name: ${server_username}
@@ -17,7 +18,51 @@ users:
     sudo:
       - ALL=(ALL) NOPASSWD:ALL
 
+mounts:
+  - [ "LABEL=shared", /srv/shared, "ext4", "defaults,nofail", "0", "2" ]
+
 write_files:
+  - path: /etc/exports
+    content: /srv/shared ${internal_subnet_cidr}(rw,sync,no_subtree_check)
+    append: true
+
+  - path: /usr/local/sbin/prepare-shared-volume
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+
+      if ! blkid /dev/sdb >/dev/null 2>&1; then
+          mkfs.ext4 -L shared /dev/sdb
+      fi
+
+      mkdir -p /srv/shared
+      mount -a
+      chown ${server_username}:${server_username} /srv/shared
+
+  - path: /etc/systemd/system/shared-volume.service
+    content: |
+      [Unit]
+      Description=Prepare and mount the shared data volume
+      BindsTo=dev-sdb.device
+      After=dev-sdb.device
+      Wants=nfs-server.service
+      Before=nfs-server.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/local/sbin/prepare-shared-volume
+
+      [Install]
+      WantedBy=dev-sdb.device
+
+  - path: /etc/systemd/system/nfs-server.service.d/shared-volume.conf
+    content: |
+      [Unit]
+      Requires=shared-volume.service
+      After=shared-volume.service
+
   - path: /etc/nginx/stream.conf.d/neo4j-bolt.conf
     content: |
       server {
@@ -76,7 +121,10 @@ runcmd:
   - ufw default allow outgoing
   - ufw allow 22/tcp comment 'SSH'
   - ufw allow 7687/tcp comment 'Neo4j Bolt'
+  - ufw allow proto tcp from ${internal_subnet_cidr} to any port 2049 comment 'NFS'
   - ufw enable
   - rm -f /etc/nginx/sites-enabled/default
   - systemctl enable nginx
   - systemctl start nginx
+  - systemctl daemon-reload
+  - systemctl enable shared-volume

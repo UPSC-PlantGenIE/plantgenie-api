@@ -27,9 +27,10 @@ resource "waldur_openstack_instance" "nginx" {
   ]
 
   user_data = trimspace(templatefile("${path.module}/nginx-cloud-init.yaml", {
-    server_username   = var.server_username
-    public_ssh_key    = trimspace(tls_private_key.ssh.public_key_openssh)
-    neo4j_internal_ip = waldur_openstack_instance.neo4j.internal_ips[0]
+    server_username      = var.server_username
+    public_ssh_key       = trimspace(tls_private_key.ssh.public_key_openssh)
+    neo4j_internal_ip    = waldur_openstack_instance.neo4j.internal_ips[0]
+    internal_subnet_cidr = data.waldur_openstack_subnet.internal.cidr
   }))
 }
 

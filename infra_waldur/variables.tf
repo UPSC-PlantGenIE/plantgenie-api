@@ -49,9 +49,78 @@ variable "neo4j_flavor_name" {
   type        = string
 }
 
+variable "shared_volume_size" {
+  description = "Size of the shared NFS volume on nginx in GB"
+  type        = number
+}
+
 variable "nginx_flavor_name" {
   description = "Flavor for the nginx instance"
   type        = string
+}
+
+variable "rabbitmq_flavor_name" {
+  description = "Flavor for the rabbitmq instance"
+  type        = string
+}
+
+variable "rabbitmq_username" {
+  description = "RabbitMQ default user"
+  type        = string
+}
+
+variable "rabbitmq_password" {
+  description = "RabbitMQ default user password"
+  type        = string
+  sensitive   = true
+}
+
+variable "redis_flavor_name" {
+  description = "Flavor for the redis instance"
+  type        = string
+}
+
+variable "queue_flavor_name" {
+  description = "Flavor for the celery queue instance"
+  type        = string
+}
+
+variable "github_pat" {
+  description = "GitHub personal access token for pulling images from GHCR"
+  type        = string
+  sensitive   = true
+}
+
+variable "github_username" {
+  description = "GitHub username associated with the PAT"
+  type        = string
+}
+
+variable "celery_worker_image_tag" {
+  description = "Docker image tag for the celery worker (e.g. v0.4.5)"
+  type        = string
+}
+
+variable "os_auth_url" {
+  description = "OpenStack identity service URL of the old cluster, still hosting Swift"
+  type        = string
+}
+
+variable "os_region_name" {
+  description = "OpenStack region name of the old cluster"
+  type        = string
+}
+
+variable "os_application_credential_id" {
+  description = "OpenStack application credential id for Swift access"
+  type        = string
+  sensitive   = true
+}
+
+variable "os_application_credential_secret" {
+  description = "OpenStack application credential secret for Swift access"
+  type        = string
+  sensitive   = true
 }
 
 variable "server_username" {
