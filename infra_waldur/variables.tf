@@ -29,13 +29,8 @@ variable "internal_subnet_name" {
   type        = string
 }
 
-variable "test_flavor_name" {
-  description = "Flavor for the test instance"
-  type        = string
-}
-
 variable "test_image_name" {
-  description = "OS image for the test instance"
+  description = "OS image for every instance"
   type        = string
 }
 
@@ -57,6 +52,16 @@ variable "shared_volume_size" {
 variable "nginx_flavor_name" {
   description = "Flavor for the nginx instance"
   type        = string
+}
+
+variable "ui_download_url" {
+  description = "URL to download the React frontend zip from GitHub releases"
+  type        = string
+}
+
+variable "domain_names" {
+  description = "Domain names for this deployment, used for nginx server_name"
+  type        = list(string)
 }
 
 variable "rabbitmq_flavor_name" {

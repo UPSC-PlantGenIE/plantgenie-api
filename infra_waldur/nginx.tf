@@ -5,6 +5,46 @@ data "waldur_openstack_flavor" "nginx" {
   }
 }
 
+resource "waldur_openstack_floating_ip" "nginx" {
+  tenant = data.waldur_openstack_tenant.plantgenie.url
+}
+
+resource "null_resource" "nginx_floating_ip" {
+  triggers = {
+    instance_uuid    = waldur_openstack_instance.nginx.id
+    floating_ip_uuid = waldur_openstack_floating_ip.nginx.id
+    floating_ip_url  = waldur_openstack_floating_ip.nginx.url
+    subnet_url       = data.waldur_openstack_subnet.internal.url
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+
+    environment = {
+      WALDUR_API_URL      = var.waldur_api_url
+      WALDUR_ACCESS_TOKEN = var.waldur_access_token
+      INSTANCE_UUID       = waldur_openstack_instance.nginx.id
+      FLOATING_IP_UUID    = waldur_openstack_floating_ip.nginx.id
+      FLOATING_IP_URL     = waldur_openstack_floating_ip.nginx.url
+      SUBNET_URL          = data.waldur_openstack_subnet.internal.url
+    }
+
+    command = "python3 ${path.module}/attach-floating-ip.py"
+  }
+
+  provisioner "local-exec" {
+    when        = destroy
+    interpreter = ["/bin/bash", "-c"]
+
+    environment = {
+      INSTANCE_UUID    = self.triggers.instance_uuid
+      FLOATING_IP_UUID = self.triggers.floating_ip_uuid
+    }
+
+    command = "python3 ${path.module}/detach-floating-ip.py"
+  }
+}
+
 resource "waldur_openstack_instance" "nginx" {
   name               = "plantgenie-nginx"
   project            = data.waldur_structure_project.plantgenie.url
@@ -26,12 +66,6 @@ resource "waldur_openstack_instance" "nginx" {
     },
   ]
 
-  floating_ips = [
-    {
-      subnet = data.waldur_openstack_subnet.internal.url
-    },
-  ]
-
   user_data = trimspace(templatefile("${path.module}/nginx-cloud-init.yaml", {
     server_username         = var.server_username
     public_ssh_key          = trimspace(tls_private_key.ssh.public_key_openssh)
@@ -39,6 +73,8 @@ resource "waldur_openstack_instance" "nginx" {
     rabbitmq_internal_ip    = waldur_openstack_instance.rabbitmq.internal_ips[0]
     application_internal_ip = local.application_pinned_ip
     internal_subnet_cidr    = data.waldur_openstack_subnet.internal.cidr
+    ui_download_url         = var.ui_download_url
+    domain_names            = join(" ", var.domain_names)
   }))
 }
 
@@ -90,5 +126,5 @@ locals {
 }
 
 output "nginx_floating_ip" {
-  value = [for fip in waldur_openstack_instance.nginx.floating_ips : fip.address]
+  value = waldur_openstack_floating_ip.nginx.address
 }

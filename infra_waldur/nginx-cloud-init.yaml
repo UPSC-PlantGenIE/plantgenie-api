@@ -8,6 +8,9 @@ packages:
   - nginx
   - libnginx-mod-stream
   - nfs-kernel-server
+  - unzip
+  - certbot
+  - python3-certbot-nginx
 
 users:
   - name: ${server_username}
@@ -92,7 +95,12 @@ write_files:
 
           server {
               listen 80;
-              server_name _;
+              server_name ${domain_names};
+
+              location /.well-known/acme-challenge/ {
+                  root /var/www/html;
+                  allow all;
+              }
 
               location /api/ {
                   proxy_pass http://${application_internal_ip}:8000/;
@@ -108,6 +116,12 @@ write_files:
                   proxy_http_version 1.1;
                   proxy_set_header Host $host;
                   proxy_set_header X-Real-IP $remote_addr;
+              }
+
+              location / {
+                  root  /var/www/html/dist;
+                  index index.html index.htm;
+                  try_files $uri $uri/ /index.html;
               }
           }
       }
@@ -149,10 +163,14 @@ runcmd:
   - ufw default allow outgoing
   - ufw allow 22/tcp comment 'SSH'
   - ufw allow 80/tcp comment 'HTTP'
+  - ufw allow 443/tcp comment 'HTTPS'
   - ufw allow 7687/tcp comment 'Neo4j Bolt'
   - ufw allow proto tcp from ${internal_subnet_cidr} to any port 2049 comment 'NFS'
   - ufw enable
   - rm -f /etc/nginx/sites-enabled/default
+  - wget -O /tmp/plantgenie-ui.zip ${ui_download_url}
+  - unzip /tmp/plantgenie-ui.zip -d /var/www/html
+  - rm /tmp/plantgenie-ui.zip
   - systemctl enable nginx
   - systemctl start nginx
   - systemctl daemon-reload

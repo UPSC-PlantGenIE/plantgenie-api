@@ -37,9 +37,8 @@ Worth doing: a scoped service token for automation, rather than a personal one.
 
 ## Verified working end to end
 
-`infra_waldur/` provisions an SSH key, the `plantgenie-test` scratch instance, a
-100 GB data volume, a `plantgenie-neo4j` instance running neo4j off that volume,
-and a `plantgenie-nginx` instance with a floating IP proxying bolt to it.
+`infra_waldur/` provisions the whole stack: an SSH key, six instances, two 100 GB
+data volumes, a standalone floating IP, and the `bolt` security group.
 
 Verified end to end on 2026-08-27: the volume detaches from one instance and
 attaches to another, neo4j starts against the mounted store, and
@@ -110,13 +109,46 @@ IP quota 50.
 - **The guest sees volumes as `/dev/sdX`, not `/dev/vdX`.** The Waldur API
   reports the same. The old `infra/` modules all assume `/dev/vdb`.
 - **Destroying an instance destroys its attached data volume.** Replacing nginx
-  on 2026-08-30 deleted `plantgenie-shared` and everything on it. Terraform had
-  *not* planned that: the 7 destroys were 3 instances plus 4 `null_resource`s,
-  and `waldur_openstack_volume.shared` was never in the plan. It went out of
-  band, and the next `attach-volume.py` run failed with a 404 on the volume GET.
-  **The neo4j data volume is exposed to exactly the same thing**, and it will
-  hold the real graph load. Detach before replacing an instance, or find
-  whatever the Waldur equivalent of `delete_on_termination` is.
+  on 2026-08-30 deleted `plantgenie-shared` and everything on it, and again on
+  2026-08-31 before the fix below. Terraform does *not* plan it:
+  `waldur_openstack_volume.shared` never appears in the destroy list, it goes
+  out of band, and the next `attach-volume.py` run fails with a 404 on the
+  volume GET.
+  **Fixed for the shared volume**, proven on the TLS rebuild 2026-08-31:
+  `null_resource.shared_attachment` has a `when = destroy` provisioner running
+  `detach-volume.py`. Because the null_resource depends on the instance,
+  Terraform destroys it *first*, so the volume is detached before the instance
+  goes away and survives.
+  **`neo4j_data_attachment` still has no destroy provisioner** and holds the
+  real graph load. Same three-line fix when you get to it.
+- **Destroy provisioners can only read `self`**, so credentials cannot come from
+  `var.*`. Passing them via new `triggers` keys does not work either: a destroy
+  provisioner evaluates `self` against the *old* state entry, which predates the
+  keys, and the apply dies with "Missing map element". So `detach-volume.py` and
+  `detach-floating-ip.py` take only uuids from `self.triggers` and read
+  `WALDUR_API_URL` / `WALDUR_ACCESS_TOKEN` from the inherited environment.
+  **Run terraform with `set -a; source ../.env.shared; set +a` first**, or the
+  destroy provisioner fails on a `KeyError` — loudly, before anything is torn
+  down. Adding a *new* trigger key that a destroy provisioner reads always costs
+  one throwaway apply first; changing an existing key's value is free.
+- **The floating IP cannot be assigned through the instance resource.**
+  `waldur_openstack_floating_ip` exists as a resource (only `tenant` is
+  required; `address` is computed) and the instance's `floating_ips[].ip_address`
+  is documented as "existing floating IP address ... to be assigned", but
+  setting it on an existing instance sends the computed `url` *and* the
+  `ip_address` and the API rejects it: HTTP 400 `Please specify floating IP URL
+  or IP address, not both`. `terraform import` on the FIP is also unavailable —
+  the provider returns an empty `timeouts` object and fails the framework type
+  check ("Expected ... Object[create,delete,update], Received ... Object[]").
+  So the association is a `null_resource` plus `attach-floating-ip.py` /
+  `detach-floating-ip.py`, posting `{"floating_ips": [{"subnet": ..., "url":
+  ...}]}` to `POST /api/openstack-instances/{uuid}/update_floating_ips/`, and
+  `[]` to release. Note the endpoint's `OPTIONS` metadata marks both `url` and
+  `address` read-only, which is wrong — same unreliable metadata as the ports
+  `security_groups` case.
+  Removing `floating_ips` from the instance config causes **no diff**, since it
+  is `optional: true, computed: true`. That is what makes this safe to adopt
+  without replacing the instance.
 - **`fixed_ips` works at create and silently no-ops on update.** Pinning an
   instance's internal IP works if the port is created with it. Changing a pin on
   an existing instance plans as an in-place update, and the apply fails with
@@ -137,6 +169,19 @@ IP quota 50.
 ## Watch list
 
 Things that may bite later. Fix when they surface, not before.
+
+- **NFS exports need a pinned `fsid`.** Replacing nginx gives the export new
+  file handles, so every existing client mount goes `ESTALE` — seen on
+  application and queue after the TLS rebuild, with DuckDB failing on
+  `/opt/app-data/plantgenie-backend.db`. `mount -a` does not fix it; the mount
+  has to be dropped first (`systemctl stop <unit>`, `umount -f -l
+  /opt/app-data`, `mount -a`, start the unit — the stop matters because docker
+  bind mounts are `rprivate` and a container started over a broken mount keeps
+  the broken view for its whole life).
+  **Not yet applied, deliberately:** add `fsid=1` to the `/etc/exports` line in
+  `nginx-cloud-init.yaml` so handles survive a server rebuild. Do it with the
+  next prod nginx change, and carry it into dev. The first replacement after
+  adding it still goes stale once; every one after that is clean.
 
 - `neo4j-cloud-init.yaml` uses `$RELEASE` for the docker apt source instead of
   the old hardcoded `noble`. It worked on Ubuntu 26.04, but it is doing a
@@ -189,8 +234,9 @@ deployment config, not source history.
 
 ## Current state
 
-Seven instances are running as of 2026-08-30, `plantgenie-application` having
-been added. They can be stopped and started with
+Six instances are running as of 2026-08-31 — neo4j, nginx, rabbitmq, redis,
+queue and application. `plantgenie-test` was removed. They can be stopped and
+started with
 `POST /api/openstack-instances/{uuid}/{stop,start}/`; the provider has no
 power-state attribute, so this is outside Terraform and causes no plan drift.
 
@@ -199,9 +245,19 @@ and their units carry `RequiresMountsFor=/opt/app-data`, so a late nginx means
 the service retries every 10s instead of coming up wrong. Verified by reboot on
 both application and queue.
 
-nginx's floating IP is now `130.236.225.56`; the bolt endpoint moved with it.
-Internal addresses are pinned for nginx (`192.168.42.11`) and application
-(`192.168.42.12`) in a `locals` block in `main.tf`. Everything else is DHCP.
+nginx's floating IP is `130.236.227.49` and no longer moves: it is a standalone
+`waldur_openstack_floating_ip.nginx` associated by `null_resource` rather than
+allocated by the instance, so nginx rebuilds keep the same address. The bolt
+endpoint is stable with it. Internal addresses are pinned for nginx
+(`192.168.42.11`) and application (`192.168.42.12`) in a `locals` block in
+`main.tf`. Everything else is DHCP.
+
+`www.plantgenie.se` points at `130.236.227.49` as of 2026-08-31 and serves over
+HTTPS, with a Let's Encrypt cert valid to 2026-11-29 and HTTP 301'ing to it.
+`dev.plantgenie.se` still points at the old SSC deployment. The old server's
+certbot renewal for `www` will start failing there, since the challenge now
+lands here — `sudo certbot delete --cert-name www.plantgenie.se` on the old
+machine once you are sure you are not going back.
 
 Stopping does not appear to reduce what the project is charged: the instances'
 marketplace `state` stays `OK` while `runtime_state` is `SHUTOFF`, and no
@@ -277,19 +333,26 @@ already-working queue.
 - [x] nginx `http` block proxying `/api/` to the app and `/rabbitmq/` to the
       management UI. `server_name _` on port 80, no TLS yet. Both return 200
       through `http://130.236.225.56/`.
-- [ ] `location /` serving the UI bundle. Not started — needs a decision on
-      where the bundle comes from (GitHub release asset, which is a private repo
-      so the `wget` needs a token, or rsync'd up by hand).
-- [ ] TLS. Needs certbot, `python3-certbot-nginx`, the acme-challenge location,
-      ufw 443 and a real `server_name`, with DNS already pointing at the
-      floating IP. **Settle the floating IP first** — it changes every time
-      nginx's `user_data` changes, which would break DNS and the cert on every
-      later nginx edit.
+- [x] `location /` serving the UI bundle, ported from the old module: `unzip` in
+      packages, `root /var/www/html/dist` with `try_files`, and a plain `wget` of
+      the release zip in `runcmd`. `ui_download_url` in tfvars points at
+      `plantgenie-ui` v0.3.4 — the same bundle the old SSC deployment runs. Note
+      `plantgenie-api` is *public*, so no token is needed; the earlier note here
+      claiming otherwise was wrong.
+- [x] TLS, done 2026-08-31. `certbot` + `python3-certbot-nginx` in packages, the
+      acme-challenge location, ufw 443, and `server_name ${domain_names}` from a
+      `domain_names` list in tfvars. certbot itself is run by hand once after
+      DNS lands: `sudo certbot --nginx -d www.plantgenie.se`. It rewrites
+      `/etc/nginx/nginx.conf` in place and `/etc/letsencrypt` is on the boot
+      volume, so both are lost on an nginx replacement and the command is
+      re-run — same as the old setup. Deliberate: keeping certs off the shared
+      volume maps to how SSC did it.
 - [ ] Nothing published has the v2 API. `fastapi_image_tag` is `v0.4.5`, and no
       tag contains the commit that added `src/plantgenie_api/api/v2` — it came
-      in with the PR #6 merge. `/api/v1/available-species` works; `/api/v2/taxa`
-      404s until a new image is built. Bumping the tag is now a one-VM change,
-      since the application's pinned IP keeps nginx out of the plan.
+      in with the PR #6 merge. `/api/v2/taxa` 404s until a new image is built.
+      Not urgent: the deployment currently runs the old UI, which does not use
+      v2, and matches what SSC serves. Bumping the tag is a one-VM change, since
+      the application's pinned IP keeps nginx out of the plan.
 
 **E. Make the NFS mount survive boot ordering** — done 2026-08-30.
 
@@ -328,19 +391,31 @@ is a clean rebuild, but it shows up as destroy/create in the plan.
 
 ## Repo state
 
-`infra_waldur/` is fully committed: `49305a9` covers neo4j and nginx, `95c2c82`
-adds rabbitmq, redis, the shared volume and the celery queue, and a third commit
-adds the application, the pinned IPs, the nginx `http` block and the celery
-systemd unit. Nothing in `infra_waldur/` is outstanding. `IMPLEMENTATION.md`
-stays untracked — unrelated semantic-search notes, don't commit it.
+`infra_waldur/` was fully committed through `ab3f4c0`: `49305a9` covers neo4j
+and nginx, `95c2c82` adds rabbitmq, redis, the shared volume and the celery
+queue, and `ab3f4c0` adds the application, the pinned IPs, the nginx `http`
+block and the celery systemd unit.
+
+**Uncommitted as of 2026-08-31** — the test-instance removal, the UI `location /`
+and its `ui_download_url`, TLS and `domain_names`, the standalone floating IP
+with `attach-floating-ip.py` / `detach-floating-ip.py`, `detach-volume.py` and
+the `shared_attachment` destroy provisioner, and this HANDOFF update.
+
+`IMPLEMENTATION.md` stays untracked — unrelated semantic-search notes, don't
+commit it.
 `prod.tfvars` and the state files are gitignored and local; HCP Terraform
 state-only with local execution is the fallback if more than one person needs to
 apply.
 
-`plantgenie-test` is still running and still costing something. Nothing
-references it. Removing it means deleting lines 73–131 of `instance.tf` only —
-that file also holds the shared data sources and the `tls_private_key.ssh` /
-`waldur_core_ssh_public_key.ssh` that every other instance uses.
+`plantgenie-test` was removed on 2026-08-31, along with
+`data.waldur_openstack_flavor.test` and `var.test_flavor_name`. `instance.tf`
+now holds only the shared data sources and the `tls_private_key.ssh` /
+`waldur_core_ssh_public_key.ssh` that every instance uses. Two leftovers keep
+the old name and were left alone on purpose: `data.waldur_openstack_image.test`
+(+ `var.test_image_name`), used by all six instances, and the
+`waldur_core_ssh_public_key.ssh` resource whose Waldur-side name is
+`plantgenie-test` — renaming it would replace the key and cascade into every
+instance. `plantgenie-test.pem` on disk is that shared key, not a test artifact.
 
 Already committed as `160010b`: the frontend release workflow ported from
 `plantgenie-ui` (adapted for `ui/`, no Rust/wasm step, Yarn 4 `--immutable`),
@@ -423,5 +498,17 @@ are Django's `DEBUG=False` HTML page (145 bytes, `server: gunicorn`), so there
 is no body on our side at all. A traceback from theirs would say whether it is
 the serializer or the backend executor.
 
-`vars.VITE_API_BASE_URL` needs setting on this repo's `production` GitHub
-environment before a tagged release builds a usable bundle.
+## Frontend build config
+
+The `production` GitHub environment was created on this repo on 2026-08-31 and
+`vars.VITE_API_BASE_URL` set to `/api/`. Relative on purpose: `baseUrl` goes
+straight into `fetchBaseQuery` in `ui/src/api/plantgenieApi.ts` and every
+endpoint is a relative path, so the browser resolves against the page origin.
+That survives the http→https switch and any floating IP change, where the old
+deployment's absolute `https://www.plantgenie.se/api` would have broken as mixed
+content.
+
+`vars.VITE_APP_TITLE` is read by `build-frontend-release.yaml` and is still
+unset; the old repo has it as `PlantGenIE`. The workflow has never run — there
+are no releases on this repo, and the deployment serves the `plantgenie-ui`
+v0.3.4 zip instead.
