@@ -71,7 +71,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, '-dev') }}
           body: "New release of plantgenie-ui"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
