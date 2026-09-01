@@ -1,0 +1,125 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+
+apt:
+  sources:
+    docker.list:
+      source: deb https://download.docker.com/linux/ubuntu $RELEASE stable
+      keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+      arches: [ amd64 ]
+
+packages:
+  - ufw
+  - fail2ban
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+
+# The data volume is created and formatted once, by hand, and then moves
+# between instances by detach/attach. Uncomment the three blocks below only
+# when bringing up an instance with a brand new, unformatted volume.
+#
+# device_aliases:
+#   app_data: /dev/sdb
+#
+# disk_setup:
+#   app_data:
+#     layout: true
+#     overwrite: false
+#     table_type: gpt
+#
+# fs_setup:
+#   - device: app_data
+#     label: neo4j_data
+#     filesystem: ext4
+#     overwrite: false
+
+users:
+  - name: ${server_username}
+    lock_passwd: true
+    shell: /bin/bash
+    groups:
+      - docker
+    ssh-authorized-keys:
+      - ${public_ssh_key}
+    sudo:
+      - ALL=(ALL) NOPASSWD:ALL
+
+mounts:
+  - [ "LABEL=neo4j_data", /opt/neo4j, "ext4", "defaults,nofail", "0", "2" ]
+
+write_files:
+  - path: /etc/systemd/system/neo4j.service
+    content: |
+      [Unit]
+      Description=Neo4j
+      Requires=docker.service
+      After=docker.service
+      RequiresMountsFor=/opt/neo4j
+
+      [Service]
+      Restart=always
+      RestartSec=10
+      ExecStartPre=/bin/mkdir -p /opt/neo4j/logs /opt/neo4j/data /opt/neo4j/import
+      ExecStartPre=/bin/chown -R ${server_username}:${server_username} /opt/neo4j
+      ExecStartPre=-/usr/bin/docker rm -f neo4j
+      ExecStart=/usr/bin/docker run --rm \
+        --name neo4j \
+        -p 7474:7474 \
+        -p 7687:7687 \
+        -v /opt/neo4j/logs:/logs \
+        -v /opt/neo4j/data:/data \
+        -v /opt/neo4j/import:/import \
+        -e NEO4J_PLUGINS='["graph-data-science"]' \
+        -e NEO4J_AUTH=${neo4j_username}/${neo4j_password} \
+        neo4j:2026.01.4-community-trixie
+      ExecStop=/usr/bin/docker stop neo4j
+
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /etc/ssh/sshd_config
+    content: |
+      Port 22
+      Protocol 2
+      HostKey /etc/ssh/ssh_host_rsa_key
+      HostKey /etc/ssh/ssh_host_ecdsa_key
+      HostKey /etc/ssh/ssh_host_ed25519_key
+      SyslogFacility AUTH
+      LogLevel INFO
+      LoginGraceTime 120
+      PermitRootLogin no
+      PermitEmptyPasswords no
+      PermitUserEnvironment yes
+      PasswordAuthentication no
+      StrictModes yes
+      DebianBanner no
+      PubkeyAuthentication yes
+      IgnoreRhosts yes
+      HostbasedAuthentication no
+      ChallengeResponseAuthentication no
+      X11Forwarding no
+      PrintMotd no
+      PrintLastLog yes
+      TCPKeepAlive yes
+      AcceptEnv LANG LC_*
+      Subsystem sftp /usr/lib/openssh/sftp-server
+      UsePAM yes
+      MaxAuthTries 3
+      MaxStartups 2:30:10
+      AllowAgentForwarding no
+      AllowUsers ${server_username}
+
+runcmd:
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp comment 'SSH'
+  - ufw allow 7474/tcp comment 'Neo4j Browser'
+  - ufw allow 7687/tcp comment 'Neo4j Bolt'
+  - ufw enable
+  - systemctl enable docker
+  - systemctl start docker
+  - systemctl daemon-reload
+  - systemctl enable neo4j
+  - systemctl start neo4j

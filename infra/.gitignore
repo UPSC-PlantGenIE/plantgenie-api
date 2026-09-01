@@ -7,3 +7,9 @@
 
 crash.log
 *.tfvars
+
+# State contains the ssh private key, the Waldur token and the neo4j password
+terraform.tfstate
+terraform.tfstate.*
+
+*.pem
