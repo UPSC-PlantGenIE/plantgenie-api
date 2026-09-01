@@ -5,9 +5,14 @@ merge of `feature/react-ui-api-integration`, PR #6).
 
 ## Goal
 
-Migrate the deployed infrastructure off the current OpenStack cluster onto the
-new one, which is fronted by Waldur. Today's `infra/` is Terraform against the
-OpenStack provider directly.
+Migrate the deployed infrastructure off the old OpenStack cluster onto the new
+one, which is fronted by Waldur.
+
+`infra/` is the Waldur rewrite and is what deploys today. The pre-migration
+`infra/`, which targeted the OpenStack provider directly with per-service
+modules, was deleted once prod was live on the new cluster — read it in git
+history at `e9cb1f4` or earlier if you need it. References below to
+`the old infra/modules/...` mean that deleted tree.
 
 Two Waldur projects are available, one per environment:
 
@@ -19,25 +24,25 @@ Both run the same FastAPI backend from this repo.
 
 ## Decided: Terraform with the Waldur provider
 
-`waldur/waldur`, pinned to `8.1.3-rc.2` in `infra_waldur/main.tf`. Note this is
+`waldur/waldur`, pinned to `8.1.3-rc.2` in `infra/main.tf`. Note this is
 a prerelease — Terraform will not select it automatically, so the pin is load
 bearing. Without it `init` silently picks `0.0.10`, whose schema is far behind
 the published docs.
 
 There is no direct OpenStack API access on this cluster: no Horizon, no openrc.
-Everything goes through Waldur's REST API, so the existing `infra/` cannot be
-re-pointed — it has to be rewritten against `waldur_openstack_*` resources.
-`infra_waldur/` is that rewrite, starting from a single test instance.
+Everything goes through Waldur's REST API, so the old OpenStack terraform could
+not be re-pointed — it had to be rewritten against `waldur_openstack_*`
+resources. `infra/` is that rewrite.
 
 Auth is `WALDUR_API_URL` + `WALDUR_ACCESS_TOKEN` (both in `.env.shared`, and in
-`infra_waldur/prod.tfvars`, which is gitignored). Tokens expire; a stale one
+`infra/prod.tfvars`, which is gitignored). Tokens expire; a stale one
 returns `{"detail": "Token has expired."}`.
 
 Worth doing: a scoped service token for automation, rather than a personal one.
 
 ## Verified working end to end
 
-`infra_waldur/` provisions the whole stack: an SSH key, six instances, two 100 GB
+`infra/` provisions the whole stack: an SSH key, six instances, two 100 GB
 data volumes, a standalone floating IP, and the `bolt` security group.
 
 Verified end to end on 2026-08-27: the volume detaches from one instance and
@@ -66,7 +71,7 @@ IP quota 50.
 - **The workaround** is `POST /api/openstack-ports/{uuid}/update_security_groups/`
   with a list of URL *strings*. Note the inconsistency: that endpoint wants
   strings, while `PATCH` on the port wants dicts (and 500s anyway).
-  `infra_waldur/attach-security-groups.py` does this, driven by a
+  `infra/attach-security-groups.py` does this, driven by a
   `null_resource` provisioner after the instance is created.
 - **Always include `default` in the group set.** `ssh` and `web` are
   ingress-only; `default` carries the allow-all egress rules. Without it the
@@ -92,7 +97,7 @@ IP quota 50.
 - **`waldur_openstack_volume_attachment` 404s on create.** The API action works
   fine — `POST /api/openstack-volumes/{uuid}/attach/` with
   `{"instance": "<instance url>"}` returns 202 — so this is the provider, not
-  the deployment. `infra_waldur/attach-volume.py` drives it from a
+  the deployment. `infra/attach-volume.py` drives it from a
   `null_resource`, detaching from the current instance first if needed and
   waiting on `runtime_state`.
 - **`user_data` needs `trimspace()` too**, same as the ssh key: Waldur strips
@@ -283,7 +288,7 @@ Ordered. Each group is a separate apply.
 **A. Queue backing services** — nothing depends on them, so they go first.
 
 - [x] `rabbitmq.tf` + `rabbitmq-cloud-init.yaml`, ported from
-      `infra/modules/rabbitmq`. Docker, `rabbitmq:4.2.5-management-alpine`, no
+      `the old infra/modules/rabbitmq`. Docker, `rabbitmq:4.2.5-management-alpine`, no
       floating IP, security groups `default` + `ssh`.
 - [x] `redis.tf` + `redis-cloud-init.yaml`, same shape, redis on 6379.
 - [x] Verified 2026-08-28 with `nc -z` from the nginx VM: 5672 and 6379 both
@@ -302,7 +307,7 @@ Ordered. Each group is a separate apply.
 
 **C. Celery**
 
-- [x] `queue.tf` + cloud-init from `infra/modules/queue`: NFS mount at
+- [x] `queue.tf` + cloud-init from `the old infra/modules/queue`: NFS mount at
       `/opt/app-data`, `docker login ghcr.io`, celery-worker image.
 - [x] Verified 2026-08-28: `add.delay(2, 3).get()` returns 5 from inside the
       container, so the task reaches rabbitmq and the result comes back out of
@@ -323,7 +328,7 @@ Ordered. Each group is a separate apply.
 queue, so it is the place to prove the pattern in E before applying it to the
 already-working queue.
 
-- [x] `application.tf` from `infra/modules/application`, plus `NEO4J_URI`,
+- [x] `application.tf` from `the old infra/modules/application`, plus `NEO4J_URI`,
       `NEO4J_USER`, `NEO4J_PASSWORD`. Otherwise the same env block as
       `queue-cloud-init.yaml`, plus `-p 8000:8000`. nginx reaches it over the
       internal network, so `default` + `ssh` are the only groups it needs.
@@ -391,7 +396,7 @@ is a clean rebuild, but it shows up as destroy/create in the plan.
 
 ## Repo state
 
-`infra_waldur/` was fully committed through `ab3f4c0`: `49305a9` covers neo4j
+`infra/` was fully committed through `ab3f4c0`: `49305a9` covers neo4j
 and nginx, `95c2c82` adds rabbitmq, redis, the shared volume and the celery
 queue, and `ab3f4c0` adds the application, the pinned IPs, the nginx `http`
 block and the celery systemd unit.
