@@ -27,10 +27,13 @@ workflow change considered earlier is dropped.
 - [x] `build-frontend-release.yaml` marks `-dev` tags as prereleases
       (`prerelease: ${{ contains(github.ref_name, '-dev') }}`), so they do not
       take over "Latest". Untested until the first tag is cut.
-- [ ] Cut the first `v*.*.*-dev` tag and set `fastapi_image_tag`,
-      `celery_worker_image_tag` and `ui_download_url` in `dev.tfvars` to match.
-      The zip URL is deterministic:
+- [x] First dev tag `v0.4.6-dev` cut 2026-08-31. Both workflows succeeded, the
+      release is correctly marked Pre-release, and `dev.tfvars` now points at
+      `v0.4.6-dev` for both images and the UI zip. The zip URL is deterministic:
       `https://github.com/UPSC-PlantGenIE/plantgenie-api/releases/download/<tag>/plantgenie-ui-<tag>.zip`
+      Note this bundle is the **new React UI** from `ui/`, built with
+      `VITE_API_BASE_URL=/api/` — unlike prod, which serves `plantgenie-ui`
+      v0.3.4.
 - [ ] `build-docker-image.yaml` builds `plantgenie-api:latest`, which nothing
       deploys — the tfvars pin `fastapi-backend` and `celery-worker`. Dead
       workflow, decide whether to delete it.

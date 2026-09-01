@@ -59,7 +59,7 @@ resource "tls_private_key" "ssh" {
 }
 
 resource "waldur_core_ssh_public_key" "ssh" {
-  name       = "plantgenie-test"
+  name       = var.ssh_key_name
   public_key = trimspace(tls_private_key.ssh.public_key_openssh)
 }
 

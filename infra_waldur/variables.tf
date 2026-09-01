@@ -24,6 +24,11 @@ variable "project_name" {
   type        = string
 }
 
+variable "ssh_key_name" {
+  description = "Name of the Waldur SSH key; unique per user, so it differs per environment"
+  type        = string
+}
+
 variable "internal_subnet_name" {
   description = "Name of the tenant's internal subnet"
   type        = string
