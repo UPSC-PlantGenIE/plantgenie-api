@@ -1,42 +1,43 @@
 from datetime import date
-from typing import Annotated, List, Optional
+from typing import Annotated
 
+from neo4j.time import Date as Neo4jDate
 from pydantic import BeforeValidator
 
 from plantgenie_api.models import PlantGenieModel
 
 
-def _to_native(v):
-    return v.to_native() if hasattr(v, "to_native") else v
+def to_native(v: object) -> object:
+    return v.to_native() if isinstance(v, Neo4jDate) else v
 
 
-NativeDate = Annotated[date, BeforeValidator(_to_native)]
+NativeDate = Annotated[date, BeforeValidator(to_native)]
 
 
 class Taxon(PlantGenieModel):
     id: int
     scientific_name: str
     abbreviation: str
-    alias: Optional[str] = None
-    common_name: Optional[str] = None
+    alias: str | None = None
+    common_name: str | None = None
 
 
 class TaxaResponse(PlantGenieModel):
-    taxa: List[Taxon]
+    taxa: list[Taxon]
 
 
 class Assembly(PlantGenieModel):
     id: str
     version: str
-    version_name: Optional[str] = None
+    version_name: str | None = None
     published: bool
-    publication_date: Optional[NativeDate] = None
-    doi: Optional[str] = None
+    publication_date: NativeDate | None = None
+    doi: str | None = None
     taxon_abbreviation: str
 
 
 class AssembliesResponse(PlantGenieModel):
-    assemblies: List[Assembly]
+    assemblies: list[Assembly]
 
 
 class Annotation(PlantGenieModel):
@@ -53,4 +54,4 @@ class AnnotationDetail(Annotation):
 
 
 class AnnotationsResponse(PlantGenieModel):
-    annotations: List[Annotation]
+    annotations: list[Annotation]
