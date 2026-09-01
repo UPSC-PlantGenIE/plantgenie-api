@@ -34,9 +34,9 @@ workflow change considered earlier is dropped.
       Note this bundle is the **new React UI** from `ui/`, built with
       `VITE_API_BASE_URL=/api/` — unlike prod, which serves `plantgenie-ui`
       v0.3.4.
-- [ ] `build-docker-image.yaml` builds `plantgenie-api:latest`, which nothing
-      deploys — the tfvars pin `fastapi-backend` and `celery-worker`. Dead
-      workflow, decide whether to delete it.
+- [x] `build-docker-image.yaml` built `plantgenie-api:latest`, which nothing
+      deployed — the tfvars pin `fastapi-backend` and `celery-worker`. Deleted
+      in `96904db` alongside the Waldur terraform rewrite.
 
 ## First `dev` apply
 
@@ -81,3 +81,31 @@ workflow change considered earlier is dropped.
       talking points are at the bottom of `HANDOFF.md`, still unsent.
 - [ ] Swift still points at the old cluster (`OS_*` in `.env.shared`). A
       self-hosted MinIO on the new cluster is the likely replacement.
+
+## Dependency hygiene
+
+Direct deps were bumped via `uv lock --upgrade` on 2026-09-01. `redis` (6.4.0)
+and `testcontainers` (4.13.3) are held below latest by something in the
+resolution; not chased down.
+
+- [ ] **Consolidate on one HTTP client.** Three are in the tree: `aiohttp`
+      (`plantgenie_api/client.py`), `requests` (blast + enrichment routes,
+      `shared/services/openstack.py`), and `httpx` (unit tests, arriving via
+      `fastapi[standard]`). httpx covers sync and async, so it is the obvious
+      survivor and `aiohttp` would go.
+- [ ] **Removal candidates — declared but never imported.** Verify against the
+      Swift/MinIO decision above before pulling the Swift ones, since that
+      rewrite may remove them anyway.
+      - `pyarrow` (root) — zero references in the repo
+      - `python-keystoneclient` (root, task-queue) — never imported; Keystone
+        auth is done by hand with `requests` in `shared/services/openstack.py`
+      - `python-swiftclient` (task-queue) — Swift is only touched in
+        `plantgenie_api` and `shared`
+      - `networkx` + `types-networkx` (task-queue) — only `go-enrich` uses it
+      - `docker` + `types-docker` (task-queue dev) — testcontainers pulls docker
+        itself
+      - `redis` (root) — direct import only in `test_container_setup.py`;
+        `celery[redis]` already provides it
+- [ ] **Imported but not declared**, currently relying on transitives:
+      `requests` (root and `shared`), `httpx` (root dev), `duckdb`
+      (task-queue), `pydantic` (`shared`).
