@@ -28,6 +28,7 @@ class TaxaResponse(PlantGenieModel):
 
 class Assembly(PlantGenieModel):
     id: str
+    path: str | None = None
     version: str
     version_name: str | None = None
     published: bool

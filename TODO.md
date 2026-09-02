@@ -40,20 +40,29 @@ workflow change considered earlier is dropped.
 
 ## First `dev` apply
 
-- [ ] `terraform workspace select dev && terraform apply -var-file=dev.tfvars`.
+- [x] `terraform workspace select dev && terraform apply -var-file=dev.tfvars`.
       Six instances, two volumes, a floating IP. Remember
       `set -a; source ../.env.shared; set +a` first — the destroy provisioners
       read the token from the environment.
-- [ ] Point `dev.plantgenie.se` at the dev nginx floating IP. It currently
-      points at the old SSC deployment, so this is a cutover, not a new record.
-- [ ] `sudo certbot --nginx -d dev.plantgenie.se` on the dev nginx VM.
-- [ ] Populate the dev shared volume. Decide where from — a copy of the prod
-      one, or a smaller subset. `plantgenie-backend.db` at minimum, since the
-      API fails on it.
-- [ ] Load the graph into dev neo4j. Both deployments currently have an empty
-      store; real content comes from the knowledge-builder load into
-      `/opt/neo4j/import`. `NEO4J_AUTH` only applies to an empty data
-      directory, so the tfvars password takes effect only on a fresh store.
+- [x] Point `dev.plantgenie.se` at the dev nginx floating IP. It previously
+      pointed at the old SSC deployment, so this was a cutover, not a new
+      record.
+- [x] `sudo certbot --nginx -d dev.plantgenie.se` on the dev nginx VM. HTTPS
+      confirmed working 2026-09-01.
+- [ ] Populate the dev shared volume: copy the duckdb database across, plus the
+      BLAST databases. Required regardless of the v2-only focus — `lifespan` in
+      `dependencies.py` does `db_path.resolve(strict=True)` then
+      `duckdb.connect()`, so the API will not boot without
+      `plantgenie-backend.db` present, and it also needs all six `OS_*` Swift
+      vars set.
+- [x] Load the graph into dev neo4j. Done 2026-09-02, not by loading CSVs on
+      the VM but by dumping the local store and restoring it:
+      `neo4j-admin database dump neo4j --to-stdout` locally, then
+      `database load neo4j --from-stdin --overwrite-destination=true` on dev.
+      Only the `neo4j` database moves, so dev keeps its own tfvars password
+      (auth lives in the untouched `system` database). Reachable over bolt at
+      `dev.plantgenie.se:7687` through the nginx stream proxy. See
+      `neo4j-data-load-plan.md` for how the local store was built.
 
 ## Fixes to prove on dev, then carry to prod
 
@@ -69,6 +78,13 @@ workflow change considered earlier is dropped.
       hand because `disk_setup`/`fs_setup` cannot work when the volume attaches
       after the instance. nginx's udev-triggered oneshot handles both a fresh
       volume and one moving between instances.
+
+      This bit on 2026-09-02: after a reboot, `/dev/sdb` came back raw with no
+      filesystem and no `neo4j_data` label, so `opt-neo4j.mount` failed its
+      device dependency and `systemctl start neo4j` hung on
+      `RequiresMountsFor`. Recovered with
+      `mkfs.ext4 -L neo4j_data /dev/sdb` and `mount -a`, which is exactly the
+      manual step this item exists to remove.
 
 ## Smaller things
 

@@ -100,9 +100,9 @@ services:
       NEO4J_AUTH: neo4j/guest123
       NEO4J_PLUGINS: '["graph-data-science"]'
     volumes:
-      - /opt/neo4j/logs:/logs
-      - /opt/neo4j/data:/data
-      - /opt/neo4j/import:/import
+      - /opt/neo4j/${WORKTREE:?WORKTREE must be set in .env}/logs:/logs
+      - /opt/neo4j/${WORKTREE:?WORKTREE must be set in .env}/data:/data
+      - /opt/neo4j/import:/import:ro
     healthcheck:
       test: ["CMD-SHELL", "cypher-shell -u neo4j -p guest123 'RETURN 1' || exit 1"]
       interval: 5s
