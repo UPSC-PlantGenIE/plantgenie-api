@@ -138,3 +138,85 @@ async def test_get_gene_go_terms_returns_empty_list_when_none(
 
     assert response.status_code == 200
     assert response.json() == []
+
+
+@pytest.mark.anyio
+async def test_get_gene_arabidopsis_hit_responds_200(
+    async_client: AsyncClient,
+    neo4j_session: FakeNeo4jSession,
+):
+    neo4j_session.next_records = [
+        {
+            "hit": {
+                "geneId": "AT1G01010",
+                "name": "NAC001",
+                "description": "NAC domain containing protein 1",
+                "evalue": 3.2e-155,
+                "bitscore": 442.6,
+            }
+        }
+    ]
+
+    response = await async_client.get(
+        "/v2/genes/potra-v2.2/Potra2n1c1/arabidopsis-hit"
+    )
+
+    assert response.status_code == 200
+
+
+@pytest.mark.anyio
+async def test_get_gene_arabidopsis_hit_returns_hit(
+    async_client: AsyncClient,
+    neo4j_session: FakeNeo4jSession,
+):
+    neo4j_session.next_records = [
+        {
+            "hit": {
+                "geneId": "AT1G01010",
+                "name": "NAC001",
+                "description": "NAC domain containing protein 1",
+                "evalue": 3.2e-155,
+                "bitscore": 442.6,
+            }
+        }
+    ]
+
+    response = await async_client.get(
+        "/v2/genes/potra-v2.2/Potra2n1c1/arabidopsis-hit"
+    )
+
+    assert response.json() == {
+        "geneId": "AT1G01010",
+        "name": "NAC001",
+        "description": "NAC domain containing protein 1",
+        "evalue": 3.2e-155,
+        "bitscore": 442.6,
+    }
+
+
+@pytest.mark.anyio
+async def test_get_gene_arabidopsis_hit_returns_null_when_no_hit(
+    async_client: AsyncClient,
+    neo4j_session: FakeNeo4jSession,
+):
+    neo4j_session.next_records = [{"hit": None}]
+
+    response = await async_client.get(
+        "/v2/genes/arath-araport11/AT1G01010/arabidopsis-hit"
+    )
+
+    assert response.json() is None
+
+
+@pytest.mark.anyio
+async def test_get_gene_arabidopsis_hit_returns_404_when_gene_missing(
+    async_client: AsyncClient,
+    neo4j_session: FakeNeo4jSession,
+):
+    neo4j_session.next_records = []
+
+    response = await async_client.get(
+        "/v2/genes/potra-v2.2/UNKNOWN/arabidopsis-hit"
+    )
+
+    assert response.status_code == 404

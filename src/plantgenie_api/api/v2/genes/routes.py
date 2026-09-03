@@ -1,8 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
-from typing import List
-
 from plantgenie_api.api.v2.genes.models import (
+    ArabidopsisHit,
     GeneDetail,
     GoTerm,
     LookupGene,
@@ -49,10 +48,10 @@ async def get_gene(
     return GeneDetail(**dict(records[0]["g"]))
 
 
-@router.get("/{annotation_id}/{gene_id}/go-terms", response_model=List[GoTerm])
+@router.get("/{annotation_id}/{gene_id}/go-terms", response_model=list[GoTerm])
 async def get_gene_go_terms(
     session: Neo4jDep, annotation_id: str, gene_id: str
-) -> List[GoTerm]:
+) -> list[GoTerm]:
     result = await session.run(
         "MATCH (:Annotation {id: $annotationId})-[:HAS_GENE]->"
         "(:Gene {id: $geneId})-[:HAS_GO_TERM]->(t:GoTerm) "
@@ -61,3 +60,28 @@ async def get_gene_go_terms(
         geneId=gene_id,
     )
     return [GoTerm(**dict(r["t"])) async for r in result]
+
+
+@router.get(
+    "/{annotation_id}/{gene_id}/arabidopsis-hit",
+    response_model=ArabidopsisHit | None,
+)
+async def get_gene_arabidopsis_hit(
+    session: Neo4jDep, annotation_id: str, gene_id: str
+) -> ArabidopsisHit | None:
+    result = await session.run(
+        "MATCH (:Annotation {id: $annotationId})-[:HAS_GENE]->"
+        "(g:Gene {id: $geneId}) "
+        "OPTIONAL MATCH (g)-[r:BEST_ARABIDOPSIS_HIT]->(t:Gene) "
+        "RETURN t {geneId: t.id, .name, .description, "
+        "evalue: r.evalue, bitscore: r.bitscore} AS hit",
+        annotationId=annotation_id,
+        geneId=gene_id,
+    )
+    records = [record async for record in result]
+    if not records:
+        raise HTTPException(status_code=404, detail="Gene not found")
+    hit = records[0]["hit"]
+    if hit is None:
+        return None
+    return ArabidopsisHit(**dict(hit))
