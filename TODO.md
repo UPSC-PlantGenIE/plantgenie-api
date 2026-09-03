@@ -98,6 +98,37 @@ workflow change considered earlier is dropped.
 - [ ] Swift still points at the old cluster (`OS_*` in `.env.shared`). A
       self-hosted MinIO on the new cluster is the likely replacement.
 
+## Gene list feature
+
+Merged in from `plantgenie-old/api-new-react-ui-api-integration/TODO.md`. The
+API section of that file is fully done, all of it superseded by v2: `/v2/taxa`
+with common names, string slug IDs on Assembly and Annotation, `?taxon=` /
+`?assembly=` filters, and `geneCount` / `isDefault` on Annotation.
+
+- [x] Rewire the React wizard onto `/v2/taxa` + `/v2/assemblies` +
+      `/v2/annotations`. Done — `GenomeSelector.tsx` uses all three hooks.
+      Retiring the v1 endpoints is still outstanding.
+- [ ] **Account IDs.** A unique numeric ID per user, like mullvad.net's VPN
+      account numbers, used to store and retrieve their lists. Not started:
+      `api/v2/lists/routes.py:61` returns a hardcoded `account_id="stub"` and
+      nothing filters on it, so every list is visible to everyone. Visible on
+      dev now that it is on a public URL.
+- [x] Empty gene list page after "create list" — `lists/ListPage.tsx`.
+- [x] Screens for adding user-entered gene IDs, with a validation view showing
+      descriptions and IDs that were not found — `lists/AddByIdPage.tsx`,
+      backed by `/v2/genes/lookup`.
+- [ ] **Search-driven list building.** Full text and/or semantic search over
+      gene descriptions, returning scored results with a configurable result
+      count or score threshold, rows selectable as in the add-by-ID flow. No
+      endpoint exists for this yet.
+- [~] Gene list page populated with real genes, rows linking through to gene
+      pages. `genes/GenePage.tsx` exists; embedding a JBrowse instance there is
+      still open.
+
+Work these TDD-style as before: write the test, watch it fail, write the
+minimum to pass, refactor. UI first against static data, then add the backend
+endpoints and update the tests where they break.
+
 ## Dependency hygiene
 
 Direct deps were bumped via `uv lock --upgrade` on 2026-09-01. `redis` (6.4.0)

@@ -22,6 +22,33 @@ Two Waldur projects are available, one per environment:
 
 Both run the same FastAPI backend from this repo.
 
+## Conventions
+
+Carried over from
+`plantgenie-old/api-new-react-ui-api-integration/HANDOFF.md`, which remains the
+reference for feature work on the backend and UI.
+
+- **TDD, failing test first.** Backend and UI alike: write the test asserting
+  what the code should do, watch it fail, then write the minimum to pass.
+- Tailwind built-in scales only, no arbitrary pixel values.
+- No explanatory comments in code.
+- Prettier in `ui/`: semicolons, double quotes, 2-space indent, ES5 trailing
+  commas.
+- Justify changes before applying them, and keep justifications terse.
+
+Test layout lives in `pyproject.toml`. `testpaths` covers `src/tests`,
+`packages/task-queue/src/tests` and `packages/shared/src/tests`, and `addopts`
+carries `-m "not e2e"`, so a plain `pytest` skips the end-to-end tests. Those
+are marked `e2e`, live in `src/tests/e2e/`, use pytest-playwright, and need both
+the docker compose stack and the vite dev server up. Opt in with `-m e2e`.
+
+Backend unit tests fake the database rather than reaching it:
+`src/tests/plantgenie_api/unit/conftest.py` overrides the `get_neo4j_session`
+dependency with a `FakeNeo4jSession` whose `next_records` each test sets. That
+keeps the unit suite at well under a second and independent of a running neo4j.
+The container-backed tests under `packages/task-queue/src/tests` are the slow
+ones, since testcontainers starts real RabbitMQ and Redis instances.
+
 ## Decided: Terraform with the Waldur provider
 
 `waldur/waldur`, pinned to `8.1.3-rc.2` in `infra/main.tf`. Note this is
@@ -49,10 +76,11 @@ Verified end to end on 2026-08-27: the volume detaches from one instance and
 attaches to another, neo4j starts against the mounted store, and
 `bolt://<nginx floating ip>:7687` authenticates from outside the cluster.
 
-The neo4j store copied from the old `north-dev` cluster is faithful but empty —
-`databases/` is 880K and `transactions/` is 515M, because nothing was ever
-loaded into the dev database. Real content comes from the knowledge-builder load
-into `/opt/neo4j/import`.
+The neo4j store copied from the old `north-dev` cluster was faithful but empty.
+**Populated 2026-09-03**, not by loading CSVs on the VM but by dumping the local
+store and restoring it — see `.claude/handoffs/HANDOFF-2026-09-03.md`. The load
+scripts that built the local store are in `scripts/neo4j/`, and
+`neo4j-data-load-plan.md` covers what they do and what is still missing.
 
 Project `NAISS 2025/22-1577` (`950a75640950426a94a8ac2cd446b7e3`), tenant
 `1cb7834e0b48471398af441b7c1af91a`, internal network
@@ -199,6 +227,13 @@ Things that may bite later. Fix when they surface, not before.
   it formats only if `blkid` finds no filesystem, mounts, and pulls up
   `nfs-server`. That works for a fresh volume and for one moving between
   instances, so port it to neo4j at its next rebuild.
+  **This bit on 2026-09-03.** After a reboot, `/dev/sdb` came back raw with no
+  filesystem and no `neo4j_data` label, so `opt-neo4j.mount` failed its device
+  dependency and `systemctl start neo4j` hung on `RequiresMountsFor` before
+  reporting "A dependency job for neo4j.service failed". `lsblk -f` showing
+  `sdb` present but with a blank FSTYPE is the diagnostic. Recovered with
+  `mkfs.ext4 -L neo4j_data /dev/sdb` then `mount -a` — exactly the manual step
+  `shared-volume.service` exists to remove.
 - Splitting the NFS server onto its own VM was considered on 2026-08-30 and not
   done. It was the other way to break the dependency cycle, and it is still the
   cleaner separation, but pinning the two IPs solved the same problem without a
@@ -210,8 +245,12 @@ Things that may bite later. Fix when they surface, not before.
   plus `RequiresMountsFor=/opt/neo4j` on `neo4j.service`, which is why neo4j is
   a systemd unit rather than a `docker run` in `runcmd` as in the old modules.
 - `NEO4J_AUTH` only applies to an empty data directory, so `neo4j_password` in
-  tfvars is ignored whenever an existing store is attached. The database
-  currently takes the old `north-dev` password, not the tfvars one.
+  tfvars is ignored whenever an existing store is attached. No longer true on
+  dev as of 2026-09-03: reformatting the volume left the data directory empty at
+  boot, so `NEO4J_AUTH` took effect and dev now uses the tfvars password.
+  Restoring the graph afterwards did not change that, because
+  `neo4j-admin database load neo4j` moves only the `neo4j` database and leaves
+  the `system` database, where users live, untouched.
 - Backend and celery talk to Swift on the *old* cluster
   (`packages/shared/.../openstack.py`, `OS_*` in `.env.shared`). Decided
   2026-08-28: keep pointing at the old cluster's Swift for now. A self-hosted
@@ -259,7 +298,9 @@ endpoint is stable with it. Internal addresses are pinned for nginx
 
 `www.plantgenie.se` points at `130.236.227.49` as of 2026-08-31 and serves over
 HTTPS, with a Let's Encrypt cert valid to 2026-11-29 and HTTP 301'ing to it.
-`dev.plantgenie.se` still points at the old SSC deployment. The old server's
+`dev.plantgenie.se` was cut over to the dev nginx floating IP on 2026-09-01 and
+has its own Let's Encrypt cert. It serves the new React UI against the loaded
+graph. The old server's
 certbot renewal for `www` will start failing there, since the challenge now
 lands here — `sudo certbot delete --cert-name www.plantgenie.se` on the old
 machine once you are sure you are not going back.
@@ -352,12 +393,18 @@ already-working queue.
       volume, so both are lost on an nginx replacement and the command is
       re-run — same as the old setup. Deliberate: keeping certs off the shared
       volume maps to how SSC did it.
-- [ ] Nothing published has the v2 API. `fastapi_image_tag` is `v0.4.5`, and no
-      tag contains the commit that added `src/plantgenie_api/api/v2` — it came
-      in with the PR #6 merge. `/api/v2/taxa` 404s until a new image is built.
-      Not urgent: the deployment currently runs the old UI, which does not use
-      v2, and matches what SSC serves. Bumping the tag is a one-VM change, since
-      the application's pinned IP keeps nginx out of the plan.
+- [x] **Dev only:** the v2 API is published and serving. `dev.tfvars` pins
+      `v0.4.7-dev` for both images and the UI zip as of 2026-09-03. Bumping the
+      tag on a running VM turned out not to need a terraform apply: the tag is
+      baked into `/etc/systemd/system/fastapi.service`, so `sed` it,
+      `daemon-reload`, `restart fastapi`. The next apply regenerates that file
+      from cloud-init, and tfvars already carries the same tag, so they agree.
+- [ ] **Prod is still on `v0.4.5`**, which predates `src/plantgenie_api/api/v2`,
+      so `https://www.plantgenie.se/api/v2/taxa` 404s. Confirmed 2026-09-03; the
+      API itself is healthy, with `/api/` and `/api/docs` at 200 and the v1
+      endpoints served unprefixed (`/api/available-species`, not `/api/v1/...`).
+      Not a fault: prod runs the old `plantgenie-ui` v0.3.4 bundle, which uses
+      v1 only. It stays this way until the UI cutover.
 
 **E. Make the NFS mount survive boot ordering** — done 2026-08-30.
 

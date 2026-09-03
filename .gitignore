@@ -26,3 +26,4 @@ wheels/
 .DS_STORE
 ui/.pnp.cjs
 ui/.pnp.loader.mjs
+.claude
