@@ -228,7 +228,6 @@ describe("MyListsPage", () => {
           },
         ];
         return HttpResponse.json({
-          accountId: "stub",
           listId: "new-1",
         });
       })

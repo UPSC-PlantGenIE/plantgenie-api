@@ -15,7 +15,6 @@ export default function GenomeSelector() {
   const [createList] = useCreateListMutation();
   const [, setLocation] = useLocation();
   const dispatch = useAppDispatch();
-  const accountId = useAppSelector((s) => s.account.accountId);
   const listName = useAppSelector((s) => s.wizard.name);
   const listDescription = useAppSelector((s) => s.wizard.description);
   const step = useAppSelector((s) => s.wizard.step);
@@ -24,7 +23,6 @@ export default function GenomeSelector() {
 
   const handleCreateList = async () => {
     const { listId } = await createList({
-      accountId: accountId ?? undefined,
       name: listName,
       description: listDescription,
       annotationId: annotationId!,
@@ -188,7 +186,7 @@ export default function GenomeSelector() {
 
           {/* TODO: replace dispatch(next()) with the create-list flow:
               1. call useCreateListMutation() at the top of this component
-              2. on click, await createList({ accountId, name, description, annotationId, geneIds: [] }).unwrap()
+              2. on click, await createList({ name, description, annotationId, geneIds: [] }).unwrap()
               3. read setLocation from wouter's useLocation() and call setLocation(`/lists/${response.listId}`)
               4. delete the dispatch(next()) line — it no longer makes sense since step caps at 3 */}
           <button

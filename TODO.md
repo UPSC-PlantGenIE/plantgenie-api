@@ -112,7 +112,7 @@ with common names, string slug IDs on Assembly and Annotation, `?taxon=` /
       account numbers, used to store and retrieve their lists. Not started:
       `api/v2/lists/routes.py:61` returns a hardcoded `account_id="stub"` and
       nothing filters on it, so every list is visible to everyone. Visible on
-      dev now that it is on a public URL.
+      dev now that it is on a public URL. Specced 2026-09-03, see below.
 - [x] Empty gene list page after "create list" — `lists/ListPage.tsx`.
 - [x] Screens for adding user-entered gene IDs, with a validation view showing
       descriptions and IDs that were not found — `lists/AddByIdPage.tsx`,
@@ -124,10 +124,91 @@ with common names, string slug IDs on Assembly and Annotation, `?taxon=` /
 - [~] Gene list page populated with real genes, rows linking through to gene
       pages. `genes/GenePage.tsx` exists; embedding a JBrowse instance there is
       still open.
+- [ ] **Error handling across the UI.** Failed requests are currently silent:
+      the wizard's "Create list" button just does nothing when the POST fails,
+      which is how a 401 from the new account gating read as a broken selector
+      during e2e debugging. Every mutation should surface a message and a
+      pending state — `useCreateListMutation` already returns `isLoading` and
+      `error`, and `GenomeSelector.tsx:116` has a `<p role="alert">` pattern to
+      follow. Wanted everywhere, not just the wizard.
 
 Work these TDD-style as before: write the test, watch it fail, write the
 minimum to pass, refactor. UI first against static data, then add the backend
 endpoints and update the tests where they break.
+
+## Account IDs — spec
+
+Decided 2026-09-03. A 16-digit ID, generated server-side, that is both identity
+and credential: possession is access, there is no password. Displayed in groups
+of four.
+
+**No email in v1.** Recovery by email was considered and deferred: there is no
+SMTP anywhere in the repo, and an address is PII in a way an anonymous number is
+not. Phase 2 if it is wanted, with verification, rate limiting, and a recovery
+response that does not reveal whether an address is registered.
+
+**Accounts are created silently on first use**, not by a signup form. The first
+list creation with no stored ID does `POST /v2/accounts` first. This was chosen
+over keeping anonymous lists in localStorage specifically to avoid a second,
+client-side implementation of lists plus a bulk-claim endpoint on signup. Losing
+localStorage loses the lists either way; the only difference is where the bytes
+sit. The account page therefore *reveals* an ID that already exists rather than
+creating one.
+
+Endpoints:
+
+| method | path | notes |
+| --- | --- | --- |
+| `POST` | `/v2/accounts` | 201 `{accountId}` — the only time the plaintext ID is returned |
+| `GET` | `/v2/accounts/me` | validates the bearer; 200 `{createdAt, listCount}` or 401 |
+| all | `/v2/lists/*` | require the bearer, filtered by owner |
+
+Auth is `Authorization: Bearer <16 digits>`. An `AccountDep` dependency hashes
+the token, looks it up and 401s if unknown, in the same shape as `Neo4jDep` and
+`SqliteDep`.
+
+Only a SHA-256 of the ID is stored, so a database leak does not hand over
+working credentials. Plain SHA-256 rather than a password hash because the input
+is high-entropy and random — but 16 digits is only ~53 bits, so rate limiting
+carries the real load.
+
+```sql
+CREATE TABLE IF NOT EXISTS accounts (
+    account_hash TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+ALTER TABLE gene_lists ADD COLUMN account_hash TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS gene_lists_account ON gene_lists (account_hash);
+```
+
+The `ALTER` is not idempotent under `schema.sql`'s `CREATE TABLE IF NOT EXISTS`
+style and needs a guard, or the dev database gets dropped. Existing dev lists
+become ownerless either way, so deleting them is simplest.
+
+UI. `accountSlice` and `useAccountIdSync.ts` already persist an account id to
+`localStorage.accountId`, so what is new is:
+
+- `prepareHeaders` in `plantgenieApi.ts` injecting the bearer
+- first list creation with no stored ID calling `POST /v2/accounts` first
+- an `/account` page: the ID in groups of four, copy, download-as-file, and a
+  blunt warning that losing it loses the lists
+- **a paste-your-ID field on that page** — this is the login flow, and the only
+  way to reach an account from a second device. Easy to overlook because there
+  is no password
+- a 401 meaning the stored ID is stale: clear it and start over
+
+Two things to settle while building: `POST /v2/accounts` is unauthenticated row
+creation and wants rate limiting, and `create_list`'s `account_id="stub"`
+response field either becomes real or goes away.
+
+Ladder — backend first here, against the UI-first note above, because the UI
+cannot be meaningfully faked against an auth scheme that does not exist yet:
+
+1. `POST /v2/accounts` returns a 16-digit ID
+2. `GET /v2/accounts/me` 401s on an unknown ID
+3. `GET /v2/lists` returns only that account's lists
+4. UI: header injection, then bootstrap on first list, then the account page,
+   then paste-existing-ID
 
 ## Dependency hygiene
 

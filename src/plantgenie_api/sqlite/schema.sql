@@ -1,9 +1,15 @@
+CREATE TABLE IF NOT EXISTS accounts (
+    account_hash TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS gene_lists (
     list_id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     description TEXT,
     annotation_id TEXT NOT NULL,
     taxon_name TEXT NOT NULL DEFAULT '',
+    account_hash TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

@@ -63,13 +63,14 @@ const annotations = [
 ];
 
 export const handlers = [
-  http.post("http://localhost:8000/api/v2/lists", async ({ request }) => {
-    const body = (await request.json()) as { accountId?: string };
-    return HttpResponse.json({
-      accountId: body.accountId ?? "fake-account",
-      listId: "fake-list-123",
-    });
-  }),
+  http.post("http://localhost:8000/api/v2/accounts", () =>
+    HttpResponse.json({ accountId: "0000111122223333" }, { status: 201 })
+  ),
+
+  http.post("http://localhost:8000/api/v2/lists", () =>
+    HttpResponse.json({ listId: "fake-list-123" })
+  ),
+
   http.get("http://localhost:8000/api/v2/lists", () =>
     HttpResponse.json({
       lists: [
@@ -149,6 +150,18 @@ export const handlers = [
       const geneId = params.geneId as string;
       return HttpResponse.json(fixtures[geneId] ?? []);
     }
+  ),
+
+  http.get(
+    "http://localhost:8000/api/v2/genes/:annotationId/:geneId/arabidopsis-hit",
+    () =>
+      HttpResponse.json({
+        geneId: "AT5G59090",
+        name: "SBT4.12",
+        description: "subtilase 4.12",
+        evalue: 2.77e-188,
+        bitscore: 553.0,
+      })
   ),
 
   http.get(

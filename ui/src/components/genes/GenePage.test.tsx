@@ -84,6 +84,63 @@ describe("GenePage", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders a real Best Arabidopsis hit card rather than a placeholder", async () => {
+    mockAnnotation();
+    renderGenePage();
+    const heading = await screen.findByRole("heading", {
+      name: /best arabidopsis hit/i,
+    });
+    const card = heading.closest("section");
+    expect(card).not.toBeNull();
+    expect(
+      within(card as HTMLElement).queryByText(/coming soon/i)
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders the Arabidopsis gene id in the Best Arabidopsis hit card", async () => {
+    mockAnnotation();
+    renderGenePage();
+    const heading = await screen.findByRole("heading", {
+      name: /best arabidopsis hit/i,
+    });
+    const card = heading.closest("section");
+    expect(
+      await within(card as HTMLElement).findByText("AT5G59090")
+    ).toBeInTheDocument();
+  });
+
+  it("renders the hit name, description, evalue and bitscore", async () => {
+    mockAnnotation();
+    renderGenePage();
+    const heading = await screen.findByRole("heading", {
+      name: /best arabidopsis hit/i,
+    });
+    const scoped = within(heading.closest("section") as HTMLElement);
+    expect(await scoped.findByText("SBT4.12")).toBeInTheDocument();
+    expect(scoped.getByText(/subtilase 4\.12/i)).toBeInTheDocument();
+    expect(scoped.getByText("2.77e-188")).toBeInTheDocument();
+    expect(scoped.getByText("553")).toBeInTheDocument();
+  });
+
+  it("reports no hit when the API returns null", async () => {
+    mockAnnotation();
+    server.use(
+      http.get(
+        "http://localhost:8000/api/v2/genes/:annotationId/:geneId/arabidopsis-hit",
+        () => HttpResponse.json(null)
+      )
+    );
+    renderGenePage();
+    const heading = await screen.findByRole("heading", {
+      name: /best arabidopsis hit/i,
+    });
+    expect(
+      await within(heading.closest("section") as HTMLElement).findByText(
+        /no arabidopsis hit/i
+      )
+    ).toBeInTheDocument();
+  });
+
   it("renders GO term names from the API in the GO terms card", async () => {
     mockAnnotation();
     renderGenePage();

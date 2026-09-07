@@ -3,6 +3,7 @@ from typing import cast
 from fastapi import APIRouter, HTTPException
 from neo4j.graph import Node
 
+from plantgenie_api.api.v2.accounts.routes import router as accounts_router
 from plantgenie_api.api.v2.genes.routes import router as genes_router
 from plantgenie_api.api.v2.lists.routes import router as user_lists_router
 from plantgenie_api.api.v2.models import (
@@ -20,6 +21,7 @@ router = APIRouter(prefix="/v2", tags=["v2"])
 
 router.include_router(user_lists_router)
 router.include_router(genes_router)
+router.include_router(accounts_router)
 
 
 @router.get("/taxa", response_model=TaxaResponse, tags=["taxon"])

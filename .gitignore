@@ -27,3 +27,4 @@ wheels/
 ui/.pnp.cjs
 ui/.pnp.loader.mjs
 .claude
+.zed

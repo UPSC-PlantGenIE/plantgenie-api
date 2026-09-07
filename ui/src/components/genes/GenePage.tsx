@@ -2,6 +2,7 @@ import { Link, useParams } from "wouter";
 import {
   type GoTerm,
   useGetAnnotationQuery,
+  useGetGeneArabidopsisHitQuery,
   useGetGeneGoTermsQuery,
   useGetGeneQuery,
 } from "../../api/plantgenieApi";
@@ -90,7 +91,10 @@ export default function GenePage() {
         <PlaceholderCard heading="Genome browser" />
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <AnnotationDetailsCard gene={gene} length={length} />
-          <PlaceholderCard heading="Best Arabidopsis hit" />
+          <ArabidopsisHitCard
+            annotationId={annotationId}
+            geneId={geneId}
+          />
         </div>
         <PlaceholderCard heading="Best hits in other taxa" />
         <GoTermsCard annotationId={annotationId} geneId={geneId} />
@@ -134,6 +138,47 @@ function AnnotationDetailsCard({
         <dt className="text-muted">Strand</dt>
         <dd className="text-heading">{gene?.strand ?? "—"}</dd>
       </dl>
+    </section>
+  );
+}
+
+function ArabidopsisHitCard({
+  annotationId,
+  geneId,
+}: {
+  annotationId: string;
+  geneId: string;
+}) {
+  const { data: hit } = useGetGeneArabidopsisHitQuery({
+    annotationId,
+    geneId,
+  });
+
+  return (
+    <section className="rounded-xl border border-border bg-card px-6 py-5 shadow-card">
+      <h2 className="text-sm font-semibold text-heading">
+        Best Arabidopsis hit
+      </h2>
+      {hit && (
+        <>
+          <p className="mt-3 text-sm font-medium text-heading">
+            {hit.geneId}
+          </p>
+          {hit.name && <p className="mt-1 text-sm text-primary">{hit.name}</p>}
+          {hit.description && (
+            <p className="mt-1 text-xs text-muted">{hit.description}</p>
+          )}
+          <dl className="mt-3 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-xs">
+            <dt className="text-muted">E-value</dt>
+            <dd className="text-heading">{hit.evalue}</dd>
+            <dt className="text-muted">Bitscore</dt>
+            <dd className="text-heading">{hit.bitscore}</dd>
+          </dl>
+        </>
+      )}
+      {hit === null && (
+        <p className="mt-3 text-xs text-muted">No Arabidopsis hit</p>
+      )}
     </section>
   );
 }

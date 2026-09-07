@@ -5,8 +5,11 @@ import AddByIdPage from "./components/lists/AddByIdPage";
 import ListPage from "./components/lists/ListPage";
 import MyListsPage from "./components/lists/MyListsPage";
 import Wizard from "./components/wizard/Wizard";
+import { useAccountIdSync } from "./store/useAccountIdSync";
 
 function App() {
+  useAccountIdSync();
+
   return (
     <div className="min-h-screen bg-surface">
       <Navbar />

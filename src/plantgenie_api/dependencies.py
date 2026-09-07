@@ -1,3 +1,4 @@
+import hashlib
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -6,7 +7,7 @@ from typing import Annotated, AsyncGenerator, Dict, Generator, List
 import aiosqlite
 import duckdb
 from duckdb import DuckDBPyConnection
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncSession
 
 from plantgenie_api.sqlite import bootstrap_sqlite
@@ -136,9 +137,37 @@ async def get_neo4j_session(
         yield session
 
 
+def hash_account_id(account_id: str) -> str:
+    return hashlib.sha256(account_id.encode()).hexdigest()
+
+
+async def get_account_hash(
+    request: Request,
+    authorization: Annotated[str | None, Header()] = None,
+) -> str:
+    if authorization is None:
+        raise HTTPException(status_code=401, detail="Unknown account")
+
+    account_hash = hash_account_id(authorization.removeprefix("Bearer "))
+
+    async with aiosqlite.connect(
+        request.app.state.APP_ENVIRONMENT["SQLITE_PATH"]
+    ) as conn:
+        async with conn.execute(
+            "SELECT 1 FROM accounts WHERE account_hash = ?", (account_hash,)
+        ) as cursor:
+            row = await cursor.fetchone()
+
+    if row is None:
+        raise HTTPException(status_code=401, detail="Unknown account")
+
+    return account_hash
+
+
 DatabaseDep = Annotated[DuckDBPyConnection, Depends(get_db_connection)]
 Neo4jDep = Annotated[AsyncSession, Depends(get_neo4j_session)]
 SqliteDep = Annotated[aiosqlite.Connection, Depends(get_sqlite_connection)]
 EnvironmentDep = Annotated[Dict[str, str], Depends(get_environment)]
 BlastPathDep = Annotated[Path, Depends(get_blast_path)]
 GoEnrichmentPathDep = Annotated[Path, Depends(get_go_enrichment_path)]
+AccountDep = Annotated[str, Depends(get_account_hash)]

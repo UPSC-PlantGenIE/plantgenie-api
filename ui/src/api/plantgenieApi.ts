@@ -49,12 +49,10 @@ export interface GeneListWithMembers extends GeneList {
 }
 
 export interface CreateListResponse {
-  accountId: string;
   listId: string;
 }
 
 export interface CreateListRequest {
-  accountId?: string;
   name: string;
   description?: string;
   annotationId: string;
@@ -88,9 +86,26 @@ export interface GoTerm {
   namespace: string | null;
 }
 
+export interface ArabidopsisHit {
+  geneId: string;
+  name: string | null;
+  description: string | null;
+  evalue: number;
+  bitscore: number;
+}
+
 export const plantgenieApi = createApi({
   reducerPath: "plantgenieApi",
-  baseQuery: fetchBaseQuery({ baseUrl }),
+  baseQuery: fetchBaseQuery({
+    baseUrl,
+    prepareHeaders: (headers, { getState }) => {
+      const { accountId } = (
+        getState() as { account: { accountId: string | null } }
+      ).account;
+      if (accountId) headers.set("Authorization", `Bearer ${accountId}`);
+      return headers;
+    },
+  }),
   tagTypes: ["List"],
   endpoints: (build) => ({
     getTaxa: build.query<Taxon[], void>({
@@ -113,6 +128,9 @@ export const plantgenieApi = createApi({
     }),
     getAnnotation: build.query<AnnotationDetail, string>({
       query: (annotationId) => `v2/annotations/${annotationId}`,
+    }),
+    createAccount: build.mutation<{ accountId: string }, void>({
+      query: () => ({ url: "v2/accounts", method: "POST" }),
     }),
     createList: build.mutation<CreateListResponse, CreateListRequest>({
       query: (body) => ({ url: "v2/lists", method: "POST", body }),
@@ -151,6 +169,13 @@ export const plantgenieApi = createApi({
       query: ({ annotationId, geneId }) =>
         `v2/genes/${annotationId}/${geneId}/go-terms`,
     }),
+    getGeneArabidopsisHit: build.query<
+      ArabidopsisHit | null,
+      { annotationId: string; geneId: string }
+    >({
+      query: ({ annotationId, geneId }) =>
+        `v2/genes/${annotationId}/${geneId}/arabidopsis-hit`,
+    }),
     patchList: build.mutation<
       { listId: string },
       {
@@ -181,6 +206,7 @@ export const {
   useGetAssembliesQuery,
   useGetAnnotationsQuery,
   useGetAnnotationQuery,
+  useCreateAccountMutation,
   useCreateListMutation,
   useGetListQuery,
   useGetMyListsQuery,
@@ -188,6 +214,7 @@ export const {
   useLazyLookupGenesQuery,
   useGetGeneQuery,
   useGetGeneGoTermsQuery,
+  useGetGeneArabidopsisHitQuery,
   usePatchListMutation,
   useDeleteListMutation,
 } = plantgenieApi;

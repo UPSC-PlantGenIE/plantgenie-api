@@ -10,19 +10,23 @@ from plantgenie_api.api.v2.lists.models import (
     GetListsResponse,
     PatchListRequest,
 )
-from plantgenie_api.dependencies import SqliteDep
+from plantgenie_api.dependencies import AccountDep, SqliteDep
 
 router = APIRouter(prefix="/lists", tags=["v2", "lists"])
 
 
 @router.get("")
-async def retrieve_lists(conn: SqliteDep) -> GetListsResponse:
+async def retrieve_lists(
+    conn: SqliteDep, account_hash: AccountDep
+) -> GetListsResponse:
     async with conn.execute(
         "SELECT g.list_id, g.name, g.description, g.annotation_id, g.taxon_name, g.created_at, "
         "COUNT(m.gene_id) AS gene_count "
         "FROM gene_lists g "
         "LEFT JOIN gene_list_members m ON g.list_id = m.list_id "
-        "GROUP BY g.list_id"
+        "WHERE g.account_hash = ? "
+        "GROUP BY g.list_id",
+        (account_hash,),
     ) as cursor:
         rows = await cursor.fetchall()
     return GetListsResponse(
@@ -43,34 +47,37 @@ async def retrieve_lists(conn: SqliteDep) -> GetListsResponse:
 
 @router.post("", status_code=201)
 async def create_list(
-    body: CreateListRequest, conn: SqliteDep
+    body: CreateListRequest, conn: SqliteDep, account_hash: AccountDep
 ) -> CreateListResponse:
     list_id = secrets.token_hex(8)
     await conn.execute(
-        "INSERT INTO gene_lists (list_id, name, description, annotation_id, taxon_name) "
-        "VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO gene_lists (list_id, name, description, annotation_id, taxon_name, account_hash) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
         (
             list_id,
             body.name,
             body.description,
             body.annotation_id,
             body.taxon_name,
+            account_hash,
         ),
     )
     await conn.commit()
-    return CreateListResponse(account_id="stub", list_id=list_id)
+    return CreateListResponse(list_id=list_id)
 
 
 @router.get("/{list_id}")
-async def get_list(list_id: str, conn: SqliteDep) -> GeneListWithMember:
+async def get_list(
+    list_id: str, conn: SqliteDep, account_hash: AccountDep
+) -> GeneListWithMember:
     async with conn.execute(
         "SELECT g.list_id, g.name, g.description, g.annotation_id, g.taxon_name, g.created_at, "
         "COUNT(m.gene_id) AS gene_count "
         "FROM gene_lists g "
         "LEFT JOIN gene_list_members m ON g.list_id = m.list_id "
-        "WHERE g.list_id = ? "
+        "WHERE g.list_id = ? AND g.account_hash = ? "
         "GROUP BY g.list_id",
-        (list_id,),
+        (list_id, account_hash),
     ) as cursor:
         row = await cursor.fetchone()
     if row is None:
@@ -96,9 +103,12 @@ async def get_list(list_id: str, conn: SqliteDep) -> GeneListWithMember:
 
 
 @router.delete("/{list_id}", status_code=204)
-async def delete_list(list_id: str, conn: SqliteDep) -> Response:
+async def delete_list(
+    list_id: str, conn: SqliteDep, account_hash: AccountDep
+) -> Response:
     async with conn.execute(
-        "SELECT 1 FROM gene_lists WHERE list_id = ?", (list_id,)
+        "SELECT 1 FROM gene_lists WHERE list_id = ? AND account_hash = ?",
+        (list_id, account_hash),
     ) as cursor:
         row = await cursor.fetchone()
     if row is None:
@@ -115,8 +125,21 @@ async def delete_list(list_id: str, conn: SqliteDep) -> Response:
 
 @router.patch("/{list_id}")
 async def patch_list(
-    list_id: str, body: PatchListRequest, conn: SqliteDep
-) -> dict:
+    list_id: str,
+    body: PatchListRequest,
+    conn: SqliteDep,
+    account_hash: AccountDep,
+) -> dict[str, str]:
+    async with conn.execute(
+        "SELECT 1 FROM gene_lists WHERE list_id = ? AND account_hash = ?",
+        (list_id, account_hash),
+    ) as cursor:
+        row = await cursor.fetchone()
+    if row is None:
+        raise HTTPException(
+            status_code=404, detail=f"List '{list_id}' not found"
+        )
+
     if body.add_gene_ids:
         await conn.executemany(
             "INSERT OR IGNORE INTO gene_list_members "
