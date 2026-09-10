@@ -63,6 +63,27 @@ const annotations = [
 ];
 
 export const handlers = [
+  http.get("http://localhost:8000/api/v2/blast/databases", () =>
+    HttpResponse.json({
+      databases: [
+        {
+          id: "picab-v2.0-cds",
+          name: "Coding sequences",
+          sequenceType: "cds",
+          moleculeType: "nucl",
+          taxonScientificName: "Picea abies",
+        },
+        {
+          id: "picab-v2.0-protein",
+          name: "Proteins",
+          sequenceType: "protein",
+          moleculeType: "prot",
+          taxonScientificName: "Picea abies",
+        },
+      ],
+    })
+  ),
+
   http.post("http://localhost:8000/api/v2/accounts", () =>
     HttpResponse.json({ accountId: "0000111122223333" }, { status: 201 })
   ),

@@ -252,3 +252,51 @@ def execute_blast_pipeline(args: ExecuteBlastPipelineArgs):
     )
 
     return workflow()
+
+
+@app.task(name="blast.run_search")
+def run_blast_search(
+    job_id: str,
+    program: str,
+    query_path: str,
+    database_path: str,
+    parameters: dict[str, str],
+) -> str:
+    output_directory = Path(query_path).parent
+    archive_path = (output_directory / f"{job_id}.asn").as_posix()
+
+    subprocess.run(
+        [
+            program,
+            "-query", query_path,
+            "-db", database_path,
+            "-outfmt", "11",
+            "-out", archive_path,
+            *[
+                argument
+                for name, value in parameters.items()
+                for argument in (f"-{name}", str(value))
+            ],
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    for output_format, suffix in (("6", "tsv"), ("html", "html")):
+        formatter_arguments = (
+            ["-html"] if output_format == "html" else ["-outfmt", "6"]
+        )
+        subprocess.run(
+            [
+                "blast_formatter",
+                "-archive", archive_path,
+                "-out", (output_directory / f"{job_id}.{suffix}").as_posix(),
+                *formatter_arguments,
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+    return archive_path

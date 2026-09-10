@@ -1,71 +1,67 @@
-import os
-import socket
-import threading
+import subprocess
 import time
+from collections.abc import Callable
 from pathlib import Path
 
-import duckdb
+import httpx
 import pytest
-import uvicorn
-from dotenv import dotenv_values
 
-API_PORT = 8000
-DATABASE_NAME = "plantgenie-backend.db"
 REPO_ROOT = Path(__file__).resolve().parents[3]
-
-FAKE_SWIFT = {
-    "OS_AUTH_TYPE": "v3applicationcredential",
-    "OS_AUTH_URL": "http://swift.invalid",
-    "OS_IDENTITY_API_VERSION": "3",
-    "OS_REGION_NAME": "e2e",
-    "OS_INTERFACE": "public",
-    "OS_APPLICATION_CREDENTIAL_ID": "e2e",
-    "OS_APPLICATION_CREDENTIAL_SECRET": "e2e",
-}
+API_URL = "http://localhost:8000"
+SITE_URL = "http://localhost:5173"
+SERVICES = ["neo4j", "rabbitmq", "redis", "api", "celery_worker"]
 
 
-def port_is_free(port: int) -> bool:
-    with socket.socket() as probe:
-        return probe.connect_ex(("127.0.0.1", port)) != 0
+def responds(url: str) -> bool:
+    try:
+        return httpx.get(url, timeout=2).status_code < 500
+    except httpx.TransportError:
+        return False
+
+
+def wait_until(condition: Callable[[], bool], message: str, seconds: int):
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if condition():
+            return
+        time.sleep(0.5)
+    pytest.fail(message)
 
 
 @pytest.fixture(scope="session")
-def live_server(tmp_path_factory: pytest.TempPathFactory):
-    if not port_is_free(API_PORT):
-        pytest.fail(
-            f"port {API_PORT} is in use — stop the dev API before running e2e"
-        )
-
-    data_path = tmp_path_factory.mktemp("userdata")
-    duckdb.connect(str(data_path / DATABASE_NAME)).close()
-
-    local_env = dotenv_values(REPO_ROOT / ".env")
-    os.environ.update(FAKE_SWIFT)
-    os.environ["DATA_PATH"] = str(data_path)
-    os.environ["DATABASE_NAME"] = DATABASE_NAME
-    for key in ("NEO4J_URI", "NEO4J_USER", "NEO4J_PASSWORD"):
-        value = local_env.get(key)
-        if value is None:
-            pytest.fail(f"{key} missing from {REPO_ROOT / '.env'}")
-        os.environ[key] = value
-
-    from plantgenie_api.main import app
-
-    server = uvicorn.Server(
-        uvicorn.Config(
-            app, host="127.0.0.1", port=API_PORT, log_level="warning"
-        )
+def live_server():
+    subprocess.run(
+        ["docker", "compose", "up", "-d", "--wait", *SERVICES],
+        cwd=REPO_ROOT,
+        check=True,
     )
-    thread = threading.Thread(target=server.run, daemon=True)
-    thread.start()
+    wait_until(
+        lambda: responds(f"{API_URL}/api/"),
+        f"API at {API_URL} did not become ready",
+        seconds=120,
+    )
+    yield API_URL
 
-    deadline = time.monotonic() + 30
-    while not server.started:
-        if time.monotonic() > deadline:
-            pytest.fail("API did not start within 30s")
-        time.sleep(0.05)
 
-    yield f"http://127.0.0.1:{API_PORT}"
+@pytest.fixture(scope="session")
+def site(live_server: str):
+    if responds(SITE_URL):
+        yield SITE_URL
+        return
 
-    server.should_exit = True
-    thread.join(timeout=10)
+    vite = subprocess.Popen(
+        ["yarn", "dev"],
+        cwd=REPO_ROOT / "ui",
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    wait_until(
+        lambda: responds(SITE_URL),
+        f"vite at {SITE_URL} did not become ready",
+        seconds=60,
+    )
+
+    yield SITE_URL
+
+    vite.terminate()
+    vite.wait(timeout=10)

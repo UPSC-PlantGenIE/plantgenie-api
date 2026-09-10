@@ -31,7 +31,7 @@ class TestNewVisitor:
         ).click()
         expect(page.get_by_role("heading", name=name)).to_be_visible()
 
-    def test_can_start_a_gene_list(self, page: Page, live_server):
+    def test_can_start_a_gene_list(self, page: Page, site):
         # Ada wants to investigate some cold stress genes in Norway spruce.
         # She heard about this cool website where she can create gene lists against
         # the Norway spruce genome (and others) called PlantGenIE.
@@ -124,7 +124,7 @@ class TestNewVisitor:
         assert re.search(r"/lists/.+", page.url)
 
     def test_multiple_users_can_keep_their_own_lists(
-        self, page: Page, browser: Browser, live_server
+        self, page: Page, browser: Browser, site
     ):
         # Ada makes herself a list, as before.
         self.start_a_gene_list(
@@ -150,7 +150,7 @@ class TestNewVisitor:
         bobs_computer.close()
 
     def test_a_list_url_is_private_to_its_owner(
-        self, page: Page, browser: Browser, live_server
+        self, page: Page, browser: Browser, site
     ):
         # Ada makes herself a list, which lives at its own URL
         self.start_a_gene_list(
@@ -181,3 +181,101 @@ class TestNewVisitor:
         ).to_have_count(0)
 
         bobs_computer.close()
+
+SPRUCE_QUERY_HEADER = ">adas-test-sequence"
+SPRUCE_QUERY = """\
+ATGGAAGATTCACAAATTGGTCTCGTGAAACGGATTGTTCATGATGGAGATAATTTATCAGTAGAAAACA
+CGGATCATGGAGTGAAAGATCAACACGAGACCACTCCAGTGAGCTTGAATATAGAAGATGGCCGTAAGGA
+GCTGGGTATTTTAGAAGATTTTGATAGCAAAATACCTCCATGGAGGGAGCAGATATCTTTCCGTGGGATT
+TTTGTGAGCTTCGTGATAGGAACCGTCTTCAGTATCATTGTTATGAATCTCAATCTCACCACTGGATTGG
+CTCCCGCCATGAATGTTTCTGCTGGGCTGCTGGGCTTCGTATTCATGAAATCGTGGAGCAAACTCCTGAT
+GAAGTTTGGATTACTGAAAGTTCCTTTCACGAGGCAAGAGAATACTGTAATCCAGACTTGTATTGTGGCG
+TGTTACAGCCTTGCATACGGTGGAGGATTTGGATCCTATGTGTTGGGATTGAATAGAAAAACCTATGAGC
+GGGCAGGTGTGAACACTCCAGGTAATACGCCCGATACAGTAAAGGAACCCACTATTGCCTGGATGATTGG
+ATTTCTGTTTCTAGTTACATTCGTGGGCATTATAGCACTGGTGCCTCTGCGAAAGGTCCTTATCATTGAC
+"""
+
+
+FASTA_QUERY = ">PA_chr01_G000001.mRNA.1\n" + SPRUCE_QUERY
+
+
+class TestBlastSearch:
+    def test_can_blast_a_sequence_against_a_genome(
+        self, page: Page, site
+    ):
+        # Ada is interested in figuring out which spruce gene sequences are similar
+        # to one she has discovered. She found out that PlantGenIE has a BLAST interface,
+        # which is a tool that can be used to search a sequence against a database.
+        # She navigates to the page https://www.plantgenie.se/blast/
+        page.goto(SITE_URL + "/blast/")
+
+        expect(
+            page.get_by_role("heading", name=re.compile(r"blast", re.IGNORECASE))
+        ).to_be_visible()
+
+        # She sees a dropdown menu with a label - choose database
+        database_dropdown = page.get_by_label(
+            re.compile(r"choose database", re.IGNORECASE)
+        )
+        expect(database_dropdown).to_be_enabled()
+
+        # She sees a disabled dropdown with a label - choose program. She reasons
+        # it stays that way until the site knows what she means to search
+        program_dropdown = page.get_by_label(
+            re.compile(r"choose program", re.IGNORECASE)
+        )
+        expect(program_dropdown).to_be_disabled()
+
+        # She sees a text box with a label "Query", which she safely assumes is the
+        # place where she can paste a DNA sequence. There is also a search button
+        # underneath which is currently disabled.
+        query_box = page.get_by_label(re.compile(r"query", re.IGNORECASE))
+        search_button = page.get_by_role(
+            "button", name=re.compile(r"search", re.IGNORECASE)
+        )
+        expect(query_box).to_be_empty()
+        expect(search_button).to_be_disabled()
+
+        # She pastes her sequence into the query box
+        query_box.fill(SPRUCE_QUERY)
+
+        # She expected that the search button would be enabled, but that did not
+        # happen. She does notice that there is a red error message stating that her query
+        # must follow FASTA format guidelines exactly
+        expect(page.get_by_role("alert")).to_contain_text(
+            re.compile(r"fasta", re.IGNORECASE)
+        )
+        expect(search_button).to_be_disabled()
+
+        # Of course - she forgot the header line. She adds one naming her sequence,
+        # and the complaint disappears
+        query_box.fill(FASTA_QUERY)
+        expect(page.get_by_role("alert")).to_have_count(0)
+
+        # Now she chooses what to search against. The dropdown offers her every
+        # genome and annotation PlantGenIE hosts, and she takes the spruce coding
+        # sequences, being after genes rather than raw genome
+        database_dropdown.select_option("picab-v2.0-cds")
+
+        # Having chosen a nucleotide database, the program dropdown wakes up and
+        # offers the programs that can search one. She takes blastn, the
+        # nucleotide-against-nucleotide search
+        expect(program_dropdown).to_be_enabled()
+        program_dropdown.select_option("blastn")
+
+        # Everything the search needs is filled in, so the button comes alive
+        expect(search_button).to_be_enabled()
+        search_button.click()
+
+        # Searching takes a moment, and she is told the job is running rather than
+        # being left staring at an unchanged page
+        expect(
+            page.get_by_text(re.compile(r"running|searching", re.IGNORECASE))
+        ).to_be_visible()
+
+        # The hits come back as a table. The best one is the gene her sequence came
+        # from, matched along its whole length
+        expect(
+            page.get_by_role("cell", name="PA_chr01_G000001.mRNA.1")
+        ).to_be_visible(timeout=60000)
+        expect(page.get_by_role("cell", name="100.000")).to_be_visible()

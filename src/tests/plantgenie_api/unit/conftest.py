@@ -51,7 +51,10 @@ def anyio_backend():
 def sqlite_conn(tmp_path: Path):
     db_path = tmp_path / "userdata.sqlite"
     bootstrap_sqlite(db_path)
-    app.state.APP_ENVIRONMENT = {"SQLITE_PATH": str(db_path)}
+    app.state.APP_ENVIRONMENT = {
+        "SQLITE_PATH": str(db_path),
+        "DATA_PATH": str(tmp_path),
+    }
     conn = sqlite3.connect(str(db_path))
     yield conn
     conn.close()

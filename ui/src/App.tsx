@@ -4,6 +4,7 @@ import GenePage from "./components/genes/GenePage";
 import AddByIdPage from "./components/lists/AddByIdPage";
 import ListPage from "./components/lists/ListPage";
 import MyListsPage from "./components/lists/MyListsPage";
+import BlastPage from "./components/blast/BlastPage";
 import Wizard from "./components/wizard/Wizard";
 import { useAccountIdSync } from "./store/useAccountIdSync";
 
@@ -16,6 +17,8 @@ function App() {
       <main>
         <Switch>
           <Route path="/" component={MyListsPage} />
+          <Route path="/blast" component={BlastPage} />
+          <Route path="/blast/" component={BlastPage} />
           <Route path="/lists/new" component={Wizard} />
           <Route path="/lists/:listId/genes/add-by-id" component={AddByIdPage} />
           <Route path="/lists/:listId" component={ListPage} />

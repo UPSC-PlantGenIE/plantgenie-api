@@ -86,6 +86,14 @@ export interface GoTerm {
   namespace: string | null;
 }
 
+export interface BlastDatabase {
+  id: string;
+  name: string;
+  sequenceType: string;
+  moleculeType: "nucl" | "prot";
+  taxonScientificName: string;
+}
+
 export interface ArabidopsisHit {
   geneId: string;
   name: string | null;
@@ -169,6 +177,10 @@ export const plantgenieApi = createApi({
       query: ({ annotationId, geneId }) =>
         `v2/genes/${annotationId}/${geneId}/go-terms`,
     }),
+    getBlastDatabases: build.query<BlastDatabase[], void>({
+      query: () => "v2/blast/databases",
+      transformResponse: (r: { databases: BlastDatabase[] }) => r.databases,
+    }),
     getGeneArabidopsisHit: build.query<
       ArabidopsisHit | null,
       { annotationId: string; geneId: string }
@@ -214,6 +226,7 @@ export const {
   useLazyLookupGenesQuery,
   useGetGeneQuery,
   useGetGeneGoTermsQuery,
+  useGetBlastDatabasesQuery,
   useGetGeneArabidopsisHitQuery,
   usePatchListMutation,
   useDeleteListMutation,

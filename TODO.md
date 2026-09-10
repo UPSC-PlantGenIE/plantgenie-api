@@ -86,7 +86,31 @@ workflow change considered earlier is dropped.
       `mkfs.ext4 -L neo4j_data /dev/sdb` and `mount -a`, which is exactly the
       manual step this item exists to remove.
 
-## Smaller things
+## nginx
+
+All of this lives in `infra/nginx-cloud-init.yaml`, not in the running
+`/etc/nginx/nginx.conf` — certbot rewrites that file in place, and it is on the
+boot volume, so anything edited by hand is lost on the next nginx replacement.
+
+- [ ] **`client_max_body_size`.** The BLAST submit endpoint caps queries at 1 MB
+      in the handler, but uvicorn buffers the whole body first, so a huge POST is
+      fully received before being rejected. nginx should refuse it at the edge.
+      Note nginx's default is already `1m`, which is *below* what a 1 MB query
+      plus JSON overhead needs — so this has to be set explicitly, high enough
+      for a legitimate query and low enough to be a real limit. Somewhere around
+      `2m`, and the app keeps its own check for direct callers.
+- [ ] **Rate limit `POST /api/v2/accounts`.** Unauthenticated row creation:
+      anyone can call it in a loop and grow the `accounts` table. Two directives
+      — `limit_req_zone $binary_remote_addr zone=accounts:10m rate=5r/m;` in the
+      `http` block, and a `location /api/v2/accounts` carrying
+      `limit_req zone=accounts burst=5 nodelay;` plus `limit_req_status 429;`.
+      The location must be declared **before** the general `/api/` one.
+- [ ] **Rate limit `POST /api/v2/blast`.** A BLAST search against pinsy is 20
+      Gbases of work; submitting them in a loop is a cheap way to flatten the
+      machine. Same shape as above, with a tighter rate.
+- [ ] **Check `proxy_read_timeout` against polling.** Not an issue while results
+      are fetched by polling a job id, but it becomes one the moment anything
+      waits on a search in-request.
 
 - [ ] `vars.VITE_APP_TITLE` is unset on this repo. Old repo has `PlantGenIE`.
 - [ ] `external_network_uuid` and `external_network_backend_id` are declared in
@@ -131,6 +155,19 @@ with common names, string slug IDs on Assembly and Annotation, `?taxon=` /
       pending state — `useCreateListMutation` already returns `isLoading` and
       `error`, and `GenomeSelector.tsx:116` has a `<p role="alert">` pattern to
       follow. Wanted everywhere, not just the wizard.
+- [ ] **Server-side validation of BLAST queries.** `BlastPage.tsx` checks the
+      query starts with `>` so the user is not made to wait for a round trip,
+      but that is a convenience, not a gate — anyone can POST directly. The
+      submit endpoint must enforce, independently:
+      - a **1 MB cap** on the query, returning 413. v1 capped the uploaded file
+        (`MAX_FILE_SIZE` in `api/v1/blast/routes.py`); v2 takes the sequence as
+        JSON text, so the cap applies to the field, and uvicorn will have
+        buffered the whole body before the handler sees it.
+      - real FASTA parsing rather than a `>` check, plus a cap on how many
+        sequences one query may hold.
+      - characters restricted to the nucleotide/protein alphabets.
+      Note v1 used `FastaValidator`, whose import is currently unresolved —
+      one of the four pre-existing `ty` errors.
 
 Work these TDD-style as before: write the test, watch it fail, write the
 minimum to pass, refactor. UI first against static data, then add the backend
