@@ -564,3 +564,104 @@ content.
 unset; the old repo has it as `PlantGenIE`. The workflow has never run — there
 are no releases on this repo, and the deployment serves the `plantgenie-ui`
 v0.3.4 zip instead.
+
+## Completed — moved out of TODO.md on 2026-09-10
+
+TODO.md was restructured into open work only (Now / Next / Long term). The
+finished items below moved here so the record survives.
+
+### Dev build and release convention
+
+Dev builds are driven by prerelease tags like `v0.3.5-dev`. Both
+`build-frontend-release.yaml` and `build-docker-image-release.yaml` fire on
+`v*.*.*`, and that pattern matches a `-dev` suffix, so one tag produces all
+three artifacts: the `plantgenie-ui-<tag>.zip` attached to the release, plus
+`fastapi-backend:<tag>` and `celery-worker:<tag>`. Tags fire regardless of
+branch, so tagging a feature branch gives a deployable dev build — no
+per-branch CI needed.
+
+- `build-frontend-release.yaml` marks `-dev` tags as prereleases
+  (`prerelease: ${{ contains(github.ref_name, '-dev') }}`) so they do not take
+  over "Latest".
+- First dev tag `v0.4.6-dev` cut 2026-08-31. Both workflows succeeded, the
+  release is correctly marked Pre-release, and `dev.tfvars` points at
+  `v0.4.6-dev` for both images and the UI zip. The zip URL is deterministic:
+  `https://github.com/UPSC-PlantGenIE/plantgenie-api/releases/download/<tag>/plantgenie-ui-<tag>.zip`
+  That bundle is the **new React UI** from `ui/`, built with
+  `VITE_API_BASE_URL=/api/` — unlike prod, which serves `plantgenie-ui` v0.3.4.
+- `build-docker-image.yaml` built `plantgenie-api:latest`, which nothing
+  deployed — the tfvars pin `fastapi-backend` and `celery-worker`. Deleted in
+  `96904db` alongside the Waldur terraform rewrite.
+
+### First dev apply
+
+- `terraform workspace select dev && terraform apply -var-file=dev.tfvars`.
+  Six instances, two volumes, a floating IP. Remember
+  `set -a; source ../.env.shared; set +a` first — the destroy provisioners read
+  the token from the environment.
+- `dev.plantgenie.se` pointed at the dev nginx floating IP. It previously
+  pointed at the old SSC deployment, so this was a cutover, not a new record.
+- `sudo certbot --nginx -d dev.plantgenie.se` on the dev nginx VM. HTTPS
+  confirmed working 2026-09-01.
+- Graph loaded into dev neo4j 2026-09-02, not by loading CSVs on the VM but by
+  dumping the local store and restoring it:
+  `neo4j-admin database dump neo4j --to-stdout` locally, then
+  `database load neo4j --from-stdin --overwrite-destination=true` on dev. Only
+  the `neo4j` database moves, so dev keeps its own tfvars password (auth lives
+  in the untouched `system` database). Reachable over bolt at
+  `dev.plantgenie.se:7687` through the nginx stream proxy. See
+  `neo4j-data-load-plan.md` for how the local store was built.
+
+### Gene list feature
+
+Merged in from `plantgenie-old/api-new-react-ui-api-integration/TODO.md`, whose
+API section is fully superseded by v2: `/v2/taxa` with common names, string slug
+IDs on Assembly and Annotation, `?taxon=` / `?assembly=` filters, and
+`geneCount` / `isDefault` on Annotation.
+
+- React wizard rewired onto `/v2/taxa` + `/v2/assemblies` + `/v2/annotations` —
+  `GenomeSelector.tsx` uses all three hooks. Retiring the v1 endpoints is still
+  outstanding.
+- Empty gene list page after "create list" — `lists/ListPage.tsx`.
+- Screens for adding user-entered gene IDs, with a validation view showing
+  descriptions and IDs that were not found — `lists/AddByIdPage.tsx`, backed by
+  `/v2/genes/lookup`.
+- Gene list page populated with real genes, rows linking through to gene pages.
+
+### Account IDs
+
+Specced 2026-09-03 and built out over the following week. Confirmed done
+2026-09-10:
+
+- `POST /v2/accounts` (201, returns the plaintext ID once) and
+  `GET /v2/accounts/me` in `api/v2/accounts/routes.py`
+- `AccountDep` at `dependencies.py:173`, hashing the bearer and 401ing on an
+  unknown ID, in the same shape as `Neo4jDep` and `SqliteDep`
+- lists scoped by owner — the `account_id="stub"` placeholder is gone from
+  `api/v2/lists/routes.py`
+- `prepareHeaders` in `plantgenieApi.ts:124` injecting the bearer from
+  `accountSlice`
+- verified end to end by `test_a_list_url_is_private_to_its_owner` in
+  `src/tests/e2e/test_functional.py`
+
+The schema change that landed:
+
+```sql
+CREATE TABLE IF NOT EXISTS accounts (
+    account_hash TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+ALTER TABLE gene_lists ADD COLUMN account_hash TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS gene_lists_account ON gene_lists (account_hash);
+```
+
+The `ALTER` is not idempotent under `schema.sql`'s `CREATE TABLE IF NOT EXISTS`
+style and needed a guard. Existing dev lists became ownerless, so they were
+deleted.
+
+The build ladder followed, backend first, because the UI could not be
+meaningfully faked against an auth scheme that did not exist yet: accounts
+endpoint → `/me` 401ing on an unknown ID → `GET /v2/lists` filtered to the
+account → UI header injection. The remaining rung, the login UI, became the
+landing page item in TODO.md.
+
