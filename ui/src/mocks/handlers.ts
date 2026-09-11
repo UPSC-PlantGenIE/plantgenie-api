@@ -84,6 +84,14 @@ export const handlers = [
     })
   ),
 
+  http.post("http://localhost:8000/api/v2/blast", () =>
+    HttpResponse.json({ jobId: "11111111-1111-1111-1111-111111111111" })
+  ),
+
+  http.get("http://localhost:8000/api/v2/blast/poll/:jobId", () =>
+    HttpResponse.json({ status: "PENDING" })
+  ),
+
   http.post("http://localhost:8000/api/v2/accounts", () =>
     HttpResponse.json({ accountId: "0000111122223333" }, { status: 201 })
   ),

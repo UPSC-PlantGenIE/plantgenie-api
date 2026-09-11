@@ -86,6 +86,21 @@ export interface GoTerm {
   namespace: string | null;
 }
 
+export interface BlastHit {
+  queryId: string;
+  subjectId: string;
+  percentIdentity: number;
+  alignmentLength: number;
+  mismatches: number;
+  gapOpens: number;
+  queryStart: number;
+  queryEnd: number;
+  subjectStart: number;
+  subjectEnd: number;
+  evalue: number;
+  bitScore: number;
+}
+
 export interface BlastDatabase {
   id: string;
   name: string;
@@ -181,6 +196,19 @@ export const plantgenieApi = createApi({
       query: () => "v2/blast/databases",
       transformResponse: (r: { databases: BlastDatabase[] }) => r.databases,
     }),
+    submitBlast: build.mutation<
+      { jobId: string },
+      { databaseId: string; program: string; query: string }
+    >({
+      query: (body) => ({ url: "v2/blast", method: "POST", body }),
+    }),
+    pollBlast: build.query<{ status: string }, string>({
+      query: (jobId) => `v2/blast/poll/${jobId}`,
+    }),
+    getBlastResults: build.query<BlastHit[], string>({
+      query: (jobId) => `v2/blast/${jobId}/json`,
+      transformResponse: (r: { results: BlastHit[] }) => r.results,
+    }),
     getGeneArabidopsisHit: build.query<
       ArabidopsisHit | null,
       { annotationId: string; geneId: string }
@@ -227,6 +255,9 @@ export const {
   useGetGeneQuery,
   useGetGeneGoTermsQuery,
   useGetBlastDatabasesQuery,
+  useSubmitBlastMutation,
+  usePollBlastQuery,
+  useGetBlastResultsQuery,
   useGetGeneArabidopsisHitQuery,
   usePatchListMutation,
   useDeleteListMutation,

@@ -273,9 +273,13 @@ class TestBlastSearch:
             page.get_by_text(re.compile(r"running|searching", re.IGNORECASE))
         ).to_be_visible()
 
-        # The hits come back as a table. The best one is the gene her sequence came
-        # from, matched along its whole length
+        # The hits come back as a table. The best one is the gene her sequence
+        # came from, matched along its whole length - so the query and subject
+        # columns of that row name the same gene
+        best_hit = page.get_by_role("row").filter(
+            has=page.get_by_role("cell", name="PA_chr01_G000001.mRNA.1")
+        )
+        expect(best_hit.first).to_be_visible(timeout=60000)
         expect(
-            page.get_by_role("cell", name="PA_chr01_G000001.mRNA.1")
-        ).to_be_visible(timeout=60000)
-        expect(page.get_by_role("cell", name="100.000")).to_be_visible()
+            best_hit.first.get_by_role("cell", name="100.000")
+        ).to_be_visible()

@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { useGetBlastDatabasesQuery } from "../../api/plantgenieApi";
+import { useLocation } from "wouter";
+import {
+  useGetBlastDatabasesQuery,
+  useSubmitBlastMutation,
+} from "../../api/plantgenieApi";
 
 const PROGRAMS: Record<string, string[]> = {
   "nucl-nucl": ["blastn", "tblastx"],
@@ -20,9 +24,11 @@ function moleculeTypeOf(query: string) {
 
 export default function BlastPage() {
   const { data: databases } = useGetBlastDatabasesQuery();
+  const [submitBlast] = useSubmitBlastMutation();
   const [query, setQuery] = useState("");
   const [databaseId, setDatabaseId] = useState("");
   const [program, setProgram] = useState("");
+  const [, setLocation] = useLocation();
 
   const trimmedQuery = query.trim();
   const queryIsInvalid =
@@ -49,6 +55,29 @@ export default function BlastPage() {
       <div className="mt-6 flex flex-col gap-5 rounded-xl border border-border bg-card px-6 py-5 shadow-card">
         <div>
           <label
+            htmlFor="blast-query"
+            className="block text-xs font-medium text-label"
+          >
+            Query
+          </label>
+          <textarea
+            id="blast-query"
+            rows={10}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Paste one or more FASTA-formatted sequences"
+            className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 font-mono text-xs text-heading"
+          />
+          {queryIsInvalid && (
+            <p role="alert" className="mt-2 text-xs text-red-600">
+              Your query must be in FASTA format, beginning with a header
+              line such as &gt;my sequence
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label
             htmlFor="blast-database"
             className="block text-xs font-medium text-label"
           >
@@ -66,7 +95,7 @@ export default function BlastPage() {
             <option value="">Select a database</option>
             {databases?.map((database) => (
               <option key={database.id} value={database.id}>
-                {database.taxonScientificName} — {database.name}
+                {database.id}
               </option>
             ))}
           </select>
@@ -98,32 +127,17 @@ export default function BlastPage() {
           </select>
         </div>
 
-        <div>
-          <label
-            htmlFor="blast-query"
-            className="block text-xs font-medium text-label"
-          >
-            Query
-          </label>
-          <textarea
-            id="blast-query"
-            rows={10}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Paste one or more FASTA-formatted sequences"
-            className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 font-mono text-xs text-heading"
-          />
-          {queryIsInvalid && (
-            <p role="alert" className="mt-2 text-xs text-red-600">
-              Your query must be in FASTA format, beginning with a header
-              line such as &gt;my sequence
-            </p>
-          )}
-        </div>
-
         <button
           type="button"
           disabled={!canSearch}
+          onClick={async () => {
+            const { jobId } = await submitBlast({
+              databaseId,
+              program: selectedProgram,
+              query,
+            }).unwrap();
+            setLocation(`/blast/${jobId}`);
+          }}
           className="h-11 cursor-pointer rounded-lg bg-primary px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           Search
