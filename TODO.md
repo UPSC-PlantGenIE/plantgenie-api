@@ -17,14 +17,6 @@ before the UI can be faked against it.
 
 ## Now
 
-- [ ] **Versions on the BLAST database options.** The dropdown shows
-      "Picea abies — Coding sequences" with no indication of which assembly or
-      annotation it belongs to, so two annotations for one species would be
-      indistinguishable. The data is already in the graph — every
-      `BlastDatabase` hangs off an Assembly or Annotation carrying a `version`
-      — the databases query just doesn't return it. Wanted:
-      "Picea abies — Coding sequences (v2.0)". Touches the Cypher projection in
-      `api/v2/blast/routes.py:32` and the option label in `BlastPage.tsx`.
 - [ ] **Reorder the wizard so the list is named last.** Naming and describing a
       list before choosing what goes in it asks for a decision the user cannot
       make yet. Wanted order: taxon, genome, then list details. Note the Figma
@@ -34,26 +26,64 @@ before the UI can be faked against it.
 
 ## Next
 
-- [ ] **Landing page: introduction and login.** Replaces the account page that
-      was specced earlier — the login flow matters more than the ID-reveal
-      page, and the landing page is where it belongs. Paste an account ID to
-      log in, validated against the backend. A stored ID is used automatically
-      but **verified first**, with a "not you?" link offering log-in-as-someone-
-      else or generate-a-new-ID.
+- [ ] **Landing page: login.** Paste an account ID to log in, validated
+      against the backend. A stored ID is **verified first**, with a "not you?"
+      link offering log-in-as-someone-else or generate-a-new-ID. UI-only work:
+      `POST /v2/accounts` and `GET /v2/accounts/me` already exist.
 
-      Both endpoints already exist (`POST /v2/accounts`,
-      `GET /v2/accounts/me`), so this is UI-only work. Two current behaviours
-      in `store/useAccountIdSync.ts` are what it fixes:
-      - a stored ID is dispatched into state with **no backend call**, so a
-        stale or bogus ID looks logged-in until a request 401s
-      - with no stored ID, `createAccount()` fires in a `useEffect` on **app
-        mount**, so every visitor mints a row in `accounts` — bots included.
-        Generation should be a deliberate click behind "not you?"
+      Done 2026-09-11, uncommitted, UI suite green:
+      - `/` routes to `LandingPage`, `MyListsPage` moved to `/lists`, and the
+        three "My Lists" links in `ListPage.tsx` / `GenePage.tsx` follow it
+      - paste-an-ID form verifies through a new `verifyAccount` mutation,
+        shows a `role="alert"` when rejected, then stores it and goes to
+        `/lists`
+      - `prepareHeaders` no longer overwrites an `Authorization` header the
+        request already set, so verification checks the pasted ID rather than
+        the stored one
+      - `useAccountIdSync` verifies a stored ID before using it, and no longer
+        creates an account on app mount
 
-      Changes what `/` is: `App.tsx` currently routes `/` to `MyListsPage`.
+      The seven situations, decided 2026-09-11. The app sees only what is
+      stored, so they collapse to four screens:
+
+      | # | Who | Machine | Stored | Sees | Does |
+      | --- | --- | --- | --- | --- | --- |
+      | 1 | New user | New | Nothing | Both cards | Generate |
+      | 2 | New user | Someone else's | Another user's valid ID | Welcome-back card | "Not you?" → generate |
+      | 3 | Returning | Own, signed in | Own valid ID | Welcome-back card | Continue |
+      | 4 | Returning | Shared | Another user's valid ID | Welcome-back card | "Not you?" → paste |
+      | 5 | Returning | New | Nothing | Both cards | Paste |
+      | 6 | Anyone | Any | ID the backend rejects | Both cards + "saved ID wasn't recognised" | Paste or generate; bad ID cleared |
+      | 7 | Anyone | Any | ID, backend unreachable | Error with retry | Retry; ID kept |
+
+      Decisions:
+      - A valid stored ID shows the **welcome-back card** on `/` rather than
+        redirecting to `/lists` — otherwise rows 2 and 4 never see "not you?"
+      - The welcome-back card **does not mask the ID** (decided 2026-09-14).
+        Anyone at the machine can read it from localStorage or just click
+        Continue, so masking protects nothing.
+      - **No hero.** The Figma board's accent bar, headline and intro paragraph
+        are left out for now.
+
+      Remaining, each test-first:
+      1. Wrap the form in the "I have an account ID" card — heading,
+         no-email/no-password copy, `1234 5678 9012 3456` placeholder (~15 min)
+      2. "First time here?" card: "Generate a new ID" calls `POST /v2/accounts`,
+         then shows the ID in groups of four with the save-it warning (~30 min)
+      3. Welcome-back card: the ID, Continue → `/lists`, "Not you?" → both
+         cards (~30 min)
+      4. Rejected stored ID: clear it, show the note (~15 min)
+      5. Backend unreachable: error with retry, keep the ID (~15 min)
+
+      Steps 3–5 need the account slice to carry a verification status
+      (checking / valid / rejected / unreachable); `useAccountIdSync`
+      currently swallows the failure. The e2e new-visitor flow in
+      `src/tests/e2e/test_functional.py` is written against this design
+      (`#existing-account-card`, `#new-account-card`).
 
       Design: `Desktop — Landing (Signed out)` in Figma (node `122:2`). The
       returning-visitor board and the two mobile 390 boards are not drawn yet.
+      Brand colours are not applied yet — see the palette reference below.
 - [ ] **BLAST history per account.** Let a user see their past searches. The
       auth this needs is already in place, but `submit_blast`
       (`api/v2/blast/routes.py:51`) persists **nothing** linking a job to an
@@ -107,16 +137,27 @@ boot volume, so anything edited by hand is lost on the next nginx replacement.
       plus JSON overhead needs — so this has to be set explicitly, high enough
       for a legitimate query and low enough to be a real limit. Somewhere around
       `2m`, and the app keeps its own check for direct callers.
-- [ ] **Rate limit `POST /api/v2/accounts`.** Unauthenticated row creation:
-      anyone can call it in a loop and grow the `accounts` table. Two directives
-      — `limit_req_zone $binary_remote_addr zone=accounts:10m rate=5r/m;` in the
-      `http` block, and a `location /api/v2/accounts` carrying
-      `limit_req zone=accounts burst=5 nodelay;` plus `limit_req_status 429;`.
-      The location must be declared **before** the general `/api/` one. The
-      landing page above reduces the exposure but does not remove it.
+- [ ] **Rate limit `/api/v2/accounts`: creation and sign-in.** Both routes
+      under it are abuse targets. `POST` is unauthenticated row creation, so a
+      loop grows the `accounts` table. `GET /me` answers 200 or 401, so a loop
+      guesses IDs. All attempts count, successful or not — nobody signs in
+      constantly. The app also calls `/me` on every full page load
+      (`useAccountIdSync`), so leave room for refreshes and new tabs.
+      `limit_req_zone $binary_remote_addr zone=accounts:10m rate=10r/m;` in
+      the `http` block, and a `location /api/v2/accounts` carrying
+      `limit_req zone=accounts burst=10 nodelay;` plus
+      `limit_req_status 429;`. The location must be declared **before** the
+      general `/api/` one.
+- [ ] **Loose per-IP limit on all of `/api/`.** Every endpoint that takes the
+      ID can be used to guess it, so the accounts limit alone is bypassed by
+      guessing through `GET /v2/lists` instead. Around `5r/s` with a burst —
+      normal browsing never reaches it, and one IP would need ~6,000 years to
+      find any one of 10,000 accounts. nginx applies only the matching
+      location's `limit_req`, so repeat this zone inside the accounts
+      location too.
 - [ ] **Rate limit `POST /api/v2/blast`.** A BLAST search against pinsy is 20
       Gbases of work; submitting them in a loop is a cheap way to flatten the
-      machine. Same shape as above, with a tighter rate.
+      machine. Same shape as the accounts limit, with a tighter rate.
 - [ ] **Check `proxy_read_timeout` against polling.** Not an issue while results
       are fetched by polling a job id, but it becomes one the moment anything
       waits on a search in-request.

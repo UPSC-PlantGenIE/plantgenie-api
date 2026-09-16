@@ -255,6 +255,18 @@ Things that may bite later. Fix when they surface, not before.
   (`packages/shared/.../openstack.py`, `OS_*` in `.env.shared`). Decided
   2026-08-28: keep pointing at the old cluster's Swift for now. A self-hosted
   MinIO on the new cluster is the likely replacement.
+- **Claude's UI test runs stall intermittently.** Three times on 2026-09-11 a
+  `yarn test:run` (or `yarn vitest run`) launched by Claude hung with no
+  output at all, while the same suite in the user's own `yarn test` watch
+  passed in about 6s. Cause unknown. Two of the three piped output through
+  `grep`, which hid where it stopped. Mitigation now in `CLAUDE.md`: no output
+  filtering, foreground, 15s timeout. If it recurs, note whether a `yarn test`
+  watch was running at the same time.
+- **Pre-existing UI lint and format debt.** `yarn lint` fails on
+  `AddByIdPage.tsx:24` (`react-hooks/set-state-in-effect`), and
+  `prettier --check` warns on `plantgenieApi.ts`, `App.tsx`, `GenePage.tsx` and
+  `ListPage.tsx`. All of it predates the landing page work; left alone so the
+  diffs stay about one thing.
 
 ## What the new cluster has to provide
 
@@ -664,4 +676,17 @@ meaningfully faked against an auth scheme that did not exist yet: accounts
 endpoint → `/me` 401ing on an unknown ID → `GET /v2/lists` filtered to the
 account → UI header injection. The remaining rung, the login UI, became the
 landing page item in TODO.md.
+
+### BLAST database versions
+
+Moved out of TODO.md on 2026-09-11. The dropdown showed
+"Picea abies — Coding sequences" with no assembly or annotation version, so two
+annotations for one species were indistinguishable.
+
+Resolved by `a2156b4`, which labels each option with the database id
+(`BlastPage.tsx:98`). Ids are built as `{taxon}-{version}-{sequenceType}` in
+`scripts/neo4j/generate-blast-databases-csv.py:36`, so the version is visible.
+The readable label originally wanted, "Picea abies — Coding sequences (v2.0)",
+was not built: `api/v2/blast/routes.py` still does not return `version`.
+Accepted as enough on 2026-09-11.
 
