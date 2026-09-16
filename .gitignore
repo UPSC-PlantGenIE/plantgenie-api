@@ -13,9 +13,12 @@ build/
 dist/
 wheels/
 *.egg-info
+.pytest_cache/
+.ruff_cache/
 
 # IDEs
 .vscode/
+.zed/
 
 # Virtual environments
 .venv
@@ -27,4 +30,3 @@ wheels/
 ui/.pnp.cjs
 ui/.pnp.loader.mjs
 .claude
-.zed
