@@ -27,11 +27,35 @@ const makeWrapper = () => {
 describe("useAccountIdSync", () => {
   beforeEach(() => localStorage.clear());
 
-  it("hydrates from localStorage on mount", () => {
+  it("hydrates from localStorage on mount", async () => {
     localStorage.setItem("accountId", "1234567890123456");
     const { store, wrapper } = makeWrapper();
     renderHook(() => useAccountIdSync(), { wrapper });
-    expect(store.getState().account.accountId).toBe("1234567890123456");
+    await waitFor(() =>
+      expect(store.getState().account.accountId).toBe("1234567890123456")
+    );
+  });
+
+  it("does not use a stored id the backend rejects", async () => {
+    let authorization: string | null = null;
+    server.use(
+      http.get("http://localhost:8000/api/v2/accounts/me", ({ request }) => {
+        authorization = request.headers.get("Authorization");
+        return HttpResponse.json(
+          { detail: "Unknown account" },
+          { status: 401 }
+        );
+      })
+    );
+    localStorage.setItem("accountId", "1234567890123456");
+    const { store, wrapper } = makeWrapper();
+
+    renderHook(() => useAccountIdSync(), { wrapper });
+
+    await waitFor(() =>
+      expect(authorization).toBe("Bearer 1234567890123456")
+    );
+    expect(store.getState().account.accountId).toBeNull();
   });
 
   it("writes to localStorage when accountId changes", () => {
@@ -41,20 +65,5 @@ describe("useAccountIdSync", () => {
       store.dispatch(setAccountId("9999888877776666"));
     });
     expect(localStorage.getItem("accountId")).toBe("9999888877776666");
-  });
-
-  it("creates an account when none is stored", async () => {
-    server.use(
-      http.post("http://localhost:8000/api/v2/accounts", () =>
-        HttpResponse.json({ accountId: "5555444433332222" }, { status: 201 })
-      )
-    );
-    const { store, wrapper } = makeWrapper();
-
-    renderHook(() => useAccountIdSync(), { wrapper });
-
-    await waitFor(() =>
-      expect(store.getState().account.accountId).toBe("5555444433332222")
-    );
   });
 });

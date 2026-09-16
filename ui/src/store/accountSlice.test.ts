@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import reducer, { setAccountId } from "./accountSlice";
+import reducer, { clearAccountId, setAccountId } from "./accountSlice";
 
 describe("accountSlice", () => {
   it("starts with null accountId", () => {
@@ -10,4 +10,10 @@ describe("accountSlice", () => {
     const next = reducer({ accountId: null }, setAccountId("1234567890123456"));
     expect(next.accountId).toBe("1234567890123456");
   });
+
+  it("clearAccountId stores null as id", () => {
+    // clearAccountId()
+    const next = reducer({accountId: "1234567890123456"}, clearAccountId())
+    expect(next.accountId).toBeNull();
+  })
 });

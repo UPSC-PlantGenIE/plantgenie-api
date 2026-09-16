@@ -13,8 +13,12 @@ const accountSlice = createSlice({
     setAccountId(state, action: PayloadAction<string>) {
       state.accountId = action.payload;
     },
+    clearAccountId(state) {
+      state.accountId = null;
+      localStorage.removeItem("accountId");
+    }
   },
 });
 
-export const { setAccountId } = accountSlice.actions;
+export const { setAccountId, clearAccountId } = accountSlice.actions;
 export default accountSlice.reducer;
