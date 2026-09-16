@@ -19,12 +19,6 @@ export default function AddByIdPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [view, setView] = useState<"input" | "results">("input");
 
-  useEffect(() => {
-    if (result) {
-      setSelected(new Set(result.found.map((g) => g.geneId)));
-    }
-  }, [result]);
-
   const handleValidate = async () => {
     if (!list) return;
     const geneIds = Array.from(
@@ -37,7 +31,12 @@ export default function AddByIdPage() {
     );
     if (geneIds.length === 0) return;
     setOrderedIds(geneIds);
-    await lookup({ annotationId: list.annotationId, geneIds });
+    const { data: lookupResult } = await lookup({
+      annotationId: list.annotationId,
+      geneIds,
+    });
+    if (lookupResult)
+      setSelected(new Set(lookupResult.found.map((gene) => gene.geneId)));
     setView("results");
   };
 
