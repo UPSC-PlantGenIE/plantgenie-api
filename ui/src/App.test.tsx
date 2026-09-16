@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { screen } from "@testing-library/react";
 import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
@@ -6,6 +6,8 @@ import { renderWithStore } from "./test-utils";
 import App from "./App";
 
 describe("App", () => {
+  beforeEach(() => localStorage.clear());
+
   it("prevents non-authenticated users access to authenticated routes", () => {
     const { hook, history } = memoryLocation({ path: "/lists", record: true });
 

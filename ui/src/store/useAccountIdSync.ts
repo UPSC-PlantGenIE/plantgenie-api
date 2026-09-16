@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useVerifyAccountMutation } from "../api/plantgenieApi";
-import { setAccountId } from "./accountSlice";
+import { clearAccountId } from "./accountSlice";
 import type { RootState } from ".";
 
 const STORAGE_KEY = "accountId";
@@ -12,15 +12,15 @@ export function useAccountIdSync() {
   const [verifyAccount] = useVerifyAccountMutation();
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return;
-    verifyAccount(stored)
+    if (!accountId) return;
+
+    verifyAccount(accountId)
       .unwrap()
-      .then(
-        () => dispatch(setAccountId(stored)),
-        () => {}
-      );
-  }, [dispatch, verifyAccount]);
+      .catch(() => {
+        dispatch(clearAccountId());
+        localStorage.removeItem(STORAGE_KEY);
+      });
+  }, [dispatch, verifyAccount, accountId]);
 
   useEffect(() => {
     if (accountId) localStorage.setItem(STORAGE_KEY, accountId);

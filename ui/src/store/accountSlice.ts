@@ -4,7 +4,13 @@ export interface AccountState {
   accountId: string | null;
 }
 
-const initialState: AccountState = { accountId: null };
+// const initialState: AccountState = {
+//   accountId: localStorage.getItem("accountId"),
+// };
+
+const initialState = (): AccountState => ({
+  accountId: localStorage.getItem("accountId"),
+});
 
 const accountSlice = createSlice({
   name: "account",
@@ -15,7 +21,6 @@ const accountSlice = createSlice({
     },
     clearAccountId(state) {
       state.accountId = null;
-      localStorage.removeItem("accountId");
     }
   },
 });

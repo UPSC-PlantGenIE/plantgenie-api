@@ -1,6 +1,7 @@
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { clearAccountId } from "../store/accountSlice";
 import { useLocation } from "wouter";
+import { plantgenieApi } from "../api/plantgenieApi";
 
 const LogOutIcon = () => (
   <svg
@@ -44,6 +45,8 @@ export default function Navbar() {
 
   const handleLogOut = () => {
     dispatch(clearAccountId());
+    localStorage.removeItem("accountId");
+    dispatch(plantgenieApi.util.resetApiState())
     setLocation("/");
   };
 

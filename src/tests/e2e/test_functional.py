@@ -30,7 +30,9 @@ class TestNewVisitor:
         page.get_by_role(
             "link", name=re.compile(r"new list", re.IGNORECASE)
         ).click()
-        page.get_by_label(re.compile(r"list name", re.IGNORECASE)).fill(name)
+        page.get_by_label(re.compile(r"list name", re.IGNORECASE)).fill(
+            name
+        )
         page.get_by_label(re.compile(r"description", re.IGNORECASE)).fill(
             description
         )
@@ -69,7 +71,7 @@ class TestNewVisitor:
 
         # (2) to use an existing one
         expect(
-            page.locator("#existing-account-card").get_by_role(
+            page.locator("#returning-user").get_by_role(
                 "button", name=re.compile(r"continue", re.IGNORECASE)
             )
         ).to_be_visible()
@@ -80,7 +82,9 @@ class TestNewVisitor:
 
         # The site shows her the ID it just made, in groups of four so she can
         # copy it down, and warns her that losing it loses her lists
-        account_id = page.get_by_text(re.compile(r"\d{4} \d{4} \d{4} \d{4}"))
+        account_id = page.get_by_text(
+            re.compile(r"\d{4} \d{4} \d{4} \d{4}")
+        )
         expect(account_id).to_be_visible()
         expect(page.get_by_role("alert")).to_contain_text(
             re.compile(r"lose|losing", re.IGNORECASE)
@@ -174,7 +178,9 @@ class TestNewVisitor:
         # She notices her list has a URL of its own
         assert re.search(r"/lists/.+", page.url)
 
-    def test_returns_to_her_lists_on_the_same_computer(self, page: Page, site):
+    def test_returns_to_her_lists_on_the_same_computer(
+        self, page: Page, site
+    ):
         # Ada already has an account and a list from an earlier visit
         # She navigates to plantgenie on her laptop that she used for the previous visit
         sign_in(page, create_account())
@@ -186,21 +192,36 @@ class TestNewVisitor:
 
         page.goto(SITE_URL)
 
-        # She is greeted with a "Not you?" message indicating her account id
+        # She is navigated directly to her lists page
         expect(
             page.get_by_role(
-                "link", name=re.compile(r"not you", re.IGNORECASE)
+                "heading", name=re.compile(r"my lists", re.IGNORECASE)
             )
         ).to_be_visible()
-        # and a button to allow her to continue to her lists. She clicks it.
-        page.get_by_role(
-            "link", name=re.compile(r"continue|my lists", re.IGNORECASE)
-        ).click()
 
-        # Her list is right where she left it
+        # She sees the lists she created before
         expect(
             page.get_by_role("link", name="Ada's cold stress genes")
         ).to_be_visible()
+
+    def test_a_bookmarked_list_opens_directly(self, page: Page, site):
+        # Ada bookmarks one of her lists
+        sign_in(page, create_account())
+        self.start_a_gene_list(
+            page,
+            "Ada's cold stress genes",
+            "Known cold stress-related genes found in Norway spruce",
+        )
+        bookmarked_list_url = page.url
+
+        # The next day she opens the bookmark directly
+        page.goto(bookmarked_list_url)
+
+        # and lands on her list, not back on the list index
+        expect(
+            page.get_by_role("heading", name="Ada's cold stress genes")
+        ).to_be_visible()
+        assert page.url == bookmarked_list_url
 
     def test_signs_in_from_another_computer(
         self, page: Page, browser: Browser, site
@@ -244,7 +265,7 @@ class TestNewVisitor:
         # She types her ID from memory, but gets the last digit wrong
         mistyped_last_digit = str((int(adas_account_id[-1]) + 1) % 10)
         mistyped_account_id = adas_account_id[:-1] + mistyped_last_digit
-        existing_account_card = page.locator("#existing-account-card")
+        existing_account_card = page.locator("#returning-user")
         existing_account_card.get_by_label(
             re.compile(r"account id", re.IGNORECASE)
         ).fill(mistyped_account_id)
@@ -281,14 +302,17 @@ class TestNewVisitor:
         bobs_account_id = create_account()
         page.goto(SITE_URL)
 
-        # The site greets whoever used it last. That is not Bob, so he
-        # clicks "Not you?"
+        # The site drops him into whoever used it last. That is not Bob,
+        # so he logs out
+        expect(
+            page.get_by_role("link", name="Ada's cold stress genes")
+        ).to_be_visible()
         page.get_by_role(
-            "link", name=re.compile(r"not you", re.IGNORECASE)
+            "button", name=re.compile(r"log out", re.IGNORECASE)
         ).click()
 
         # He pastes in his own ID
-        existing_account_card = page.locator("#existing-account-card")
+        existing_account_card = page.locator("#returning-user")
         existing_account_card.get_by_label(
             re.compile(r"account id", re.IGNORECASE)
         ).fill(bobs_account_id)
@@ -364,10 +388,13 @@ class TestNewVisitor:
         # being shown its contents
         expect(bobs_page.get_by_role("alert")).to_be_visible()
         expect(
-            bobs_page.get_by_role("heading", name="Ada's cold stress genes")
+            bobs_page.get_by_role(
+                "heading", name="Ada's cold stress genes"
+            )
         ).to_have_count(0)
 
         bobs_computer.close()
+
 
 SPRUCE_QUERY_HEADER = ">adas-test-sequence"
 SPRUCE_QUERY = """\
@@ -387,9 +414,7 @@ FASTA_QUERY = ">PA_chr01_G000001.mRNA.1\n" + SPRUCE_QUERY
 
 
 class TestBlastSearch:
-    def test_can_blast_a_sequence_against_a_genome(
-        self, page: Page, site
-    ):
+    def test_can_blast_a_sequence_against_a_genome(self, page: Page, site):
         # Ada is interested in figuring out which spruce gene sequences are similar
         # to one she has discovered. She found out that PlantGenIE has a BLAST interface,
         # which is a tool that can be used to search a sequence against a database.
@@ -397,7 +422,9 @@ class TestBlastSearch:
         page.goto(SITE_URL + "/blast/")
 
         expect(
-            page.get_by_role("heading", name=re.compile(r"blast", re.IGNORECASE))
+            page.get_by_role(
+                "heading", name=re.compile(r"blast", re.IGNORECASE)
+            )
         ).to_be_visible()
 
         # She sees a dropdown menu with a label - choose database
@@ -457,7 +484,9 @@ class TestBlastSearch:
         # Searching takes a moment, and she is told the job is running rather than
         # being left staring at an unchanged page
         expect(
-            page.get_by_text(re.compile(r"running|searching", re.IGNORECASE))
+            page.get_by_text(
+                re.compile(r"running|searching", re.IGNORECASE)
+            )
         ).to_be_visible()
 
         # The hits come back as a table. The best one is the gene her sequence
