@@ -28,7 +28,7 @@ export default function GenePage() {
   return (
     <div className="mx-auto w-full max-w-7xl px-6 py-8">
       <nav className="text-xs text-muted" aria-label="Breadcrumb">
-        <Link href="/" className="hover:text-heading">
+        <Link href="/lists" className="hover:text-heading">
           My Lists
         </Link>
         <span className="px-2">/</span>
@@ -62,7 +62,7 @@ export default function GenePage() {
             )}
           </div>
           <Link
-            href="/"
+            href="/lists"
             className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card px-4 text-sm font-semibold text-label shadow-card"
           >
             ← Back to My Lists

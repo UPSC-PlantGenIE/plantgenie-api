@@ -189,13 +189,13 @@ describe("GenePage", () => {
     expect(await scoped.findByText(/3 annotations/i)).toBeInTheDocument();
   });
 
-  it("renders a 'Back to My Lists' link pointing to '/'", async () => {
+  it("renders a 'Back to My Lists' link pointing to '/lists'", async () => {
     mockAnnotation();
     renderGenePage();
     const link = await screen.findByRole("link", {
       name: /back to my lists/i,
     });
-    expect(link).toHaveAttribute("href", "/");
+    expect(link).toHaveAttribute("href", "/lists");
   });
 
   it("shows only the gene id in the breadcrumb when there is no list referrer", async () => {

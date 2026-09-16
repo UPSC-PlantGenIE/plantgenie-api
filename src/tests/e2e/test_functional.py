@@ -1,16 +1,32 @@
 import re
 
+import httpx
 import pytest
 from playwright.sync_api import Browser, Page, expect
 
 pytestmark = pytest.mark.e2e
 
 SITE_URL = "http://localhost:5173"
+API_URL = "http://localhost:8000"
+
+
+def create_account() -> str:
+    response = httpx.post(f"{API_URL}/api/v2/accounts", timeout=10)
+    response.raise_for_status()
+    return response.json()["accountId"]
+
+
+def sign_in(page: Page, account_id: str):
+    page.goto(SITE_URL)
+    page.evaluate(
+        "accountId => localStorage.setItem('accountId', accountId)",
+        account_id,
+    )
 
 
 class TestNewVisitor:
     def start_a_gene_list(self, page: Page, name: str, description: str):
-        page.goto(SITE_URL)
+        page.goto(SITE_URL + "/lists")
         page.get_by_role(
             "link", name=re.compile(r"new list", re.IGNORECASE)
         ).click()
@@ -36,9 +52,44 @@ class TestNewVisitor:
         # She heard about this cool website where she can create gene lists against
         # the Norway spruce genome (and others) called PlantGenIE.
 
-        # She navigates to the page
+        # She navigates to the page and is welcomed with an explanation of the app
         page.goto(SITE_URL)
-        # and sees a heading "my lists"
+        expect(
+            page.get_by_role(
+                "heading", name=re.compile(r"plantgenie", re.IGNORECASE)
+            )
+        ).to_be_visible()
+
+        # She sees two possibilities
+        # (1) to create a new id
+        generate_button = page.locator("#new-account-card").get_by_role(
+            "button", name=re.compile(r"generate a new id", re.IGNORECASE)
+        )
+        expect(generate_button).to_be_visible()
+
+        # (2) to use an existing one
+        expect(
+            page.locator("#existing-account-card").get_by_role(
+                "button", name=re.compile(r"continue", re.IGNORECASE)
+            )
+        ).to_be_visible()
+
+        # She has never been here before, so she has no account ID.
+        # She takes the offer to have one made for her instead
+        generate_button.click()
+
+        # The site shows her the ID it just made, in groups of four so she can
+        # copy it down, and warns her that losing it loses her lists
+        account_id = page.get_by_text(re.compile(r"\d{4} \d{4} \d{4} \d{4}"))
+        expect(account_id).to_be_visible()
+        expect(page.get_by_role("alert")).to_contain_text(
+            re.compile(r"lose|losing", re.IGNORECASE)
+        )
+
+        # She carries on to her lists
+        page.get_by_role(
+            "link", name=re.compile(r"continue|my lists", re.IGNORECASE)
+        ).click()
         expect(
             page.get_by_role(
                 "heading", name=re.compile(r"my lists", re.IGNORECASE)
@@ -123,21 +174,155 @@ class TestNewVisitor:
         # She notices her list has a URL of its own
         assert re.search(r"/lists/.+", page.url)
 
-    def test_multiple_users_can_keep_their_own_lists(
-        self, page: Page, browser: Browser, site
-    ):
-        # Ada makes herself a list, as before.
+    def test_returns_to_her_lists_on_the_same_computer(self, page: Page, site):
+        # Ada already has an account and a list from an earlier visit
+        # She navigates to plantgenie on her laptop that she used for the previous visit
+        sign_in(page, create_account())
         self.start_a_gene_list(
             page,
             "Ada's cold stress genes",
             "Known cold stress-related genes found in Norway spruce",
         )
 
-        # Bob is in a different lab and has never used the site before
-        # and has certainly never met Ada. He navigates to the page
+        page.goto(SITE_URL)
+
+        # She is greeted with a "Not you?" message indicating her account id
+        expect(
+            page.get_by_role(
+                "link", name=re.compile(r"not you", re.IGNORECASE)
+            )
+        ).to_be_visible()
+        # and a button to allow her to continue to her lists. She clicks it.
+        page.get_by_role(
+            "link", name=re.compile(r"continue|my lists", re.IGNORECASE)
+        ).click()
+
+        # Her list is right where she left it
+        expect(
+            page.get_by_role("link", name="Ada's cold stress genes")
+        ).to_be_visible()
+
+    def test_signs_in_from_another_computer(
+        self, page: Page, browser: Browser, site
+    ):
+        # Ada makes a list at work, and writes her account ID down
+        adas_account_id = create_account()
+        sign_in(page, adas_account_id)
+        self.start_a_gene_list(
+            page,
+            "Ada's cold stress genes",
+            "Known cold stress-related genes found in Norway spruce",
+        )
+
+        # That evening she opens the site on her laptop at home, which has never
+        # been to the site and so has nothing remembered
+        laptop = browser.new_context()
+        laptop_page = laptop.new_page()
+        laptop_page.goto(SITE_URL)
+
+        # She pastes in the ID she wrote down
+        laptop_page.get_by_role(
+            "textbox", name=re.compile(r"account id", re.IGNORECASE)
+        ).fill(adas_account_id)
+        laptop_page.get_by_role(
+            "button", name=re.compile(r"continue", re.IGNORECASE)
+        ).click()
+
+        # and her list came with her
+        expect(
+            laptop_page.get_by_role("link", name="Ada's cold stress genes")
+        ).to_be_visible()
+
+        laptop.close()
+
+    def test_a_mistyped_id_is_refused(self, page: Page, site):
+        # Ada has an account, and opens the site on a computer that has
+        # never been to it
+        adas_account_id = create_account()
+        page.goto(SITE_URL)
+
+        # She types her ID from memory, but gets the last digit wrong
+        mistyped_last_digit = str((int(adas_account_id[-1]) + 1) % 10)
+        mistyped_account_id = adas_account_id[:-1] + mistyped_last_digit
+        existing_account_card = page.locator("#existing-account-card")
+        existing_account_card.get_by_label(
+            re.compile(r"account id", re.IGNORECASE)
+        ).fill(mistyped_account_id)
+        existing_account_card.get_by_role(
+            "button", name=re.compile(r"continue", re.IGNORECASE)
+        ).click()
+
+        # She is told the ID wasn't recognised
+        expect(page.get_by_role("alert")).to_contain_text(
+            re.compile(r"recognised", re.IGNORECASE)
+        )
+
+        # and she stays where she is, free to try again
+        expect(page).not_to_have_url(re.compile(r"/lists"))
+        expect(
+            existing_account_card.get_by_role(
+                "button", name=re.compile(r"continue", re.IGNORECASE)
+            )
+        ).to_be_visible()
+
+    def test_someone_else_signs_in_on_a_shared_computer(
+        self, page: Page, site
+    ):
+        # Ada uses the lab's shared computer to make a list
+        sign_in(page, create_account())
+        self.start_a_gene_list(
+            page,
+            "Ada's cold stress genes",
+            "Known cold stress-related genes found in Norway spruce",
+        )
+
+        # Later Bob sits down at the same computer. He has an account of
+        # his own, and opens the site
+        bobs_account_id = create_account()
+        page.goto(SITE_URL)
+
+        # The site greets whoever used it last. That is not Bob, so he
+        # clicks "Not you?"
+        page.get_by_role(
+            "link", name=re.compile(r"not you", re.IGNORECASE)
+        ).click()
+
+        # He pastes in his own ID
+        existing_account_card = page.locator("#existing-account-card")
+        existing_account_card.get_by_label(
+            re.compile(r"account id", re.IGNORECASE)
+        ).fill(bobs_account_id)
+        existing_account_card.get_by_role(
+            "button", name=re.compile(r"continue", re.IGNORECASE)
+        ).click()
+
+        # and sees his own, empty, lists rather than Ada's
+        expect(
+            page.get_by_role(
+                "heading", name=re.compile(r"no lists yet", re.IGNORECASE)
+            )
+        ).to_be_visible()
+        expect(
+            page.get_by_role("link", name="Ada's cold stress genes")
+        ).to_have_count(0)
+
+    def test_multiple_users_can_keep_their_own_lists(
+        self, page: Page, browser: Browser, site
+    ):
+        # Ada makes herself a list, as before.
+        sign_in(page, create_account())
+        self.start_a_gene_list(
+            page,
+            "Ada's cold stress genes",
+            "Known cold stress-related genes found in Norway spruce",
+        )
+
+        # Bob is in a different lab and has never met Ada. He has an account of
+        # his own, and navigates to the page
         bobs_computer = browser.new_context()
         bobs_page = bobs_computer.new_page()
-        bobs_page.goto(SITE_URL)
+        sign_in(bobs_page, create_account())
+        bobs_page.goto(SITE_URL + "/lists")
 
         # Another researcher's lists should not be visible as they should be user-specific
         # After navigating to the page, he sees, as expected, no lists have been created yet.
@@ -153,6 +338,7 @@ class TestNewVisitor:
         self, page: Page, browser: Browser, site
     ):
         # Ada makes herself a list, which lives at its own URL
+        sign_in(page, create_account())
         self.start_a_gene_list(
             page,
             "Ada's cold stress genes",
@@ -160,10 +346,11 @@ class TestNewVisitor:
         )
         adas_list_url = page.url
 
-        # Bob has been using the site on his own computer
+        # Bob has been using the site on his own computer, with his own account
         bobs_computer = browser.new_context()
         bobs_page = bobs_computer.new_page()
-        bobs_page.goto(SITE_URL)
+        sign_in(bobs_page, create_account())
+        bobs_page.goto(SITE_URL + "/lists")
         expect(
             bobs_page.get_by_role(
                 "heading", name=re.compile(r"no lists yet", re.IGNORECASE)

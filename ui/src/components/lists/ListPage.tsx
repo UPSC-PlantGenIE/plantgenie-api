@@ -70,7 +70,7 @@ export default function ListPage() {
   return (
     <div className="mx-auto w-full max-w-7xl px-6 py-8">
       <nav className="text-xs text-muted" aria-label="Breadcrumb">
-        <Link href="/" className="hover:text-heading">
+        <Link href="/lists" className="hover:text-heading">
           My Lists
         </Link>
         <span className="px-2">/</span>

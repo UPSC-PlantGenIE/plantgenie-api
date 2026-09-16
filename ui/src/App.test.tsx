@@ -6,12 +6,51 @@ import { renderWithStore } from "./test-utils";
 import App from "./App";
 
 describe("App", () => {
-  it("renders the My Lists page at '/'", () => {
+  it("prevents non-authenticated users access to authenticated routes", () => {
+    const { hook, history } = memoryLocation({ path: "/lists", record: true });
+
+    renderWithStore(
+      <Router hook={hook}>
+        <App />
+      </Router>
+    );
+    expect(history.at(-1)).toBe("/");
+  });
+
+  it("allows authenticated users access to authenticated routes", async () => {
+    const { hook } = memoryLocation({ path: "/lists", record: true });
+
+    renderWithStore(
+      <Router hook={hook}>
+        <App />
+      </Router>,
+      { preloadedState: { account: { accountId: "1234567890123456" } } }
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: /my lists/i })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the landing page at '/'", () => {
     const { hook } = memoryLocation({ path: "/" });
     renderWithStore(
       <Router hook={hook}>
         <App />
       </Router>
+    );
+    expect(
+      screen.getByRole("textbox", { name: /account id/i })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the My Lists page at '/lists'", () => {
+    const { hook } = memoryLocation({ path: "/lists" });
+    renderWithStore(
+      <Router hook={hook}>
+        <App />
+      </Router>,
+      { preloadedState: { account: { accountId: "1234567890123456" } } }
     );
     expect(
       screen.getByRole("heading", { name: /my lists/i })
@@ -23,7 +62,8 @@ describe("App", () => {
     renderWithStore(
       <Router hook={hook}>
         <App />
-      </Router>
+      </Router>,
+      { preloadedState: { account: { accountId: "1234567890123456" } } }
     );
     expect(
       screen.getByRole("heading", { name: /name your list/i })
@@ -35,7 +75,8 @@ describe("App", () => {
     renderWithStore(
       <Router hook={hook}>
         <App />
-      </Router>
+      </Router>,
+      { preloadedState: { account: { accountId: "1234567890123456" } } }
     );
     expect(
       await screen.findByRole("heading", {
