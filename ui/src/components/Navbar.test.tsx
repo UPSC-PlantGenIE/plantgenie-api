@@ -1,15 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import Navbar from "./Navbar";
+import { renderWithStore } from "../test-utils";
 
 describe("Navbar", () => {
-  it("renders the GeneList wordmark", () => {
-    render(<Navbar />);
-    expect(screen.getByText("🌿 GeneList")).toBeInTheDocument();
+  it("renders the PlantGenIE wordmark", () => {
+    renderWithStore(<Navbar />);
+    expect(screen.getByText(/PlantGenIE/)).toBeInTheDocument();
   });
 
   it("exposes a banner landmark", () => {
-    render(<Navbar />);
+    renderWithStore(<Navbar />);
     expect(screen.getByRole("banner")).toBeInTheDocument();
   });
 });
