@@ -125,7 +125,8 @@ export const plantgenieApi = createApi({
       const { accountId } = (
         getState() as { account: { accountId: string | null } }
       ).account;
-      if (accountId) headers.set("Authorization", `Bearer ${accountId}`);
+      if (accountId && !headers.has("Authorization"))
+        headers.set("Authorization", `Bearer ${accountId}`);
       return headers;
     },
   }),
@@ -154,6 +155,12 @@ export const plantgenieApi = createApi({
     }),
     createAccount: build.mutation<{ accountId: string }, void>({
       query: () => ({ url: "v2/accounts", method: "POST" }),
+    }),
+    verifyAccount: build.mutation<null, string>({
+      query: (accountId) => ({
+        url: "v2/accounts/me",
+        headers: { Authorization: `Bearer ${accountId}` },
+      }),
     }),
     createList: build.mutation<CreateListResponse, CreateListRequest>({
       query: (body) => ({ url: "v2/lists", method: "POST", body }),
@@ -247,6 +254,7 @@ export const {
   useGetAnnotationsQuery,
   useGetAnnotationQuery,
   useCreateAccountMutation,
+  useVerifyAccountMutation,
   useCreateListMutation,
   useGetListQuery,
   useGetMyListsQuery,

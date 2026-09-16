@@ -96,6 +96,10 @@ export const handlers = [
     HttpResponse.json({ accountId: "0000111122223333" }, { status: 201 })
   ),
 
+  http.get("http://localhost:8000/api/v2/accounts/me", () =>
+    HttpResponse.json(null)
+  ),
+
   http.post("http://localhost:8000/api/v2/lists", () =>
     HttpResponse.json({ listId: "fake-list-123" })
   ),
