@@ -262,11 +262,35 @@ Things that may bite later. Fix when they surface, not before.
   `grep`, which hid where it stopped. Mitigation now in `CLAUDE.md`: no output
   filtering, foreground, 15s timeout. If it recurs, note whether a `yarn test`
   watch was running at the same time.
-- **Pre-existing UI lint and format debt.** `yarn lint` fails on
-  `AddByIdPage.tsx:24` (`react-hooks/set-state-in-effect`), and
-  `prettier --check` warns on `plantgenieApi.ts`, `App.tsx`, `GenePage.tsx` and
-  `ListPage.tsx`. All of it predates the landing page work; left alone so the
-  diffs stay about one thing.
+- **Pre-existing UI format debt.** The `AddByIdPage.tsx`
+  `react-hooks/set-state-in-effect` error was fixed by `a8b3b17` (the selection
+  is now set in `handleValidate` from the lookup result, and the effect is
+  gone), so `yarn lint` is clean. `prettier --check` still warns on about 15
+  files, `plantgenieApi.ts`, `GenePage.tsx` and `ListPage.tsx` among them. Left
+  alone deliberately: a formatting pass would bury the next real diff.
+- **`schema.sql` is not a migration, and nothing warns you.** Every statement
+  is `CREATE TABLE IF NOT EXISTS` and `bootstrap_sqlite` runs the whole file on
+  every startup, so a new *table* appears on an existing database but a new
+  *column* on an existing table never does. The startup succeeds either way.
+  **Bit on 2026-09-17:** `account_hash` was added to `gene_lists` in `b0c38c3`,
+  dev's database predated it, and every `GET /v2/lists` returned 500 with
+  `sqlite3.OperationalError: no such column: g.account_hash`. Fixed on dev by
+  moving the file aside and letting it rebuild, which works only because dev
+  lists are test data. Stop `fastapi` *before* moving the file: a running
+  process keeps writing to the moved inode through its open handle.
+  **Prod cannot be fixed this way** — its lists are real, so the cutover needs
+  a hand-applied `ALTER TABLE`, rehearsed against a copy. The `ALTER` used
+  locally on 2026-09-10 was never committed anywhere; there is still no
+  migration path in the repo.
+- **State read at module-import time breaks tests.** `accountSlice`'s
+  `initialState` reads `localStorage`. As a plain object that happens once when
+  the module is first imported, so a test that writes the key inside the test
+  body is too late and the store still starts empty. Fixed by making
+  `initialState` a function, which RTK calls when the state is first needed.
+  Second half of the same trap: vitest shares one jsdom per file, so a stored
+  ID leaks into later tests in that file. Every test file touching accounts now
+  needs `beforeEach(() => localStorage.clear())` — `App.test.tsx` failed on
+  exactly this.
 
 ## What the new cluster has to provide
 
@@ -674,8 +698,8 @@ deleted.
 The build ladder followed, backend first, because the UI could not be
 meaningfully faked against an auth scheme that did not exist yet: accounts
 endpoint → `/me` 401ing on an unknown ID → `GET /v2/lists` filtered to the
-account → UI header injection. The remaining rung, the login UI, became the
-landing page item in TODO.md.
+account → UI header injection. The remaining rung, the login UI, shipped on
+2026-09-16 — see "Landing page and log in" below.
 
 ### BLAST database versions
 
@@ -689,4 +713,108 @@ Resolved by `a2156b4`, which labels each option with the database id
 The readable label originally wanted, "Picea abies — Coding sequences (v2.0)",
 was not built: `api/v2/blast/routes.py` still does not return `version`.
 Accepted as enough on 2026-09-11.
+
+### Landing page and log in
+
+Finished 2026-09-16, commits `a8b3b17` through `c43714b`, tagged `v0.4.8-dev`
+and pushed. 128 UI tests and 8 e2e tests green, `yarn lint` and `yarn build`
+clean. **Deployed to dev by hand on 2026-09-17** following `MANUAL-DEPLOY.md`,
+and the account flow confirmed working in the browser. The deploy needed both
+data stores brought forward as well as the code — see "Dev data stores" below.
+
+What ships:
+
+- `/` is `LandingPage`: two cards side by side, `#returning-user` (paste an ID,
+  verified through `verifyAccount`, `role="alert"` when rejected) and
+  `#new-account-card` ("Generate a new ID" → `POST /v2/accounts`, the ID in
+  groups of four, a copy button, the save-it warning).
+- `MyListsPage` moved to `/lists`. `RequireAccount` in `App.tsx` redirects to
+  `/` for any path matching a prefix in `routePrefixesWithAuthentication`,
+  currently just `/lists`. Adding BLAST later is one string.
+- The navbar shows the account ID and a "Log out" button when signed in.
+- A signed-in visitor hitting `/` is redirected straight to `/lists`.
+
+Three designs were tried and two abandoned. **The welcome-back card** (a valid
+stored ID showing "Welcome back" plus "Not you?") was built and then removed:
+it exists to let the next person at a shared machine switch accounts, and a
+"Log out" button in the navbar does that job everywhere, not just on `/`.
+**Masking the ID** (`•••• •••• •••• 3456`) was specced and dropped — anyone at
+the keyboard can read it out of localStorage or just click Continue, so it
+protects nothing. **A `verificationStatus` flag** (checking / idle) was half
+built and thrown away; see the next item for what replaced it.
+
+Decisions worth not re-litigating:
+
+- **The store is initialised from localStorage**, so `accountId` is set on the
+  very first render and `RequireAccount` never sees a false "signed out". The
+  saved ID is verified in the background and cleared if the backend rejects it.
+  The alternative — verify first, hold a "checking" state, render nothing until
+  the answer arrives — was built and reverted: it pays a guaranteed delay on
+  every page load to avoid a rare flash of a list page for an ID that is no
+  longer valid. The ID *is* the credential and every request carries it, so
+  optimistic trust is the normal shape for this.
+
+  This was not cosmetic. With verify-first, reloading or bookmarking any
+  `/lists/<id>` URL bounced the user to the list index, because the guard
+  decided before verification finished. Reproducible in the browser: no
+  `GET /api/v2/lists/<id>` request ever went out, only `/accounts/me` then
+  `/lists`. `test_a_bookmarked_list_opens_directly` covers it.
+- **Logging out resets the RTK Query cache.** `getMyLists` takes no argument
+  and the account ID rides in a header, so the cache key is identical for every
+  user and Bob was served Ada's cached lists on a shared machine — caught by
+  `test_someone_else_signs_in_on_a_shared_computer`, which showed Bob's ID in
+  the navbar above Ada's list. `handleLogOut` now dispatches
+  `plantgenieApi.util.resetApiState()`.
+- **A generated ID is only saved when "Continue to my lists" is clicked**, not
+  when it is generated. Otherwise an accidental click on Generate stored an ID
+  the user never wrote down, and the redirect then made the landing page
+  unreachable. The cost: closing the tab without clicking Continue forgets the
+  ID, which the warning already covers.
+- **Reducers stay pure.** `clearAccountId` briefly removed the localStorage key
+  itself; the `removeItem` now sits at the two call sites, `handleLogOut` and
+  the `.catch` in `useAccountIdSync`. A `signOut` helper is worth adding if a
+  third call site appears.
+- **Cards are `<section>` with `aria-labelledby`**, which makes them `region`
+  landmarks that both the unit tests and the e2e tests select by name. A
+  `<section>` without an accessible name is not a region and the queries fail —
+  this cost a round of confusing failures twice.
+
+### Dev data stores
+
+Brought forward on 2026-09-17, alongside the `v0.4.8-dev` deploy. Both were
+behind, and neither is fixed by restarting a service.
+
+- **neo4j.** The dev graph was loaded on 2026-09-02, but
+  `arath-best-hit-load.cypher` (`50860a7`) and `blast-database-load.cypher`
+  (`57655af`) both landed after that, so the gene page's Arabidopsis card had
+  no data and the BLAST database dropdown was empty. Fixed by dumping the local
+  store and restoring it, the same way as on 2026-09-02, rather than running
+  the cypher against dev: `LOAD CSV FROM 'file:///…'` reads the *server's*
+  import directory, so the CSVs would have had to be copied onto the VM first.
+  Dumped to a file rather than piped over ssh — the image's entrypoint writes
+  startup noise to stdout, which corrupts a piped dump, and a broken pipe
+  leaves the far end half-overwritten.
+- **sqlite.** Rebuilt from scratch, because `schema.sql` never applied
+  `account_hash` to the existing `gene_lists` table. See the watch-list entry
+  above; this is the one that will need real work for prod.
+
+The neo4j VM is on DHCP at `192.168.42.101` as of 2026-09-17, reached with
+`ssh -J` through nginx like the others.
+
+### Manual deploy
+
+`MANUAL-DEPLOY.md` (repo root, written 2026-09-16, untracked) documents
+updating a running dev deployment without a `terraform apply`: bump the tags in
+`dev.tfvars`, replace the UI bundle on nginx, `sed` the image tag in
+`fastapi.service` and `celery-worker.service`, restart, verify. nginx is the
+only host with a floating IP, so application (`192.168.42.12`) and queue
+(`192.168.42.43`) are reached with `ssh -J` through it. The nginx login is
+`jamie@dev.plantgenie.se`; the internal VMs use `ubuntu`.
+
+One deliberate difference from cloud-init: the UI step moves the old
+`/var/www/html/dist` aside instead of unzipping over it, because Vite writes
+hashed filenames and stale bundles otherwise accumulate.
+
+Proven by the 2026-09-17 deploy, which also added a step 0 covering both data
+stores — the part that actually cost time.
 

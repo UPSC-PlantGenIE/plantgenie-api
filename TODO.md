@@ -26,64 +26,11 @@ before the UI can be faked against it.
 
 ## Next
 
-- [ ] **Landing page: login.** Paste an account ID to log in, validated
-      against the backend. A stored ID is **verified first**, with a "not you?"
-      link offering log-in-as-someone-else or generate-a-new-ID. UI-only work:
-      `POST /v2/accounts` and `GET /v2/accounts/me` already exist.
-
-      Done 2026-09-11, uncommitted, UI suite green:
-      - `/` routes to `LandingPage`, `MyListsPage` moved to `/lists`, and the
-        three "My Lists" links in `ListPage.tsx` / `GenePage.tsx` follow it
-      - paste-an-ID form verifies through a new `verifyAccount` mutation,
-        shows a `role="alert"` when rejected, then stores it and goes to
-        `/lists`
-      - `prepareHeaders` no longer overwrites an `Authorization` header the
-        request already set, so verification checks the pasted ID rather than
-        the stored one
-      - `useAccountIdSync` verifies a stored ID before using it, and no longer
-        creates an account on app mount
-
-      The seven situations, decided 2026-09-11. The app sees only what is
-      stored, so they collapse to four screens:
-
-      | # | Who | Machine | Stored | Sees | Does |
-      | --- | --- | --- | --- | --- | --- |
-      | 1 | New user | New | Nothing | Both cards | Generate |
-      | 2 | New user | Someone else's | Another user's valid ID | Welcome-back card | "Not you?" → generate |
-      | 3 | Returning | Own, signed in | Own valid ID | Welcome-back card | Continue |
-      | 4 | Returning | Shared | Another user's valid ID | Welcome-back card | "Not you?" → paste |
-      | 5 | Returning | New | Nothing | Both cards | Paste |
-      | 6 | Anyone | Any | ID the backend rejects | Both cards + "saved ID wasn't recognised" | Paste or generate; bad ID cleared |
-      | 7 | Anyone | Any | ID, backend unreachable | Error with retry | Retry; ID kept |
-
-      Decisions:
-      - A valid stored ID shows the **welcome-back card** on `/` rather than
-        redirecting to `/lists` — otherwise rows 2 and 4 never see "not you?"
-      - The welcome-back card **does not mask the ID** (decided 2026-09-14).
-        Anyone at the machine can read it from localStorage or just click
-        Continue, so masking protects nothing.
-      - **No hero.** The Figma board's accent bar, headline and intro paragraph
-        are left out for now.
-
-      Remaining, each test-first:
-      1. Wrap the form in the "I have an account ID" card — heading,
-         no-email/no-password copy, `1234 5678 9012 3456` placeholder (~15 min)
-      2. "First time here?" card: "Generate a new ID" calls `POST /v2/accounts`,
-         then shows the ID in groups of four with the save-it warning (~30 min)
-      3. Welcome-back card: the ID, Continue → `/lists`, "Not you?" → both
-         cards (~30 min)
-      4. Rejected stored ID: clear it, show the note (~15 min)
-      5. Backend unreachable: error with retry, keep the ID (~15 min)
-
-      Steps 3–5 need the account slice to carry a verification status
-      (checking / valid / rejected / unreachable); `useAccountIdSync`
-      currently swallows the failure. The e2e new-visitor flow in
-      `src/tests/e2e/test_functional.py` is written against this design
-      (`#existing-account-card`, `#new-account-card`).
-
-      Design: `Desktop — Landing (Signed out)` in Figma (node `122:2`). The
-      returning-visitor board and the two mobile 390 boards are not drawn yet.
-      Brand colours are not applied yet — see the palette reference below.
+- [ ] **Redraw the Figma landing board.** `Desktop — Landing (Signed out)`
+      (node `122:2`) no longer matches what ships: the board has one card and
+      a hero, the app has two cards side by side (`#returning-user` and
+      `#new-account-card`) and no hero. The returning-visitor board was never
+      drawn and is not needed — a signed-in visitor is redirected to `/lists`.
 - [ ] **BLAST history per account.** Let a user see their past searches. The
       auth this needs is already in place, but `submit_blast`
       (`api/v2/blast/routes.py:51`) persists **nothing** linking a job to an
@@ -98,6 +45,12 @@ before the UI can be faked against it.
       pending state — `useCreateListMutation` already returns `isLoading` and
       `error`, and `GenomeSelector.tsx:116` has a `<p role="alert">` pattern to
       follow. Wanted everywhere, not just the wizard.
+
+      Includes the one landing-page case left unhandled: a stored ID the
+      backend cannot be asked about. `useAccountIdSync` treats any rejection
+      the same, so a network failure silently signs the user out and drops
+      their ID. A rejected ID should be cleared; an unreachable backend should
+      keep it and say so.
 - [ ] **Server-side validation of BLAST queries.** `BlastPage.tsx` checks the
       query starts with `>` so the user is not made to wait for a round trip,
       but that is a convenience, not a gate — anyone can POST directly. The
@@ -111,11 +64,9 @@ before the UI can be faked against it.
       - characters restricted to the nucleotide/protein alphabets.
       Note v1 used `FastaValidator`, whose import is currently unresolved —
       one of the four pre-existing `ty` errors.
-- [ ] **Rename GeneList → PlantGenIE.** The product is PlantGenIE; "GeneList"
-      is a working title that leaked into three places: the wordmark in
-      `components/Navbar.tsx:5`, the wordmark on all 18 Figma artboards, and
-      `vars.VITE_APP_TITLE`, which is unset on this repo where the old repo has
-      `PlantGenIE`.
+- [ ] **Rename GeneList → PlantGenIE.** The navbar wordmark is done
+      (`components/Navbar.tsx:56`). Still wrong: `<title>GeneList</title>` in
+      `ui/index.html:17`, and the wordmark on all 18 Figma artboards.
 - [ ] **Populate the dev shared volume.** Copy the duckdb database across, plus
       the BLAST databases. Blocking: `lifespan` in `dependencies.py` does
       `db_path.resolve(strict=True)` then `duckdb.connect()`, so the dev API
@@ -228,8 +179,11 @@ resolution; not chased down.
       download-as-file, and a blunt warning that losing it loses the lists.
       Deferred behind the landing page — the login flow is what actually blocks
       users, and the landing page carries the warning already.
-- [ ] **Grow the landing page feature strip.** It names four things today —
-      build lists, add by ID, search genes, BLAST. Add to it as features land.
+- [ ] **A feature strip on the landing page.** The shipped page is two cards
+      and nothing else — a visitor who has not been told what PlantGenIE is
+      gets no answer from it. Naming what the site does (build lists, add by
+      ID, search genes, BLAST) is the smallest version, growing as features
+      land.
 
 ### Loose ends
 
@@ -243,8 +197,7 @@ resolution; not chased down.
 Decided 2026-09-03, built out over the following week. A 16-digit ID, generated
 server-side, that is both identity and credential: possession is access, there
 is no password. Displayed in groups of four. The endpoints, `AccountDep`, bearer
-injection and list scoping are all done — see `HANDOFF.md`. What remains is the
-landing page above.
+injection, list scoping and the landing page are all done — see `HANDOFF.md`.
 
 Decisions worth not re-litigating:
 
@@ -294,6 +247,8 @@ Notes:
   "save your ID" warning.
 - Do **not** re-derive this from `upsc.se`'s stylesheets. That site is a Joomla
   template whose most-repeated colours are template chrome, not the brand.
-- In code this becomes `--color-primary`, a new `--color-primary-strong`, and
-  blue/yellow tokens in `ui/src/index.css`, which currently holds a blue-based
-  palette (`--color-primary: #3885f5`).
+- In code, `--color-upsc-blue`, `--color-upsc-green` and `--color-upsc-yellow`
+  are in `ui/src/index.css` and the navbar uses the blue. **Not done:**
+  `--color-primary` is still `#3885f5`, so every `bg-primary` button — the
+  landing page's three, the wizard's, the list pages' — is still the old blue.
+  Pointing `--color-primary` at `#097e35` switches them all at once.
