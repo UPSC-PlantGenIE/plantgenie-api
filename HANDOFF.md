@@ -216,6 +216,32 @@ Things that may bite later. Fix when they surface, not before.
   next prod nginx change, and carry it into dev. The first replacement after
   adding it still goes stale once; every one after that is clean.
 
+- **`arath-best-hit-load.cypher` matches its arath target unscoped.**
+  `MATCH (t:Gene {id: row.arath_gene_id})` was safe while `arath-araport11`
+  was the only annotation holding AT identifiers, which its header comment
+  says outright. `arath-tair10` landed 2026-09-17 and carries the same ids, so
+  re-running that script now creates two edges per hit. The edges already in
+  the graph are correct — this bites on a re-run only. Fix is to bind the
+  annotation and add `WHERE (arath)-[:HAS_GENE]->(t)`, as
+  `potra-T89-2026-arath-best-hit-load.cypher` does.
+
+- **Scoping a match through a bound node loses the index.** Writing
+  `MATCH (arath)-[:HAS_GENE]->(t:Gene {id: row.arath_gene_id})` lets the
+  planner expand all 27,655 `HAS_GENE` edges per row instead of seeking on the
+  `gene_id` index — ~810M expansions for one haplotype, and the load was still
+  running after minutes. Splitting it into an index seek plus a `WHERE`
+  existence check finished in seconds. `SHOW TRANSACTIONS YIELD
+  transactionId, currentQuery, elapsedTime, status` is how to see a load that
+  is running rather than stuck; `TERMINATE TRANSACTION '<id>'` kills it.
+
+- **Genes shared between annotations must not be cleared per annotation.** The
+  T89 organelle genes (`pt`, `mt`, 125 of them) are single nodes with a
+  `HAS_GENE` edge to each haplotype. The usual clear step
+  (`MATCH (:Annotation {id: X})-[:HAS_GENE]->(g) DETACH DELETE g`) deletes the
+  *node*, so re-running one haplotype would silently break the other's edges.
+  Every T89 clear step excludes `pt`/`mt` for this reason, and the organelles
+  are loaded once, reached through h1.
+
 - `neo4j-cloud-init.yaml` uses `$RELEASE` for the docker apt source instead of
   the old hardcoded `noble`. It worked on Ubuntu 26.04, but it is doing a
   lookup the old file did not.
@@ -817,4 +843,41 @@ hashed filenames and stale bundles otherwise accumulate.
 
 Proven by the 2026-09-17 deploy, which also added a step 0 covering both data
 stores — the part that actually cost time.
+
+The `MANUAL-DEPLOY.md` neo4j section disagrees with itself: it scps the dump to
+the VM (line 91) and then loads it with `--from-stdin` (line 99). The load
+needs `--from-path=/backup`. Used in that corrected form on 2026-09-18; the
+document still says `--from-stdin`.
+
+### Arabidopsis tair10 and the T89 haplotypes
+
+Added 2026-09-17 and 2026-09-18, graph-only — no image or UI change, so the
+deploy was a neo4j dump and restore on its own.
+
+- **`arath-tair10`**, 28,775 genes, `isDefault` false, sharing the existing
+  `arath-tair10` assembly with araport11. The gene records already existed in
+  `/opt/neo4j/import/old/`. Loaded ad hoc in cypher-shell rather than through
+  a script, so a from-scratch rebuild will not reproduce it. Its `chromosome`
+  values read `Chr1` where araport11's read `1`.
+- **`potra-T89-2026`**, the phased T89 assembly. One Assembly carrying both
+  haplotypes in a single `genome.fa`, split into two Annotations
+  (`potra-T89-2026-h1`, 34,066 genes; `-h2`, 33,987) on the `T89h1`/`T89h2`
+  gene id prefix. Genes scope to an annotation, so each haplotype stays
+  separate in gene search, while BLAST against the assembly genome covers
+  both. Verified in the UI: both haplotypes appear in the genome selector and
+  BLAST works against them.
+
+The disk layout under `/opt/data/plantgenie-knowledge/potra/T89-2026/` matches
+`potra/v2`: genome and its BLAST database at the assembly level, and per
+haplotype the three sequence fastas, `gff.gz`, `annotation.tsv.gz`, BLAST
+`nucl`/`prot` databases and the diamond database and hits.
+
+Scripts are `scripts/neo4j/potra-T89-2026-{load,gene-go-load,arath-best-hit-load}.cypher`
+and `scripts/duckdb/generate-potra-T89-2026-{records,gene-go,arath-best-hits}.sql`.
+All are re-runnable — every create either `MERGE`s or has a clear step ahead
+of it.
+
+`assemblies.csv`, `annotations.csv` and `blast-databases.csv` in
+`/opt/neo4j/import/` are hand-maintained and live outside the repo. They now
+carry the T89 rows. Nothing in git records their contents.
 

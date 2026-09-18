@@ -28,7 +28,7 @@ CREATE (owner)-[:HAS_BLAST_DB]->(:BlastDatabase {
   path:         row.path
 });
 
-// Verification - expect 20 databases, 5 on assemblies and 15 on annotations
+// Verification - expect 27 databases, 6 on assemblies and 21 on annotations
 MATCH (owner)-[:HAS_BLAST_DB]->(b:BlastDatabase)
 RETURN labels(owner)[0] AS ownerType, count(b) AS databaseCount
 ORDER BY ownerType;

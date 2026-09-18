@@ -26,6 +26,14 @@ before the UI can be faked against it.
 
 ## Next
 
+- [ ] **Give `Annotation` a `version_name`.** The two T89 haplotypes show in
+      the genome selector as the bare versions `h1` and `h2`, with nothing to
+      label them. `version_name` exists on `Assembly` but not on `Annotation`
+      (`api/v2/models.py:44`). Full slice: the field, the projection in the
+      annotations query — which returns `n {.id, .version, .geneCount,
+      .isDefault}` and would reject an extra property under `extra="forbid"` —
+      a column in `/opt/neo4j/import/annotations.csv`, the `SET` in the load
+      scripts, then a reload and a dev redeploy.
 - [ ] **Redraw the Figma landing board.** `Desktop — Landing (Signed out)`
       (node `122:2`) no longer matches what ships: the board has one card and
       a hero, the app has two cards side by side (`#returning-user` and

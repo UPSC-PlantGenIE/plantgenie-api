@@ -78,11 +78,11 @@ endpoint reads them and the new UI calls none. In-scope files total ~150MB.
       `path` holding the disk layout (`betpe/v1`). Annotation IDs match those
       the gene loads in `neo4j-queries.cypher` already expect.
 - [x] `published` is `false` for all six assemblies for now.
-- [ ] Which annotation is `isDefault` for arath, araport11 or tair10? Moot
-      until the arath gene CSVs exist.
-- [ ] Produce the arath gene CSVs. Both arath rows are currently dropped from
-      `annotations.csv`, so Arabidopsis shows "No genomes available" in the
-      wizard. Two lines to add back once the CSVs exist.
+- [x] `isDefault` for arath is araport11. `arath-tair10` was added on
+      2026-09-17 with `isDefault` false.
+- [x] The arath gene CSVs exist. `arath-araport11` was loaded 2026-09-02;
+      `arath-tair10` followed on 2026-09-17 from the copy in
+      `/opt/neo4j/import/old/`.
 - [ ] Where do the load scripts live long-term? The api repo has the neo4j
       deployment (`infra/neo4j.tf`, `infra/neo4j-cloud-init.yaml`), but
       knowledge-builder was the intended home.
@@ -115,15 +115,34 @@ Each step depends on the one above it.
    nodes came from the gene-records row counts, so this only matters if the
    gene load's verification returned different numbers.
 
+## Added since
+
+- **`arath-tair10`**, 2026-09-17. 28,775 genes, `isDefault` false, sharing the
+  `arath-tair10` assembly with araport11. Its `chromosome` values read `Chr1`
+  where araport11's read `1` — the two annotations do not agree on chromosome
+  naming. Loaded ad hoc in cypher-shell; **no script covers it**, so a load
+  from scratch would miss it. See `.claude/handoffs/HANDOFF-2026-09-18.md`.
+- **`potra-T89-2026`**, 2026-09-18. The phased T89 assembly: one Assembly
+  carrying both haplotypes, split into `potra-T89-2026-h1` (34,066 genes) and
+  `potra-T89-2026-h2` (33,987). Genes, GO edges, blast databases and
+  arabidopsis best hits all loaded, scripts in `scripts/neo4j/potra-T89-2026-*`
+  and `scripts/duckdb/generate-potra-T89-2026-*`.
+
 ## Remaining
 
-The graph is loaded for the five taxa that have data. What is left:
-
-- Arabidopsis: generate the gene CSVs, add the two rows back to
-  `annotations.csv`, decide `isDefault`
 - Real `published`, `versionName`, `publicationDate` and `doi` values for the
-  assemblies, all currently absent or `false`
-- Repeat the load on the dev VM, which is the original TODO item
+  assemblies, all currently absent or `false`.
+- A readable label for the T89 haplotypes, which show as the bare versions `h1`
+  and `h2`. `versionName` is on `Assembly` only — `Annotation`
+  (`api/v2/models.py:44`) has no such field, so this needs the model, the
+  annotations query projection, a CSV column and the load scripts.
+- A script for the `arath-tair10` annotation and gene load, so the graph can
+  be rebuilt from scratch.
+- `arath-best-hit-load.cypher` matches its target unscoped
+  (`MATCH (t:Gene {id: row.arath_gene_id})`), which was safe only while
+  araport11 was the sole holder of AT identifiers. Since `arath-tair10`
+  landed, re-running it would create two edges per hit. Existing edges are
+  fine; this bites on a re-run only.
 
 ## Local test setup
 
