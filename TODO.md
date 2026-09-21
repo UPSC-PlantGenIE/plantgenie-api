@@ -75,11 +75,22 @@ before the UI can be faked against it.
 - [ ] **Rename GeneList → PlantGenIE.** The navbar wordmark is done
       (`components/Navbar.tsx:56`). Still wrong: `<title>GeneList</title>` in
       `ui/index.html:17`, and the wordmark on all 18 Figma artboards.
-- [ ] **Populate the dev shared volume.** Copy the duckdb database across, plus
-      the BLAST databases. Blocking: `lifespan` in `dependencies.py` does
-      `db_path.resolve(strict=True)` then `duckdb.connect()`, so the dev API
-      will not boot without `plantgenie-backend.db` present, and it also needs
-      all six `OS_*` Swift vars set.
+- [ ] **Populate the dev shared volume.** Partly done 2026-09-21: the sequence
+      fastas (`*-sequences.fa.gz` plus `.fai`/`.gzi`, ~471 MB) are on
+      `/srv/shared` for all seven annotations that have them, rsynced from
+      `/opt/data/plantgenie-knowledge`. Most were already there; only the two
+      T89 haplotypes and the new pinsy/pruav indexes actually transferred.
+      Still missing: the duckdb database and the BLAST databases. Blocking:
+      `lifespan` in `dependencies.py` does `db_path.resolve(strict=True)` then
+      `duckdb.connect()`, so the dev API will not boot without
+      `plantgenie-backend.db` present, and it also needs all six `OS_*` Swift
+      vars set.
+
+      **Do not rsync the whole tree.** `/opt/data/plantgenie-knowledge` is
+      32 GB and is also the local `DATA_PATH`, so it contains
+      `plantgenie-userdata.sqlite` — an unfiltered copy would overwrite dev's
+      live accounts and gene lists. Filter to what is wanted and keep
+      `--exclude='plantgenie-userdata.sqlite'` spelled out.
 
 ## Long term — may or may not happen
 
@@ -187,6 +198,21 @@ resolution; not chased down.
       download-as-file, and a blunt warning that losing it loses the lists.
       Deferred behind the landing page — the login flow is what actually blocks
       users, and the landing page carries the warning already.
+- [ ] **Colour the sequence letters** on the gene page's Sequences card —
+      four-colour for nucleotides, optionally Clustal-style by property for
+      protein. Discussed 2026-09-21 and deferred as unnecessary, not as
+      expensive: it is a character-to-class map and one DOM node per character,
+      which is nothing at ~2,500 characters. The card already scrolls inside a
+      fixed height, so virtualising is the escape hatch if a much longer
+      sequence ever shows up.
+- [ ] **Batch sequence lookup**, `POST /v2/genes/sequences` taking
+      `annotationId` + `geneIds`, mirroring `/lookup`. Only worth building if
+      exporting a whole gene list is wanted; the gene page needs one gene.
+- [ ] **Cache pysam handles if the sequence endpoint feels slow.** Opening a
+      `.fai` costs 11–80 ms and the seek costs 0.59 µs, so every request
+      currently pays three opens. `lru_cache(maxsize=6)` on the handle getter
+      fixes it at ~19 MB resident per handle. Left uncached deliberately — see
+      `HANDOFF.md`, "Gene sequences endpoint".
 - [ ] **A feature strip on the landing page.** The shipped page is two cards
       and nothing else — a visitor who has not been told what PlantGenIE is
       gets no answer from it. Naming what the site does (build lists, add by

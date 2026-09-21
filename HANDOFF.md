@@ -203,6 +203,16 @@ IP quota 50.
 
 Things that may bite later. Fix when they surface, not before.
 
+- **New files on `/srv/shared` are not visible on application until
+  `mount -a`.** Hit on 2026-09-21: after rsyncing the sequence fastas onto
+  nginx, `GET /v2/genes/.../sequences` kept returning 200 with every sequence
+  null, because the endpoint skips a file that does not exist rather than
+  erroring. The files were on nginx under `/srv/shared` and absent from
+  `/opt/app-data` on application. `sudo mount -a` on application fixed it; no
+  container restart was needed. Not the `ESTALE` case below — nginx had not
+  been replaced — so diagnose by listing the directory on both hosts before
+  reaching for the heavier remedy.
+
 - **NFS exports need a pinned `fsid`.** Replacing nginx gives the export new
   file handles, so every existing client mount goes `ESTALE` — seen on
   application and queue after the TLS rebuild, with DuckDB failing on
@@ -339,6 +349,12 @@ deployment config, not source history.
 - tag `v*.*.*` → prod (`build-docker-image-release.yaml`).
 
 ## Current state
+
+**Dev runs `v0.4.9-dev` as of 2026-09-21** — images, UI bundle and
+`dev.tfvars` all at that tag. The dev graph carries `longestTranscriptId`
+(restored from the local store) and the dev shared volume carries the sequence
+fastas, so `GET /api/v2/genes/{annotationId}/{geneId}/sequences` is live and
+the gene page's Sequences card is populated. Prod is untouched, still `v0.4.5`.
 
 Six instances are running as of 2026-08-31 — neo4j, nginx, rabbitmq, redis,
 queue and application. `plantgenie-test` was removed. They can be stopped and
@@ -835,7 +851,10 @@ updating a running dev deployment without a `terraform apply`: bump the tags in
 `fastapi.service` and `celery-worker.service`, restart, verify. nginx is the
 only host with a floating IP, so application (`192.168.42.12`) and queue
 (`192.168.42.43`) are reached with `ssh -J` through it. The nginx login is
-`jamie@dev.plantgenie.se`; the internal VMs use `ubuntu`.
+`jamie@dev.plantgenie.se`, and so is every internal VM — each cloud-init
+declares `users: - name: ${server_username}` and `dev.tfvars` sets that to
+`jamie`, with no `- default` entry, so the image's stock `ubuntu` account is
+never created. Both docs claimed `ubuntu` until 2026-09-21.
 
 One deliberate difference from cloud-init: the UI step moves the old
 `/var/www/html/dist` aside instead of unzipping over it, because Vite writes
@@ -880,4 +899,86 @@ of it.
 `assemblies.csv`, `annotations.csv` and `blast-databases.csv` in
 `/opt/neo4j/import/` are hand-maintained and live outside the repo. They now
 carry the T89 rows. Nothing in git records their contents.
+
+### Gene sequences endpoint
+
+Built 2026-09-21, commits `fc6721c` (backend) and `54e881a` (UI), deployed to
+dev as `v0.4.9-dev` and confirmed working in the browser.
+
+`GET /v2/genes/{annotationId}/{geneId}/sequences` returns
+`{geneId, transcriptId, cds, transcript, protein}`. All three by default;
+`?sequenceType=cds|transcript|protein` narrows it. 404 for an unknown gene,
+200 with every field null for a gene that has no protein-coding transcript.
+
+**Where the sequences come from.** They were already on disk, bgzipped with
+`.fai` and `.gzi` beside them, under each annotation's directory — the same
+files the BLAST databases are built from. `Annotation.path` already stores that
+directory relative to `DATA_PATH` (`potra/T89-2026/h1`), so no path has to be
+composed. Note `Taxon.id` is a *number*, not the `potra` slug, so composing a
+path from taxon and versions does not work; and annotation ids do not compose
+uniformly either — `potra-v2.2` is taxon plus annotation version while
+`potra-T89-2026-h1` also carries the assembly version.
+
+**`longestTranscriptId` on Gene nodes.** The fastas are keyed by transcript id
+and Gene nodes carry the bare gene id, so the transcript id is stored on the
+gene. `scripts/neo4j/generate-longest-transcripts-csv.py` reads each
+annotation's `transcript-sequences.fa.gz.fai` and writes
+`path,geneId,longestTranscriptId`; `longest-transcript-load.cypher` matches on
+`Annotation.path` and `SET`s it. 264,430 properties set across seven
+annotations.
+
+Transcript ids end differently in every annotation, which is why the generator
+is one explicit block per annotation rather than a shared parser with a
+per-file argument:
+
+| annotation | transcript id | strip |
+| --- | --- | --- |
+| `potra/T89-2026/h1`, `h2`, `potra/v2/v2.2` | `T89h1c1g00010.1` | `.rsplit(".", 1)` |
+| `betpe/v1/v1.2` | `Bpev01.c0000.g0001.m0001` | `.rsplit(".", 1)` |
+| `picab/v2/v2.0`, `pinsy/v1/v1.0` | `PA_cUP0115_G000001.mRNA.1` | `.rsplit(".mRNA.", 1)` |
+| `pruav/v2/v2.0` | `FUN_000003-T1` | `.rsplit("-T", 1)` |
+
+`arath/tair10/*` has no sequence fastas at all, so arath genes get no
+transcript id and the endpoint returns nulls for them. `pruav` is short by
+1,707 genes because they are non-coding — `FUN_000001` is `product=tRNA-Val`
+in the gff, typed `tRNA` not `mRNA`, so it is absent from the mRNA fastas by
+construction. `picab` and `pinsy` have *more* genes in the fasta than in the
+graph (11,128 and 9,642); those rows match nothing on load, which is harmless.
+
+`pinsy` and `pruav` had `.fa.gz` and `.gzi` but no `.fai`. Generated by hand
+with `samtools faidx` on 2026-09-21.
+
+**Decisions worth not re-litigating:**
+
+- **pysam, not `subprocess samtools faidx`.** Measured: opening the index is
+  the entire cost, and the seek is free. Per lookup — subprocess 13/48/51 ms
+  for potra T89 / picab / pinsy, pysam opening each call 11/80/69 ms, pysam
+  with the handle held open **0.59 µs**. A subprocess pays the index parse
+  every call and can never amortise it. pysam also bundles htslib in the wheel,
+  where a subprocess would need `samtools` installed in the API image.
+- **No handle cache, deliberately.** The measurement above says caching is
+  worth ~100,000×, but 21 open handles cost **402 MB** resident (~19 MB each,
+  proportional to entry count). Left uncached until it is a real problem;
+  `lru_cache(maxsize=6)` on the handle getter is the fix, and duckdb or parquet
+  is the alternative if memory matters more than latency. A columnar store
+  would not be faster — the seek is already 0.59 µs.
+- **JSON, not FASTA text**, so the response stays a `PlantGenieModel` like
+  every other v2 route. The UI assembles the download.
+- **Single gene, not batch.** The gene page shows one gene. A
+  `POST /v2/genes/sequences` mirroring `/lookup` is the shape if a list export
+  is ever wanted.
+- **The UI downloads the sequence in the selected tab only, never all three in
+  one file.** A FASTA carries no type declaration, so a file mixing nucleotide
+  and protein makes every downstream tool guess wrong; and all three records
+  would share one identifier, which `makeblastdb` rejects and `samtools faidx`
+  refuses to index. Disambiguating the headers would then break id matching
+  against every other file for that gene.
+- Sequence colouring by base or residue was discussed and **not built**. It is
+  about twenty lines and one DOM node per character, which is nothing at these
+  lengths; it was dropped as unnecessary, not as expensive.
+
+**VM logins are `jamie`, not `ubuntu`.** Every cloud-init declares
+`users: - name: ${server_username}` and `dev.tfvars` sets that to `jamie`, with
+no `- default` entry, so the image's stock `ubuntu` account is never created.
+Both `MANUAL-DEPLOY.md` and this file claimed `ubuntu` until 2026-09-21.
 
