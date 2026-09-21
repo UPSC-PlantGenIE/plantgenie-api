@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useParams } from "wouter";
 import {
   type GoTerm,
@@ -5,6 +6,7 @@ import {
   useGetGeneArabidopsisHitQuery,
   useGetGeneGoTermsQuery,
   useGetGeneQuery,
+  useGetGeneSequencesQuery,
 } from "../../api/plantgenieApi";
 
 type GeneNavState = {
@@ -96,6 +98,7 @@ export default function GenePage() {
             geneId={geneId}
           />
         </div>
+        <SequencesCard annotationId={annotationId} geneId={geneId} />
         <PlaceholderCard heading="Best hits in other taxa" />
         <GoTermsCard annotationId={annotationId} geneId={geneId} />
       </div>
@@ -178,6 +181,111 @@ function ArabidopsisHitCard({
       )}
       {hit === null && (
         <p className="mt-3 text-xs text-muted">No Arabidopsis hit</p>
+      )}
+    </section>
+  );
+}
+
+const SEQUENCE_TABS = [
+  { key: "cds", label: "CDS", unit: "bp" },
+  { key: "transcript", label: "Transcript", unit: "bp" },
+  { key: "protein", label: "Protein", unit: "aa" },
+] as const;
+
+type SequenceKey = (typeof SEQUENCE_TABS)[number]["key"];
+
+function SequencesCard({
+  annotationId,
+  geneId,
+}: {
+  annotationId: string;
+  geneId: string;
+}) {
+  const { data: sequences } = useGetGeneSequencesQuery({
+    annotationId,
+    geneId,
+  });
+  const [selected, setSelected] = useState<SequenceKey>("cds");
+  const unit = SEQUENCE_TABS.find((tab) => tab.key === selected)!.unit;
+  const sequence = sequences?.[selected] ?? null;
+
+  const handleCopy = () => {
+    if (sequence) navigator.clipboard.writeText(sequence);
+  };
+
+  const handleDownload = () => {
+    if (!sequence || !sequences?.transcriptId) return;
+    const url = URL.createObjectURL(
+      new Blob([`>${sequences.transcriptId}\n${sequence}\n`], {
+        type: "text/plain",
+      })
+    );
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${sequences.transcriptId}.${selected}.fa`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <section className="rounded-xl border border-border bg-card px-6 py-5 shadow-card">
+      <header className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-sm font-semibold text-heading">Sequences</h2>
+        {sequences?.transcriptId && (
+          <span className="font-mono text-xs text-muted">
+            {sequences.transcriptId}
+          </span>
+        )}
+      </header>
+
+      {sequences && sequences.transcriptId === null ? (
+        <p className="mt-3 text-xs text-muted">
+          No sequences available for this gene.
+        </p>
+      ) : (
+        <>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
+            <div role="tablist" className="flex gap-1">
+              {SEQUENCE_TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  role="tab"
+                  aria-selected={selected === tab.key}
+                  onClick={() => setSelected(tab.key)}
+                  className={`rounded-md px-3 py-1 text-xs font-medium ${
+                    selected === tab.key
+                      ? "bg-primary-tint text-primary"
+                      : "text-muted"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted">
+                {sequence
+                  ? `${sequence.length.toLocaleString()} ${unit}`
+                  : "—"}
+              </span>
+              <button
+                onClick={handleCopy}
+                className="rounded-lg border border-border px-3 py-1 text-xs font-semibold text-label"
+              >
+                Copy
+              </button>
+              <button
+                onClick={handleDownload}
+                className="rounded-lg border border-border px-3 py-1 text-xs font-semibold text-label"
+              >
+                Download
+              </button>
+            </div>
+          </div>
+          <pre className="mt-3 max-h-64 overflow-auto rounded-lg bg-surface px-4 py-3 font-mono text-xs whitespace-pre-wrap break-all text-label">
+            {sequence ?? "—"}
+          </pre>
+        </>
       )}
     </section>
   );

@@ -80,6 +80,14 @@ export interface GeneDetail {
   strand: string | null;
 }
 
+export interface GeneSequences {
+  geneId: string;
+  transcriptId: string | null;
+  cds: string | null;
+  transcript: string | null;
+  protein: string | null;
+}
+
 export interface GoTerm {
   id: string;
   name: string | null;
@@ -199,6 +207,13 @@ export const plantgenieApi = createApi({
       query: ({ annotationId, geneId }) =>
         `v2/genes/${annotationId}/${geneId}/go-terms`,
     }),
+    getGeneSequences: build.query<
+      GeneSequences,
+      { annotationId: string; geneId: string }
+    >({
+      query: ({ annotationId, geneId }) =>
+        `v2/genes/${annotationId}/${geneId}/sequences`,
+    }),
     getBlastDatabases: build.query<BlastDatabase[], void>({
       query: () => "v2/blast/databases",
       transformResponse: (r: { databases: BlastDatabase[] }) => r.databases,
@@ -262,6 +277,7 @@ export const {
   useLazyLookupGenesQuery,
   useGetGeneQuery,
   useGetGeneGoTermsQuery,
+  useGetGeneSequencesQuery,
   useGetBlastDatabasesQuery,
   useSubmitBlastMutation,
   usePollBlastQuery,

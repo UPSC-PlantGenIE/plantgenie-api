@@ -186,6 +186,18 @@ export const handlers = [
   ),
 
   http.get(
+    "http://localhost:8000/api/v2/genes/:annotationId/:geneId/sequences",
+    ({ params }) =>
+      HttpResponse.json({
+        geneId: params.geneId as string,
+        transcriptId: `${params.geneId}.1`,
+        cds: "ATGGATAATGAAGGCAATATCATC",
+        transcript: "ATGGATAATGAAGGCAATATCATCAATGAT",
+        protein: "MDNEGNII",
+      })
+  ),
+
+  http.get(
     "http://localhost:8000/api/v2/genes/:annotationId/:geneId/arabidopsis-hit",
     () =>
       HttpResponse.json({

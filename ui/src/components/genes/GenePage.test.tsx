@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { Route, Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
@@ -247,5 +248,77 @@ describe("GenePage", () => {
       name: /drought-response tfs/i,
     });
     expect(listLink).toHaveAttribute("href", "/lists/abc-123");
+  });
+
+  const sequencesCard = async () => {
+    const heading = await screen.findByRole("heading", {
+      name: /^sequences$/i,
+    });
+    return within(heading.closest("section") as HTMLElement);
+  };
+
+  it("renders the transcript id in the sequences card", async () => {
+    mockAnnotation();
+    renderGenePage();
+    const scoped = await sequencesCard();
+    expect(
+      await scoped.findByText("AT1G01010.1")
+    ).toBeInTheDocument();
+  });
+
+  it("shows the coding sequence and its length by default", async () => {
+    mockAnnotation();
+    renderGenePage();
+    const scoped = await sequencesCard();
+    expect(
+      await scoped.findByText("ATGGATAATGAAGGCAATATCATC")
+    ).toBeInTheDocument();
+    expect(scoped.getByText(/24 bp/)).toBeInTheDocument();
+  });
+
+  it("shows the protein sequence after selecting the protein tab", async () => {
+    const user = userEvent.setup();
+    mockAnnotation();
+    renderGenePage();
+    const scoped = await sequencesCard();
+    await user.click(await scoped.findByRole("tab", { name: /protein/i }));
+    expect(await scoped.findByText("MDNEGNII")).toBeInTheDocument();
+    expect(scoped.getByText(/8 aa/)).toBeInTheDocument();
+  });
+
+  it("copies the selected sequence to the clipboard", async () => {
+    const user = userEvent.setup();
+    mockAnnotation();
+    renderGenePage();
+    const scoped = await sequencesCard();
+    await user.click(await scoped.findByRole("button", { name: /copy/i }));
+    expect(await navigator.clipboard.readText()).toBe(
+      "ATGGATAATGAAGGCAATATCATC"
+    );
+  });
+
+  it("reports no sequences when the gene has no transcript", async () => {
+    mockAnnotation();
+    server.use(
+      http.get(
+        "http://localhost:8000/api/v2/genes/:annotationId/:geneId/sequences",
+        () =>
+          HttpResponse.json({
+            geneId: "AT1G01010",
+            transcriptId: null,
+            cds: null,
+            transcript: null,
+            protein: null,
+          })
+      )
+    );
+    renderGenePage();
+    const scoped = await sequencesCard();
+    expect(
+      await scoped.findByText(/no sequences available/i)
+    ).toBeInTheDocument();
+    expect(
+      scoped.queryByRole("button", { name: /download/i })
+    ).not.toBeInTheDocument();
   });
 });
