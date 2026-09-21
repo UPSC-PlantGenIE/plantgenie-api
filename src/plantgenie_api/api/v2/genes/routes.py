@@ -1,16 +1,27 @@
-from fastapi import APIRouter, HTTPException
+from pathlib import Path
+from typing import Annotated, Literal
+
+import pysam
+from fastapi import APIRouter, HTTPException, Query
 
 from plantgenie_api.api.v2.genes.models import (
     ArabidopsisHit,
     GeneDetail,
+    GeneSequences,
     GoTerm,
     LookupGene,
     LookupGenesRequest,
     LookupGenesResponse,
 )
-from plantgenie_api.dependencies import Neo4jDep
+from plantgenie_api.dependencies import EnvironmentDep, Neo4jDep
 
 router = APIRouter(prefix="/genes", tags=["genes"])
+
+SEQUENCE_FILES = {
+    "cds": "coding-sequences.fa.gz",
+    "transcript": "transcript-sequences.fa.gz",
+    "protein": "amino-acid-sequences.fa.gz",
+}
 
 
 @router.post("/lookup", response_model=LookupGenesResponse)
@@ -60,6 +71,57 @@ async def get_gene_go_terms(
         geneId=gene_id,
     )
     return [GoTerm(**dict(r["t"])) async for r in result]
+
+
+@router.get(
+    "/{annotation_id}/{gene_id}/sequences", response_model=GeneSequences
+)
+async def get_gene_sequences(
+    session: Neo4jDep,
+    environment: EnvironmentDep,
+    annotation_id: str,
+    gene_id: str,
+    sequence_type: Annotated[
+        Literal["cds", "transcript", "protein"] | None,
+        Query(alias="sequenceType"),
+    ] = None,
+) -> GeneSequences:
+    result = await session.run(
+        "MATCH (n:Annotation {id: $annotationId})-[:HAS_GENE]->"
+        "(g:Gene {id: $geneId}) "
+        "RETURN g.longestTranscriptId AS transcriptId, n.path AS path",
+        annotationId=annotation_id,
+        geneId=gene_id,
+    )
+    records = [record async for record in result]
+
+    if not records:
+        raise HTTPException(status_code=404, detail="Gene not found")
+
+    transcript_id = records[0]["transcriptId"]
+
+    if transcript_id is None:
+        return GeneSequences(gene_id=gene_id)
+
+    directory = Path(environment["DATA_PATH"]) / records[0]["path"]
+    requested = [sequence_type] if sequence_type else list(SEQUENCE_FILES)
+    sequences = {}
+
+    for name in requested:
+        fasta_path = directory / SEQUENCE_FILES[name]
+
+        if not fasta_path.exists():
+            continue
+
+        with pysam.FastaFile(str(fasta_path)) as fasta:
+            try:
+                sequences[name] = fasta.fetch(transcript_id)
+            except KeyError:
+                continue
+
+    return GeneSequences(
+        gene_id=gene_id, transcript_id=transcript_id, **sequences
+    )
 
 
 @router.get(

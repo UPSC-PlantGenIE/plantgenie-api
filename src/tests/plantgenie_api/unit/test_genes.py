@@ -1,3 +1,7 @@
+import sqlite3
+from pathlib import Path
+
+import pysam
 import pytest
 from httpx import AsyncClient
 
@@ -220,3 +224,151 @@ async def test_get_gene_arabidopsis_hit_returns_404_when_gene_missing(
     )
 
     assert response.status_code == 404
+
+
+@pytest.fixture
+def sequence_files(
+    sqlite_conn: sqlite3.Connection, tmp_path: Path
+) -> Path:
+    directory = tmp_path / "potra/T89-2026/h1"
+    directory.mkdir(parents=True)
+
+    contents = {
+        "coding-sequences.fa": ">T89h1c1g00010.1\nATGGATAATGAA\n",
+        "transcript-sequences.fa": (
+            ">T89h1c1g00010.1 CDS=1-12\nATGGATAATGAAGGC\n"
+        ),
+        "amino-acid-sequences.fa": ">T89h1c1g00010.1\nMDNEGNIIND\n",
+    }
+
+    for name, text in contents.items():
+        plain_path = directory / name
+        plain_path.write_text(text)
+        pysam.tabix_compress(str(plain_path), f"{plain_path}.gz")
+        pysam.faidx(f"{plain_path}.gz")
+
+    return directory
+
+
+@pytest.mark.anyio
+async def test_get_gene_sequences_returns_all_three(
+    async_client: AsyncClient,
+    neo4j_session: FakeNeo4jSession,
+    sequence_files: Path,
+):
+    neo4j_session.next_records = [
+        {
+            "transcriptId": "T89h1c1g00010.1",
+            "path": "potra/T89-2026/h1",
+        }
+    ]
+
+    response = await async_client.get(
+        "/v2/genes/potra-T89-2026-h1/T89h1c1g00010/sequences"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "geneId": "T89h1c1g00010",
+        "transcriptId": "T89h1c1g00010.1",
+        "cds": "ATGGATAATGAA",
+        "transcript": "ATGGATAATGAAGGC",
+        "protein": "MDNEGNIIND",
+    }
+
+
+@pytest.mark.anyio
+async def test_get_gene_sequences_returns_only_the_requested_type(
+    async_client: AsyncClient,
+    neo4j_session: FakeNeo4jSession,
+    sequence_files: Path,
+):
+    neo4j_session.next_records = [
+        {
+            "transcriptId": "T89h1c1g00010.1",
+            "path": "potra/T89-2026/h1",
+        }
+    ]
+
+    response = await async_client.get(
+        "/v2/genes/potra-T89-2026-h1/T89h1c1g00010/sequences",
+        params={"sequenceType": "protein"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "geneId": "T89h1c1g00010",
+        "transcriptId": "T89h1c1g00010.1",
+        "cds": None,
+        "transcript": None,
+        "protein": "MDNEGNIIND",
+    }
+
+
+@pytest.mark.anyio
+async def test_get_gene_sequences_returns_404_when_gene_missing(
+    async_client: AsyncClient,
+    neo4j_session: FakeNeo4jSession,
+    sequence_files: Path,
+):
+    neo4j_session.next_records = []
+
+    response = await async_client.get(
+        "/v2/genes/potra-T89-2026-h1/UNKNOWN/sequences"
+    )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_get_gene_sequences_returns_nulls_without_a_transcript(
+    async_client: AsyncClient,
+    neo4j_session: FakeNeo4jSession,
+    sequence_files: Path,
+):
+    neo4j_session.next_records = [
+        {
+            "transcriptId": None,
+            "path": "potra/T89-2026/h1",
+        }
+    ]
+
+    response = await async_client.get(
+        "/v2/genes/potra-T89-2026-h1/T89h1c1g99999/sequences"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "geneId": "T89h1c1g99999",
+        "transcriptId": None,
+        "cds": None,
+        "transcript": None,
+        "protein": None,
+    }
+
+
+@pytest.mark.anyio
+async def test_get_gene_sequences_returns_nulls_when_fasta_lacks_id(
+    async_client: AsyncClient,
+    neo4j_session: FakeNeo4jSession,
+    sequence_files: Path,
+):
+    neo4j_session.next_records = [
+        {
+            "transcriptId": "T89h1c9g99999.1",
+            "path": "potra/T89-2026/h1",
+        }
+    ]
+
+    response = await async_client.get(
+        "/v2/genes/potra-T89-2026-h1/T89h1c9g99999/sequences"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "geneId": "T89h1c9g99999",
+        "transcriptId": "T89h1c9g99999.1",
+        "cds": None,
+        "transcript": None,
+        "protein": None,
+    }

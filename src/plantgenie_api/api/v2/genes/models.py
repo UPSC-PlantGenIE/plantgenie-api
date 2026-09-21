@@ -33,6 +33,14 @@ class GoTerm(PlantGenieModel):
     namespace: str | None = None
 
 
+class GeneSequences(PlantGenieModel):
+    gene_id: str
+    transcript_id: str | None = None
+    cds: str | None = None
+    transcript: str | None = None
+    protein: str | None = None
+
+
 class ArabidopsisHit(PlantGenieModel):
     gene_id: str
     name: str | None = None
