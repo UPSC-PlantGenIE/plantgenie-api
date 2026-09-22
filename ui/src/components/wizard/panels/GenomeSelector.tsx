@@ -1,36 +1,19 @@
 import { useEffect } from "react";
 import {
-  useCreateListMutation,
   useGetAnnotationsQuery,
   useGetAssembliesQuery,
   useGetTaxaQuery,
 } from "../../../api/plantgenieApi";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks";
-import { back, reset, setAnnotationId } from "../../../store/wizardSlice";
-import { useLocation } from "wouter";
+import { back, next, setAnnotationId } from "../../../store/wizardSlice";
 
 const numberFmt = new Intl.NumberFormat("en-US");
 
 export default function GenomeSelector() {
-  const [createList] = useCreateListMutation();
-  const [, setLocation] = useLocation();
   const dispatch = useAppDispatch();
-  const listName = useAppSelector((s) => s.wizard.name);
-  const listDescription = useAppSelector((s) => s.wizard.description);
   const step = useAppSelector((s) => s.wizard.step);
   const taxonId = useAppSelector((s) => s.wizard.taxonId);
   const annotationId = useAppSelector((s) => s.wizard.annotationId);
-
-  const handleCreateList = async () => {
-    const { listId } = await createList({
-      name: listName,
-      description: listDescription,
-      annotationId: annotationId!,
-      taxonName: selectedTaxon?.scientificName ?? "",
-    }).unwrap();
-    setLocation(`/lists/${listId}`);
-    dispatch(reset());
-  };
 
   const { data: taxa } = useGetTaxaQuery();
   const {
@@ -50,7 +33,7 @@ export default function GenomeSelector() {
     { skip: !taxonId }
   );
 
-  const active = step === 3;
+  const active = step === 2;
   const isLoading = assembliesLoading || annotationsLoading;
   const isError = assembliesError || annotationsError;
   const canContinue = annotationId !== null && !isLoading;
@@ -90,8 +73,8 @@ export default function GenomeSelector() {
 
         <div className="mt-2 flex gap-3">
           <span className="size-2 rounded-full bg-border" />
-          <span className="size-2 rounded-full bg-border" />
           <span className="size-2 rounded-full bg-primary" />
+          <span className="size-2 rounded-full bg-border" />
         </div>
 
         <div className="mt-5 flex flex-col gap-2 rounded-2xl border border-border bg-card p-5 shadow-card">
@@ -184,18 +167,13 @@ export default function GenomeSelector() {
             ← Back
           </button>
 
-          {/* TODO: replace dispatch(next()) with the create-list flow:
-              1. call useCreateListMutation() at the top of this component
-              2. on click, await createList({ name, description, annotationId, geneIds: [] }).unwrap()
-              3. read setLocation from wouter's useLocation() and call setLocation(`/lists/${response.listId}`)
-              4. delete the dispatch(next()) line — it no longer makes sense since step caps at 3 */}
           <button
             type="button"
             disabled={!canContinue}
-            onClick={handleCreateList}
+            onClick={() => dispatch(next())}
             className="h-11 cursor-pointer rounded-lg bg-primary px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Create list →
+            Continue →
           </button>
         </div>
       </div>

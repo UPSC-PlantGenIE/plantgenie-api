@@ -68,7 +68,7 @@ describe("App", () => {
       { preloadedState: { account: { accountId: "1234567890123456" } } }
     );
     expect(
-      screen.getByRole("heading", { name: /name your list/i })
+      screen.getByRole("heading", { name: /select a taxon/i })
     ).toBeInTheDocument();
   });
 

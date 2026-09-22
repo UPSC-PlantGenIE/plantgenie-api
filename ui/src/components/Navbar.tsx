@@ -1,6 +1,6 @@
 import { useAppDispatch, useAppSelector } from "../store/hooks";
 import { clearAccountId } from "../store/accountSlice";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { plantgenieApi } from "../api/plantgenieApi";
 
 const LogOutIcon = () => (
@@ -38,10 +38,15 @@ const LogOutIcon = () => (
 //   </svg>
 // );
 
+const navLinkClassName = (isActive: boolean) =>
+  `rounded-t-md border-b-2 px-3 py-1.5 text-sm font-bold text-white transition-colors hover:bg-white/15 ${
+    isActive ? "border-white" : "border-transparent"
+  }`;
+
 export default function Navbar() {
   const accountId = useAppSelector((state) => state.account.accountId);
   const dispatch = useAppDispatch();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
 
   const handleLogOut = () => {
     dispatch(clearAccountId());
@@ -53,7 +58,25 @@ export default function Navbar() {
   return (
     <header className="h-14 w-full border-b border-border shadow-nav bg-upsc-blue">
       <div className="flex h-full items-center px-6">
-        <span className="text-2xl font-bold text-white">🌿 PlantGenIE</span>
+        <Link href="/" className="text-2xl font-bold text-white">
+          🌿 PlantGenIE
+        </Link>
+        <nav className="ml-8 flex items-center gap-2">
+          {accountId ? (
+            <Link
+              href="/lists"
+              className={navLinkClassName(location.startsWith("/lists"))}
+            >
+              Lists
+            </Link>
+          ) : null}
+          <Link
+            href="/blast"
+            className={navLinkClassName(location.startsWith("/blast"))}
+          >
+            Blast
+          </Link>
+        </nav>
         {accountId ? (
           <div className="flex ml-auto items-center gap-2">
             <p className="text-white font-bold text-xs">{accountId}</p>

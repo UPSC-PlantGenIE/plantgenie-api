@@ -30,20 +30,20 @@ class TestNewVisitor:
         page.get_by_role(
             "link", name=re.compile(r"new list", re.IGNORECASE)
         ).click()
+        page.get_by_text(re.compile(r"picea abies", re.IGNORECASE)).click()
+        page.get_by_role(
+            "button", name=re.compile(r"continue", re.IGNORECASE)
+        ).click()
+        page.get_by_text(re.compile(r"genome - ", re.IGNORECASE)).click()
+        page.get_by_role(
+            "button", name=re.compile(r"continue", re.IGNORECASE)
+        ).click()
         page.get_by_label(re.compile(r"list name", re.IGNORECASE)).fill(
             name
         )
         page.get_by_label(re.compile(r"description", re.IGNORECASE)).fill(
             description
         )
-        page.get_by_role(
-            "button", name=re.compile(r"continue", re.IGNORECASE)
-        ).click()
-        page.get_by_text(re.compile(r"picea abies", re.IGNORECASE)).click()
-        page.get_by_role(
-            "button", name=re.compile(r"continue", re.IGNORECASE)
-        ).click()
-        page.get_by_text(re.compile(r"genome - ", re.IGNORECASE)).click()
         page.get_by_role(
             "button", name=re.compile(r"create list", re.IGNORECASE)
         ).click()
@@ -111,35 +111,9 @@ class TestNewVisitor:
         page.get_by_role(
             "link", name=re.compile(r"new list", re.IGNORECASE)
         ).click()
-        # she is now sees a wizard page with two inputs and a disabled continue button
-        expect(
-            page.get_by_role(
-                "button", name=re.compile(r"continue", re.IGNORECASE)
-            )
-        ).to_be_disabled()
-
-        # The first text box indicates it is for the list name, so she enters a name
-        page.get_by_label(re.compile(r"list name", re.IGNORECASE)).fill(
-            "Ada's cold stress genes"
-        )
-        # She notices while typing the continue button becomes active, "hmm.. a list requires a name"
-        expect(
-            page.get_by_role(
-                "button", name=re.compile(r"continue", re.IGNORECASE)
-            )
-        ).to_be_enabled()
-
-        # The 2nd text box asks for a description of the list, so she enters one:
-        page.get_by_label(re.compile(r"description", re.IGNORECASE)).fill(
-            "Known cold stress-related genes found in Norway spruce"
-        )
-        # she clicks the continue button
-        page.get_by_role(
-            "button", name=re.compile(r"continue", re.IGNORECASE)
-        ).click()
-
-        # she now sees the next step of the wizard, a list of taxa to select from
-        # and a disabled continue button. In the list of taxa, she sees Norway spruce and clicks on it
+        # the wizard opens on a list of taxa to choose from, with a disabled
+        # continue button. In the list of taxa, she sees Norway spruce and
+        # clicks on it
         expect(
             page.get_by_role(
                 "button", name=re.compile(r"continue", re.IGNORECASE)
@@ -163,9 +137,33 @@ class TestNewVisitor:
             "button", name=re.compile(r"continue", re.IGNORECASE)
         ).click()
 
-        # the last step of the wizard asks which genome the list should be built
-        # against. There is only one on offer for Norway spruce, so she takes it
+        # the next step asks which genome the list should be built against.
+        # There is only one on offer for Norway spruce, so she takes it
         page.get_by_text(re.compile(r"genome - ", re.IGNORECASE)).click()
+        page.get_by_role(
+            "button", name=re.compile(r"continue", re.IGNORECASE)
+        ).click()
+
+        # the last step asks her to name the list, now that she knows what is
+        # in it. The create button stays disabled until she does
+        expect(
+            page.get_by_role(
+                "button", name=re.compile(r"create list", re.IGNORECASE)
+            )
+        ).to_be_disabled()
+        page.get_by_label(re.compile(r"list name", re.IGNORECASE)).fill(
+            "Ada's cold stress genes"
+        )
+        expect(
+            page.get_by_role(
+                "button", name=re.compile(r"create list", re.IGNORECASE)
+            )
+        ).to_be_enabled()
+
+        # and a description, which is optional
+        page.get_by_label(re.compile(r"description", re.IGNORECASE)).fill(
+            "Known cold stress-related genes found in Norway spruce"
+        )
         page.get_by_role(
             "button", name=re.compile(r"create list", re.IGNORECASE)
         ).click()

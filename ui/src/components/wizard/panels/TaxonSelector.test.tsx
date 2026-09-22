@@ -6,8 +6,8 @@ import { server } from "../../../mocks/server";
 import { renderWithStore } from "../../../test-utils";
 import TaxonSelector from "./TaxonSelector";
 
-const step2State = {
-  step: 2 as const,
+const taxonStepState = {
+  step: 1 as const,
   name: "",
   description: "",
   taxonId: null,
@@ -17,14 +17,14 @@ const step2State = {
 describe("TaxonSelector", () => {
   it("shows loading skeleton while taxa are being fetched", () => {
     renderWithStore(<TaxonSelector />, {
-      preloadedState: { wizard: step2State },
+      preloadedState: { wizard: taxonStepState },
     });
     expect(screen.getByText(/loading taxa/i)).toBeInTheDocument();
   });
 
   it("renders taxa returned from the API", async () => {
     renderWithStore(<TaxonSelector />, {
-      preloadedState: { wizard: step2State },
+      preloadedState: { wizard: taxonStepState },
     });
     const radios = await screen.findAllByRole("radio");
     expect(radios).toHaveLength(2);
@@ -32,7 +32,7 @@ describe("TaxonSelector", () => {
 
   it("marks the stored taxonId as checked", async () => {
     renderWithStore(<TaxonSelector />, {
-      preloadedState: { wizard: { ...step2State, taxonId: "pinsy" } },
+      preloadedState: { wizard: { ...taxonStepState, taxonId: "pinsy" } },
     });
     expect(
       await screen.findByRole("radio", { name: /pinus sylvestris/i })
@@ -42,7 +42,7 @@ describe("TaxonSelector", () => {
   it("clicking a radio dispatches setTaxonId with the abbreviation", async () => {
     const user = userEvent.setup();
     const { store } = renderWithStore(<TaxonSelector />, {
-      preloadedState: { wizard: step2State },
+      preloadedState: { wizard: taxonStepState },
     });
     await user.click(
       await screen.findByRole("radio", { name: /picea abies/i })
@@ -55,7 +55,7 @@ describe("TaxonSelector", () => {
     const { store } = renderWithStore(<TaxonSelector />, {
       preloadedState: {
         wizard: {
-          ...step2State,
+          ...taxonStepState,
           taxonId: "pinsy",
           annotationId: "pinsy-Araport11",
         },
@@ -72,7 +72,7 @@ describe("TaxonSelector", () => {
     const { store } = renderWithStore(<TaxonSelector />, {
       preloadedState: {
         wizard: {
-          ...step2State,
+          ...taxonStepState,
           taxonId: "pinsy",
           annotationId: "pinsy-Araport11",
         },
@@ -89,7 +89,7 @@ describe("TaxonSelector", () => {
       http.get("http://localhost:8000/api/v2/taxa", () => HttpResponse.error())
     );
     renderWithStore(<TaxonSelector />, {
-      preloadedState: { wizard: step2State },
+      preloadedState: { wizard: taxonStepState },
     });
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /couldn't load taxa/i

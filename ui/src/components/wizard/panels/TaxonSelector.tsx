@@ -1,6 +1,6 @@
 import { useGetTaxaQuery } from "../../../api/plantgenieApi";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks";
-import { back, next, setTaxonId } from "../../../store/wizardSlice";
+import { next, setTaxonId } from "../../../store/wizardSlice";
 
 export default function TaxonSelector() {
   const dispatch = useAppDispatch();
@@ -8,7 +8,7 @@ export default function TaxonSelector() {
   const taxonId = useAppSelector((s) => s.wizard.taxonId);
   const { data: taxa, isLoading, isError } = useGetTaxaQuery();
 
-  const active = step === 2;
+  const active = step === 1;
   const canContinue = taxonId !== null && !isLoading;
 
   return (
@@ -22,8 +22,8 @@ export default function TaxonSelector() {
         <h1 className="mt-1 text-2xl font-bold text-heading">Select a taxon</h1>
 
         <div className="mt-2 flex gap-3">
-          <span className="size-2 rounded-full bg-border" />
           <span className="size-2 rounded-full bg-primary" />
+          <span className="size-2 rounded-full bg-border" />
           <span className="size-2 rounded-full bg-border" />
         </div>
 
@@ -100,15 +100,7 @@ export default function TaxonSelector() {
             })}
         </div>
 
-        <div className="mt-6 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => dispatch(back())}
-            className="h-11 cursor-pointer rounded-lg border border-border bg-card px-5 text-sm font-semibold text-label"
-          >
-            ← Back
-          </button>
-
+        <div className="mt-6 flex items-center justify-end">
           <button
             type="button"
             disabled={!canContinue}

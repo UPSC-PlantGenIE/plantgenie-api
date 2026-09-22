@@ -5,7 +5,7 @@ import { renderWithStore } from "../../../test-utils";
 import GenomeSelector from "./GenomeSelector";
 
 const pinsyState = {
-  step: 3 as const,
+  step: 2 as const,
   name: "",
   description: "",
   taxonId: "pinsy",

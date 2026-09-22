@@ -15,9 +15,9 @@ export default function Wizard() {
           transform: `translateX(-${(step - 1) * 100}vw)`,
         }}
       >
-        <ListName />
         <TaxonSelector />
         <GenomeSelector />
+        <ListName />
       </div>
     </div>
   );
