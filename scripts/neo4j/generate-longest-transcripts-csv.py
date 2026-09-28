@@ -10,7 +10,7 @@ rows are keyed by the path that Annotation.path already stores.
 One block per annotation, because the transcript id ends differently in
 each one:
 
-    betpe/v1/v1.2      Bpev01.c0000.g0001.m0001
+    betpe/v1/v1.4      Bpev01.c0000.g0001.m0001
     picab/v2/v2.0      PA_cUP0115_G000001.mRNA.1
     pinsy/v1/v1.0      PS_chr01_G000001.mRNA.2
     potra/T89-2026/h1  T89h1c1g00010.1
@@ -33,7 +33,7 @@ FIELDNAMES = ["path", "geneId", "longestTranscriptId"]
 rows = []
 
 
-path = "betpe/v1/v1.2"
+path = "betpe/v1/v1.4"
 longest_by_gene = {}
 
 for line in (ROOT / path / INDEX_NAME).read_text().splitlines():

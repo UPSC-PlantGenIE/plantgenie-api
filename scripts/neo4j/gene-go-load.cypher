@@ -4,13 +4,13 @@
 //
 // arath is omitted: no gene-go CSVs were generated for it.
 
-// betpe-v1.2
-MATCH (:Annotation {id: 'betpe-v1.2'})-[:HAS_GENE]->(:Gene)-[r:HAS_GO_TERM]->()
+// betpe-v1.4
+MATCH (:Annotation {id: 'betpe-v1.4'})-[:HAS_GENE]->(:Gene)-[r:HAS_GO_TERM]->()
 CALL (r) { DELETE r } IN TRANSACTIONS OF 5000 ROWS;
 
-MATCH (a:Annotation {id: 'betpe-v1.2'})
+MATCH (a:Annotation {id: 'betpe-v1.4'})
 CALL (a) {
-  LOAD CSV WITH HEADERS FROM 'file:///betpe-gene-go.csv' AS row
+  LOAD CSV WITH HEADERS FROM 'file:///betpe-v1.4-gene-go.csv' AS row
   FIELDTERMINATOR '\t'
   MATCH (a)-[:HAS_GENE]->(g:Gene {id: row.gene_id})
   OPTIONAL MATCH (direct:GoTerm {id: row.go_id})

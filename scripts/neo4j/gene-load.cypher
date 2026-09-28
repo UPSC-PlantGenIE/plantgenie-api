@@ -24,13 +24,13 @@ CALL (a) {
   CREATE (a)-[:HAS_GENE]->(g)
 } IN TRANSACTIONS OF 1000 ROWS;
 
-// betpe-v1.2
-MATCH (:Annotation {id: 'betpe-v1.2'})-[:HAS_GENE]->(g:Gene)
+// betpe-v1.4
+MATCH (:Annotation {id: 'betpe-v1.4'})-[:HAS_GENE]->(g:Gene)
 CALL (g) { DETACH DELETE g } IN TRANSACTIONS OF 1000 ROWS;
 
-MATCH (a:Annotation {id: 'betpe-v1.2'})
+MATCH (a:Annotation {id: 'betpe-v1.4'})
 CALL (a) {
-  LOAD CSV WITH HEADERS FROM 'file:///betpe-gene-records.csv' AS row
+  LOAD CSV WITH HEADERS FROM 'file:///betpe-v1.4-gene-records.csv' AS row
   FIELDTERMINATOR '\t'
   CREATE (g:Gene {
     id: row.gene_id,

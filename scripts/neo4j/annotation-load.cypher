@@ -2,7 +2,7 @@
 //
 // Requires assembly-load.cypher to have run first.
 //
-// id is URL-safe ('betpe-v1.2') and matches the ids the gene loads in
+// id is URL-safe ('betpe-v1.4') and matches the ids the gene loads in
 // upsc-plantgenie/neo4j-queries.cypher already expect; path is the directory
 // layout. geneCount is the row count of each gene-records CSV, and is set
 // again from the graph once the genes themselves are loaded.

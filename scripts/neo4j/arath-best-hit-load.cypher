@@ -8,16 +8,18 @@
 // matched straight on the gene_id index, since Araport11 AT identifiers only
 // occur in that one annotation.
 
-// betpe-v1.2
-MATCH (:Annotation {id: 'betpe-v1.2'})-[:HAS_GENE]->(:Gene)-[r:BEST_ARABIDOPSIS_HIT]->()
+// betpe-v1.4
+MATCH (:Annotation {id: 'betpe-v1.4'})-[:HAS_GENE]->(:Gene)-[r:BEST_ARABIDOPSIS_HIT]->()
 CALL (r) { DELETE r } IN TRANSACTIONS OF 5000 ROWS;
 
-MATCH (a:Annotation {id: 'betpe-v1.2'})
-CALL (a) {
-  LOAD CSV WITH HEADERS FROM 'file:///betpe-arath-best-hits.csv' AS row
+MATCH (a:Annotation {id: 'betpe-v1.4'})
+MATCH (arath:Annotation {id: 'arath-araport11'})
+CALL (a, arath) {
+  LOAD CSV WITH HEADERS FROM 'file:///betpe-v1.4-arath-best-hits.csv' AS row
   FIELDTERMINATOR '\t'
   MATCH (a)-[:HAS_GENE]->(g:Gene {id: row.gene_id})
   MATCH (t:Gene {id: row.arath_gene_id})
+  WHERE (arath)-[:HAS_GENE]->(t)
   CREATE (g)-[:BEST_ARABIDOPSIS_HIT {
     evalue: toFloat(row.evalue),
     bitscore: toFloat(row.bitscore)
@@ -29,11 +31,13 @@ MATCH (:Annotation {id: 'picab-v2.0'})-[:HAS_GENE]->(:Gene)-[r:BEST_ARABIDOPSIS_
 CALL (r) { DELETE r } IN TRANSACTIONS OF 5000 ROWS;
 
 MATCH (a:Annotation {id: 'picab-v2.0'})
-CALL (a) {
+MATCH (arath:Annotation {id: 'arath-araport11'})
+CALL (a, arath) {
   LOAD CSV WITH HEADERS FROM 'file:///picab-arath-best-hits.csv' AS row
   FIELDTERMINATOR '\t'
   MATCH (a)-[:HAS_GENE]->(g:Gene {id: row.gene_id})
   MATCH (t:Gene {id: row.arath_gene_id})
+  WHERE (arath)-[:HAS_GENE]->(t)
   CREATE (g)-[:BEST_ARABIDOPSIS_HIT {
     evalue: toFloat(row.evalue),
     bitscore: toFloat(row.bitscore)
@@ -45,11 +49,13 @@ MATCH (:Annotation {id: 'pinsy-v1.0'})-[:HAS_GENE]->(:Gene)-[r:BEST_ARABIDOPSIS_
 CALL (r) { DELETE r } IN TRANSACTIONS OF 5000 ROWS;
 
 MATCH (a:Annotation {id: 'pinsy-v1.0'})
-CALL (a) {
+MATCH (arath:Annotation {id: 'arath-araport11'})
+CALL (a, arath) {
   LOAD CSV WITH HEADERS FROM 'file:///pinsy-arath-best-hits.csv' AS row
   FIELDTERMINATOR '\t'
   MATCH (a)-[:HAS_GENE]->(g:Gene {id: row.gene_id})
   MATCH (t:Gene {id: row.arath_gene_id})
+  WHERE (arath)-[:HAS_GENE]->(t)
   CREATE (g)-[:BEST_ARABIDOPSIS_HIT {
     evalue: toFloat(row.evalue),
     bitscore: toFloat(row.bitscore)
@@ -61,11 +67,13 @@ MATCH (:Annotation {id: 'potra-v2.2'})-[:HAS_GENE]->(:Gene)-[r:BEST_ARABIDOPSIS_
 CALL (r) { DELETE r } IN TRANSACTIONS OF 5000 ROWS;
 
 MATCH (a:Annotation {id: 'potra-v2.2'})
-CALL (a) {
+MATCH (arath:Annotation {id: 'arath-araport11'})
+CALL (a, arath) {
   LOAD CSV WITH HEADERS FROM 'file:///potra-arath-best-hits.csv' AS row
   FIELDTERMINATOR '\t'
   MATCH (a)-[:HAS_GENE]->(g:Gene {id: row.gene_id})
   MATCH (t:Gene {id: row.arath_gene_id})
+  WHERE (arath)-[:HAS_GENE]->(t)
   CREATE (g)-[:BEST_ARABIDOPSIS_HIT {
     evalue: toFloat(row.evalue),
     bitscore: toFloat(row.bitscore)
@@ -77,11 +85,13 @@ MATCH (:Annotation {id: 'pruav-v2.0'})-[:HAS_GENE]->(:Gene)-[r:BEST_ARABIDOPSIS_
 CALL (r) { DELETE r } IN TRANSACTIONS OF 5000 ROWS;
 
 MATCH (a:Annotation {id: 'pruav-v2.0'})
-CALL (a) {
+MATCH (arath:Annotation {id: 'arath-araport11'})
+CALL (a, arath) {
   LOAD CSV WITH HEADERS FROM 'file:///pruav-arath-best-hits.csv' AS row
   FIELDTERMINATOR '\t'
   MATCH (a)-[:HAS_GENE]->(g:Gene {id: row.gene_id})
   MATCH (t:Gene {id: row.arath_gene_id})
+  WHERE (arath)-[:HAS_GENE]->(t)
   CREATE (g)-[:BEST_ARABIDOPSIS_HIT {
     evalue: toFloat(row.evalue),
     bitscore: toFloat(row.bitscore)

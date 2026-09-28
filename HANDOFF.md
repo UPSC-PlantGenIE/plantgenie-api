@@ -225,6 +225,50 @@ IP quota 50.
   — nothing errors — so compare `count(DISTINCT sample_id)` in the expression
   CSV against the samples CSV whenever a load comes up short.
 
+- **`annotation-load.cypher` deletes every `Annotation` node and recreates
+  them**, which takes `HAS_GENE` with it — its own header says "Re-running
+  this means re-running the gene loads afterwards." Caught before running it
+  on 2026-09-28 while adding betpe v1.4. To add or change one annotation, do
+  not run this script: create that node alone with
+  `LOAD CSV … WITH row WHERE row.id = '<annotation>'` and the same `CREATE`.
+  `gene-load.cypher`, `gene-go-load.cypher` and `arath-best-hit-load.cypher`
+  have the same shape — one block per annotation, each clearing its own — so
+  running them whole rebuilds every taxon. Extract the one block you want.
+
+- **The CoGe GFF export is not usable as downloaded.** For birch gid 35080 the
+  `id_typename` option puts a functional description in `ID=` for 2,307 of
+  24,849 gene rows, 1,405 gene rows have `start == end`, 20,770 exon rows are
+  nested duplicates, and `cds0` leaves the phase column empty throughout. The
+  real ids survive only in `Alias=`. All of this, and SQL that repairs it, is
+  in `betpe-v1.4-gff-provenance.md` in the handover package — **start there,
+  not from a fresh export.** Two byte-different copies of the export exist
+  under the same name; the 86,144,515 byte one is correct and the 520-bytes-
+  smaller one is missing 21 `Parent=` rows that cannot be reconstructed.
+
+- **`gffread` writes `.` for stop codons; `diamond makedb` rejects it** with
+  `Error: Invalid character in sequence: '.'`. `makeblastdb` accepts it
+  silently, so the protein BLAST database can be built from a file diamond
+  will refuse. v1.2's fastas use `*`, so convert with
+  `sed '/^>/!s/\./*/g'` before indexing anything, and rebuild the `.gz`,
+  `.fai`, `.gzi` and protein BLAST database afterwards — they were all built
+  from the dotted file on 2026-09-28 and had to be redone.
+
+- **`mv` is interactive here and silently declines.** On 2026-09-28
+  `mv converted.fa original.fa` printed `overwrite? (y/n [n]) not overwritten`
+  and the pipeline continued against the *unconverted* file — bgzip, faidx and
+  makeblastdb all ran on the wrong input with no error. Use `command mv -f`,
+  and check the result rather than the exit code.
+
+- **betpe's expression parquet mixes two transcript conventions.** 25,865
+  features end `.mRNA1` and 226 end `.m0002`, and both carry real gene ids —
+  the `.mNNNN` form alone accounts for 220 genes in the annotation. A regex
+  for one form drops or undercounts them, so use
+  `'^(.*)\.m(?:RNA)?[0-9]+$'`. The parquet also holds 1,455 features named
+  after a protein description and 2 Arabidopsis ids, none in the annotation,
+  which the gene filter removes. Note the parquet never matched v1.2's own
+  transcript fastas either — those use `.m0001` — so this is not new with
+  v1.4.
+
 ## Watch list
 
 Things that may bite later. Fix when they surface, not before.
@@ -266,14 +310,21 @@ Things that may bite later. Fix when they surface, not before.
   next prod nginx change, and carry it into dev. The first replacement after
   adding it still goes stale once; every one after that is clean.
 
-- **`arath-best-hit-load.cypher` matches its arath target unscoped.**
-  `MATCH (t:Gene {id: row.arath_gene_id})` was safe while `arath-araport11`
-  was the only annotation holding AT identifiers, which its header comment
-  says outright. `arath-tair10` landed 2026-09-17 and carries the same ids, so
-  re-running that script now creates two edges per hit. The edges already in
-  the graph are correct — this bites on a re-run only. Fix is to bind the
-  annotation and add `WHERE (arath)-[:HAS_GENE]->(t)`, as
-  `potra-T89-2026-arath-best-hit-load.cypher` does.
+- **~~`arath-best-hit-load.cypher` matches its arath target unscoped.~~
+  Fixed 2026-09-28.** `MATCH (t:Gene {id: row.arath_gene_id})` was safe while
+  `arath-araport11` was the only annotation holding AT identifiers, which its
+  header comment says outright. `arath-tair10` landed 2026-09-17 and carries
+  the same ids, so the script created two edges per hit. Confirmed before
+  fixing: both annotations return a node for `AT2G20300`. All five blocks now
+  bind `MATCH (arath:Annotation {id: 'arath-araport11'})`, pass it in with
+  `CALL (a, arath)`, and add `WHERE (arath)-[:HAS_GENE]->(t)`, as
+  `potra-T89-2026-arath-best-hit-load.cypher` already did. Verified on the
+  betpe v1.4 load: 20,342 edges from 20,342 CSV rows, not 40,684.
+
+  **No existing edges were doubled** — checked 2026-09-28, every annotation's
+  edge count equals its CSV row count, because they were all loaded before
+  `arath-tair10` landed. One small discrepancy unrelated to this: picab has
+  30,702 edges against 30,707 CSV rows, 5 short, not investigated.
 
 - **Scoping a match through a bound node loses the index.** Writing
   `MATCH (arath)-[:HAS_GENE]->(t:Gene {id: row.arath_gene_id})` lets the
@@ -402,17 +453,35 @@ deployment config, not source history.
 
 ## Current state
 
-**Expression and coexpression are loaded locally only, as of 2026-09-24.**
-The local graph carries all nine picab experiments — 330 samples, 14,196,911
-`EXPRESSED_IN` edges, every count matching its source CSV — plus 2,940,805
-`COEXPRESSED_WITH` edges for cold-roots. Nothing of this is on dev: the
-heatmap, both v2 endpoints and the CSVs exist only on the laptop. Shape is
-`(Annotation)-[:HAS_EXPERIMENT]->(Experiment)`,
+**Expression is loaded locally only, for all five taxa, as of 2026-09-28.**
+18 experiments, 913 samples, 38,969,527 `EXPRESSED_IN` edges, every count
+matching its source CSV:
+
+| Annotation | Experiments | Samples | Edges |
+| --- | --- | --- | --- |
+| picab-v2.0 | 9 | 330 | 14,196,911 |
+| pinsy-v1.0 | 6 | 329 | 16,232,678 |
+| potra-v2.2 | 1 | 106 | 3,929,950 |
+| pruav-v2.0 | 1 | 82 | 3,122,150 |
+| betpe-v1.4 | 1 | 66 | 1,487,838 |
+
+Plus 2,940,805 `COEXPRESSED_WITH` edges for picab cold-roots only. Nothing of
+this is on dev: the heatmap, both v2 endpoints and the CSVs exist only on the
+laptop. Shape is `(Annotation)-[:HAS_EXPERIMENT]->(Experiment)`,
 `(Sample)-[:PART_OF]->(Experiment)`,
 `(Gene)-[:EXPRESSED_IN {value}]->(Sample)`, and
 `(Gene)-[:COEXPRESSED_WITH {experiment, pearson, spearman}]->(Gene)` stored
-once per pair. pinsy, potra, betpe and pruav have no expression loaded, so
-their lists show "No expression experiments for this genome yet".
+once per pair.
+
+**betpe moved to a chromosome-scale assembly, v1.4, on 2026-09-28.** The
+contig-based v1.2 was deleted from the local graph and its data directory
+moved to `betpe/v1-old/`; `betpe/v1/` now holds the 14 pseudochromosomes
+(391,815,048 bp) with annotation `betpe-v1.4` at `betpe/v1/v1.4`. Gene ids are
+unchanged — `Bpev01.cNNNN.gNNNN` in both — so v1.4 is v1.2's gene models placed
+onto chromosomes rather than a re-annotation: 24,855 of v1.4's 24,861 genes
+carry a v1.2 id, 99.38% with byte-identical spans, and every strand flip is a
+whole contig or a whole piece of a split contig turning over together. 3,292
+v1.2 genes were dropped, 6 are new.
 
 **Dev runs the `v0.4.10-dev` UI bundle as of 2026-09-22**, on `v0.4.9-dev`
 images — the tag is UI-only, so `fastapi.service` and `celery-worker.service`

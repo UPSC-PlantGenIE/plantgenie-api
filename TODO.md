@@ -17,18 +17,28 @@ before the UI can be faked against it.
 
 ## Now
 
-- [ ] **Load the other four taxa's expression.** picab's nine experiments are
-      loaded locally (`scripts/expression/picab-expression.sql`,
-      `scripts/neo4j/picab-expression-load.cypher`). Still to do, one explicit
-      file per taxon in the same shape: pinsy (6 experiments, and
-      `pinco-wood-cutting` is `vst` with *Pinus contorta* samples mapped onto
-      the pinsy annotation), potra, betpe and pruav (1 wood-cutting each).
-      Check sample ids line up between `metadata.txt` and `data.parquet`
-      before loading — see the drought-roots landmine in `HANDOFF.md`.
+- [x] **Load the other four taxa's expression.** Done 2026-09-28. One explicit
+      SQL + cypher pair per taxon alongside picab's:
+      `scripts/expression/{pinsy,potra,pruav,betpe}-expression.sql` and
+      `scripts/neo4j/{pinsy,potra,pruav,betpe}-expression-load.cypher`. All
+      18 experiments across five taxa are now in the local graph — 913
+      samples, 38,969,527 `EXPRESSED_IN` edges, every count equal to
+      genes × samples in its source CSV, with one value per taxon spot-checked
+      against the CSV to full precision. Sample ids were compared between
+      `metadata.txt` and `data.parquet` for all of them before loading; every
+      taxon agreed exactly, so the picab drought-roots problem did not recur.
+
+      betpe rode along with the v1.4 assembly swap below and uses a different
+      transcript regex — see the entry in `HANDOFF.md`.
 - [ ] **Deploy the heatmap to dev.** Nothing from this work is on dev. Dump the
       local store and restore it there, as on 2026-09-03, rather than copying
       CSVs and re-running loads on the VM. Then deploy the UI and API and open
       a picab list.
+
+      Now also carries the betpe v1.4 swap, which is bigger than a graph
+      restore: `/opt/data/plantgenie-knowledge/betpe/` has to be replaced on
+      the shared volume too, since the sequence endpoint and BLAST both read
+      from it. Dev still has the contig v1.2 tree.
 - [ ] **Reorder the wizard artboards in Figma.** The code shipped in
       `23ac913` (taxon → genome → list details, deployed as `v0.4.10-dev`), but
       the design still has naming as step 1 across three artboards
