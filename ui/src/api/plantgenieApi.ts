@@ -117,6 +117,29 @@ export interface BlastDatabase {
   taxonScientificName: string;
 }
 
+export interface Experiment {
+  id: string;
+  name: string;
+  description: string | null;
+  unit: string;
+  sampleCount: number;
+}
+
+export interface ExpressionSample {
+  id: string;
+  group: number;
+  order: number;
+}
+
+export interface ExpressionResponse {
+  experimentId: string;
+  unit: string;
+  samples: ExpressionSample[];
+  geneIds: string[];
+  values: (number | null)[][];
+  missingGeneIds: string[];
+}
+
 export interface ArabidopsisHit {
   geneId: string;
   name: string | null;
@@ -238,6 +261,22 @@ export const plantgenieApi = createApi({
       query: ({ annotationId, geneId }) =>
         `v2/genes/${annotationId}/${geneId}/arabidopsis-hit`,
     }),
+    getExperiments: build.query<Experiment[], string>({
+      query: (annotationId) =>
+        `v2/annotations/${annotationId}/experiments`,
+      transformResponse: (r: { experiments: Experiment[] }) =>
+        r.experiments,
+    }),
+    getExpression: build.query<
+      ExpressionResponse,
+      { experimentId: string; geneIds: string[] }
+    >({
+      query: ({ experimentId, geneIds }) => ({
+        url: `v2/experiments/${experimentId}/expression`,
+        method: "POST",
+        body: { geneIds },
+      }),
+    }),
     patchList: build.mutation<
       { listId: string },
       {
@@ -283,6 +322,8 @@ export const {
   usePollBlastQuery,
   useGetBlastResultsQuery,
   useGetGeneArabidopsisHitQuery,
+  useGetExperimentsQuery,
+  useGetExpressionQuery,
   usePatchListMutation,
   useDeleteListMutation,
 } = plantgenieApi;

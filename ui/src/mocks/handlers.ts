@@ -252,6 +252,45 @@ export const handlers = [
     }
   ),
 
+  http.get(
+    "http://localhost:8000/api/v2/annotations/:annotationId/experiments",
+    () => {
+      return HttpResponse.json({
+        experiments: [
+          {
+            id: "picab-v2.0-cold-roots",
+            name: "Picab Cold Roots",
+            description: "Effect of cold stress on roots",
+            unit: "tpm",
+            sampleCount: 2,
+          },
+        ],
+      });
+    }
+  ),
+
+  http.post(
+    "http://localhost:8000/api/v2/experiments/:experimentId/expression",
+    async ({ params, request }) => {
+      const body = (await request.json()) as { geneIds: string[] };
+      const fixtures: Record<string, number[]> = {
+        PA_chr01_G000102: [0, 10],
+      };
+      const geneIds = body.geneIds.filter((id) => fixtures[id]);
+      return HttpResponse.json({
+        experimentId: params.experimentId,
+        unit: "tpm",
+        samples: [
+          { id: "control-1", group: 1, order: 1 },
+          { id: "cold-1", group: 2, order: 2 },
+        ],
+        geneIds,
+        values: geneIds.map((id) => fixtures[id]),
+        missingGeneIds: body.geneIds.filter((id) => !fixtures[id]),
+      });
+    }
+  ),
+
   http.get("http://localhost:8000/api/v2/taxa", ({ request }) => {
     const abbreviation = new URL(request.url).searchParams.get("abbreviation");
     const filtered = abbreviation

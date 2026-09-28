@@ -17,14 +17,38 @@ before the UI can be faked against it.
 
 ## Now
 
-- [ ] **Reorder the wizard so the list is named last.** Naming and describing a
-      list before choosing what goes in it asks for a decision the user cannot
-      make yet. Wanted order: taxon, genome, then list details. Note the Figma
-      file has naming as step 1 across three artboards
+- [ ] **Load the other four taxa's expression.** picab's nine experiments are
+      loaded locally (`scripts/expression/picab-expression.sql`,
+      `scripts/neo4j/picab-expression-load.cypher`). Still to do, one explicit
+      file per taxon in the same shape: pinsy (6 experiments, and
+      `pinco-wood-cutting` is `vst` with *Pinus contorta* samples mapped onto
+      the pinsy annotation), potra, betpe and pruav (1 wood-cutting each).
+      Check sample ids line up between `metadata.txt` and `data.parquet`
+      before loading — see the drought-roots landmine in `HANDOFF.md`.
+- [ ] **Deploy the heatmap to dev.** Nothing from this work is on dev. Dump the
+      local store and restore it there, as on 2026-09-03, rather than copying
+      CSVs and re-running loads on the VM. Then deploy the UI and API and open
+      a picab list.
+- [ ] **Reorder the wizard artboards in Figma.** The code shipped in
+      `23ac913` (taxon → genome → list details, deployed as `v0.4.10-dev`), but
+      the design still has naming as step 1 across three artboards
       (`Desktop — Step 1: List Details`, `Step 2: Select Taxon`,
-      `Step 3: Select Genome`), so the design needs the same reordering.
+      `Step 3: Select Genome`). They need renumbering to match, and the step
+      dots redrawn.
 
 ## Next
+
+- [ ] **E2E tests for add-by-ID.** Adding new IDs to a list that already has
+      genes, and validation still sorting IDs into found and not found. The
+      flow was confirmed by hand and by unit tests, but nothing exercises the
+      real UI → API → sqlite path.
+- [ ] **Reproducible expression loads.** The per-experiment CSVs are generated
+      on the laptop from `/opt/data/plantgenie-knowledge/*/*/*/rnaseq/*/`. They
+      should be reproducible and live in bucket storage, so a rebuild can load
+      from there instead of from one machine.
+- [ ] **Delete `scripts/neo4j/expression-load.cypher`.** Superseded by
+      `picab-expression-load.cypher`, which covers cold-roots and the other
+      eight.
 
 - [ ] **Give `Annotation` a `version_name`.** The two T89 haplotypes show in
       the genome selector as the bare versions `h1` and `h2`, with nothing to

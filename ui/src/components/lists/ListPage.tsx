@@ -84,34 +84,58 @@ export default function ListPage() {
             {data.description && (
               <p className="mt-1 text-sm text-muted">{data.description}</p>
             )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="rounded-md bg-primary-tint px-2.5 py-1 text-xs font-medium text-primary">
+                {data.taxonName}
+              </span>
+              <span className="rounded-md bg-primary-tint px-2.5 py-1 text-xs font-medium text-primary">
+                {data.annotationId.split("-").slice(1).join("-")}
+              </span>
+              <span className="rounded-md bg-primary-tint px-2.5 py-1 text-xs font-medium text-primary">
+                {data.geneCount} {data.geneCount === 1 ? "gene" : "genes"}
+              </span>
+              <span className="rounded-md bg-primary-tint px-2.5 py-1 text-xs font-medium text-primary">
+                Created{" "}
+                {new Date(data.createdAt + "Z").toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </span>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={handleExport}
-            disabled={data.memberGeneIds.length === 0}
-            className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card px-4 text-sm font-semibold text-label shadow-card disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Export
-          </button>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <span className="rounded-md bg-primary-tint px-2.5 py-1 text-xs font-medium text-primary">
-            {data.taxonName}
-          </span>
-          <span className="rounded-md bg-primary-tint px-2.5 py-1 text-xs font-medium text-primary">
-            {data.annotationId.split("-").slice(1).join("-")}
-          </span>
-          <span className="rounded-md bg-primary-tint px-2.5 py-1 text-xs font-medium text-primary">
-            {data.geneCount} {data.geneCount === 1 ? "gene" : "genes"}
-          </span>
-          <span className="rounded-md bg-primary-tint px-2.5 py-1 text-xs font-medium text-primary">
-            Created{" "}
-            {new Date(data.createdAt + "Z").toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            })}
-          </span>
+          <div className="grid shrink-0 grid-cols-2 gap-2">
+            {data.memberGeneIds.length > 0 && (
+              <>
+                <Link
+                  href={`/lists/${listId}/genes/add-by-id`}
+                  className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 text-xs font-semibold text-white shadow-card"
+                >
+                  + Add by ID
+                </Link>
+                <Link
+                  href="#"
+                  className="inline-flex h-8 items-center justify-center rounded-md border border-primary bg-card px-3 text-xs font-semibold text-primary shadow-card"
+                >
+                  🔍 Search genes
+                </Link>
+                <Link
+                  href={`/lists/${listId}/heatmap`}
+                  className="inline-flex h-8 items-center justify-center rounded-md border border-primary bg-card px-3 text-xs font-semibold text-primary shadow-card"
+                >
+                  ▦ Heatmap
+                </Link>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={data.memberGeneIds.length === 0}
+              className="inline-flex h-8 items-center justify-center rounded-md border border-border bg-card px-3 text-xs font-semibold text-label shadow-card disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Export
+            </button>
+          </div>
         </div>
       </article>
 

@@ -199,9 +199,49 @@ IP quota 50.
   source in the middle does not help — reading an address inherits a dependency
   on whatever owns it.
 
+- **`LOAD CSV` inside a `CALL { } IN TRANSACTIONS` subquery batches the wrong
+  thing.** Hit on 2026-09-23 loading 1.16M expression rows:
+  `MATCH (a:Annotation) CALL (a) { LOAD CSV … CREATE … } IN TRANSACTIONS OF
+  10000 ROWS` batches the *outer* rows, and there is only one — the annotation
+  — so every write lands in a single transaction and dies with
+  `51N72: memory pool out of memory`. `LOAD CSV` has to sit in the outer query
+  with `CALL (row) { … } IN TRANSACTIONS` inside it; then the plan shows
+  `LoadCSV` feeding `TransactionForeach` and the same load finishes in seconds.
+  The same wrong shape is still in `potra-T89-2026-*-load.cypher` and
+  `arath-best-hit-load.cypher`; it has not bitten there because those files are
+  ~34k rows and fit in one transaction.
+- **`EXPLAIN` before a big load, and read it.** The gene side was right by
+  construction (`NodeIndexSeek` on `Gene(id)` then `Expand(Into)` for the
+  `HAS_GENE` check), but the Sample match planned as `NodeByLabelScan` until
+  the `sample_id` constraint existed — 27 samples scanned per row, 1.16M times.
+  Creating constraints first turned it into `NodeUniqueIndexSeek`.
+- **Sample ids must match between `metadata.txt` and `data.parquet`.** picab
+  drought-roots loaded 1,075,575 edges against 1,204,644 CSV rows on
+  2026-09-24. The gap was exactly 3 × 43,023 genes: the parquet columns read
+  `117-Root30%-7d` while the metadata read `117-Root-30%-7d`, so three samples
+  matched nothing and were silently dropped. Fixed in the parquet, which was
+  the inconsistent side. `somatic-embryogenesis/metadata.txt` also carried a
+  trailing space on its `id` header. **A short edge count is the only symptom**
+  — nothing errors — so compare `count(DISTINCT sample_id)` in the expression
+  CSV against the samples CSV whenever a load comes up short.
+
 ## Watch list
 
 Things that may bite later. Fix when they surface, not before.
+
+- **Tailwind classes do not survive an SVG export.** The heatmap's text used
+  `text-xs` / `fill-primary`, which live in the page stylesheet, so exported
+  PNG and SVG fell back to the 16px browser default and the labels collided
+  with the cells. SVG destined for export needs presentation attributes
+  (`fontSize`, `fill`, `fontFamily`) on the element. Same class of bug: sizing
+  a canvas from `svg.clientWidth` crops the drawing when it sits in a
+  horizontally scrolling container — use the SVG's own `width` attribute.
+- **UI tests that click before their data arrives.** `GenePage`'s clipboard
+  test failed intermittently (clipboard read back `''`) because it clicked Copy
+  while `useGetGeneSequencesQuery` was still loading, and `handleCopy` no-ops
+  when `sequences` is undefined. Fixed by awaiting the sequence text first. The
+  heatmap export tests needed the same treatment — the Export button is
+  disabled until the expression arrives.
 
 - **New files on `/srv/shared` are not visible on application until
   `mount -a`.** Hit on 2026-09-21: after rsyncing the sequence fastas onto
@@ -291,6 +331,13 @@ Things that may bite later. Fix when they surface, not before.
   (`packages/shared/.../openstack.py`, `OS_*` in `.env.shared`). Decided
   2026-08-28: keep pointing at the old cluster's Swift for now. A self-hosted
   MinIO on the new cluster is the likely replacement.
+- **A UI-only tag splits `dev.tfvars`.** `v0.4.10-dev` changed nothing in
+  `src/`, so only the UI bundle was replaced on nginx and the image tags were
+  left at `v0.4.9-dev`. That is correct and cheap, but it is the first time
+  the three tfvars entries disagree, and the UI bundle on disk is the only
+  record of what is actually served. Check `ui_download_url` against
+  `/var/www/html/dist` before assuming a tag describes the whole deployment.
+
 - **Claude's UI test runs stall intermittently.** Three times on 2026-09-11 a
   `yarn test:run` (or `yarn vitest run`) launched by Claude hung with no
   output at all, while the same suite in the user's own `yarn test` watch
@@ -298,6 +345,11 @@ Things that may bite later. Fix when they surface, not before.
   `grep`, which hid where it stopped. Mitigation now in `CLAUDE.md`: no output
   filtering, foreground, 15s timeout. If it recurs, note whether a `yarn test`
   watch was running at the same time.
+  **Recurred twice on 2026-09-22**, both on a single-file run, both while the
+  user's e2e suite was running in another terminal — the first correlation
+  with concurrent load rather than with a `yarn test` watch. One of the two
+  was `grep`-piped despite the rule. The full-suite run immediately afterwards
+  passed both times, so the hang does not survive a retry.
 - **Pre-existing UI format debt.** The `AddByIdPage.tsx`
   `react-hooks/set-state-in-effect` error was fixed by `a8b3b17` (the selection
   is now set in `handleValidate` from the lookup result, and the effect is
@@ -350,11 +402,29 @@ deployment config, not source history.
 
 ## Current state
 
-**Dev runs `v0.4.9-dev` as of 2026-09-21** — images, UI bundle and
-`dev.tfvars` all at that tag. The dev graph carries `longestTranscriptId`
+**Expression and coexpression are loaded locally only, as of 2026-09-24.**
+The local graph carries all nine picab experiments — 330 samples, 14,196,911
+`EXPRESSED_IN` edges, every count matching its source CSV — plus 2,940,805
+`COEXPRESSED_WITH` edges for cold-roots. Nothing of this is on dev: the
+heatmap, both v2 endpoints and the CSVs exist only on the laptop. Shape is
+`(Annotation)-[:HAS_EXPERIMENT]->(Experiment)`,
+`(Sample)-[:PART_OF]->(Experiment)`,
+`(Gene)-[:EXPRESSED_IN {value}]->(Sample)`, and
+`(Gene)-[:COEXPRESSED_WITH {experiment, pearson, spearman}]->(Gene)` stored
+once per pair. pinsy, potra, betpe and pruav have no expression loaded, so
+their lists show "No expression experiments for this genome yet".
+
+**Dev runs the `v0.4.10-dev` UI bundle as of 2026-09-22**, on `v0.4.9-dev`
+images — the tag is UI-only, so `fastapi.service` and `celery-worker.service`
+were left alone. The reordered wizard and the new navbar links were confirmed
+in the browser after the deploy. The dev graph carries `longestTranscriptId`
 (restored from the local store) and the dev shared volume carries the sequence
 fastas, so `GET /api/v2/genes/{annotationId}/{geneId}/sequences` is live and
 the gene page's Sequences card is populated. Prod is untouched, still `v0.4.5`.
+
+`dev.tfvars` therefore splits for the first time: `ui_download_url` at
+`v0.4.10-dev`, `fastapi_image_tag` and `celery_worker_image_tag` still at
+`v0.4.9-dev`. Earlier deploys moved all three together.
 
 Six instances are running as of 2026-08-31 — neo4j, nginx, rabbitmq, redis,
 queue and application. `plantgenie-test` was removed. They can be stopped and
@@ -552,82 +622,6 @@ Already committed as `160010b`: the frontend release workflow ported from
 plus `packageManager` and `engines.node` in `ui/package.json` so corepack and
 `setup-node` pin the right versions in CI.
 
-## TODO: report the port security_groups 500 to NAISS
-
-Not sent yet. Reproduction below.
-
-Fails, HTTP 500 with an HTML error page and no JSON body:
-
-```bash
-curl -X POST "https://waldur.pcd.arrhenius.naiss.se/api/openstack-ports/" \
-  -H "Authorization: token $WALDUR_ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "sgtest",
-    "network": "https://waldur.pcd.arrhenius.naiss.se/api/openstack-networks/d562b9c5dd2c4fa88f10fa1486ee97b8/",
-    "security_groups": []
-  }'
-```
-
-Succeeds, HTTP 201, identical payload minus the `security_groups` key:
-
-```bash
-curl -X POST "https://waldur.pcd.arrhenius.naiss.se/api/openstack-ports/" \
-  -H "Authorization: token $WALDUR_ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "sgtest",
-    "network": "https://waldur.pcd.arrhenius.naiss.se/api/openstack-networks/d562b9c5dd2c4fa88f10fa1486ee97b8/"
-  }'
-```
-
-Points to make:
-
-- An *empty* list fails, so it is not about the contents. Also tried
-  `[{"name": "ssh"}]`, `[{"name": "ssh", "url": "..."}]`, and with `fixed_ips`
-  present as in the provider's documented example — all 500. Only
-  `[{"url": "..."}]` differs, returning 400
-  (`{"security_groups": [{"name": ["This field is required."]}]}`), which shows
-  the serializer expects `name` and then crashes downstream of validation.
-- **The endpoint's own `OPTIONS` metadata advertises the field as writable at
-  creation**, and pins down the only legal shape:
-
-  ```json
-  "security_groups": {
-    "required": false, "read_only": false,
-    "child": {"children": {
-      "uuid": {"read_only": true},
-      "name": {"required": true, "read_only": false, "max_length": 150},
-      "url":  {"read_only": true}
-    }}
-  }
-  ```
-
-  `name` is the only settable child — and `[{"name": "ssh"}]` is exactly the
-  payload that 500s. This also explains the 400 from `[{"url": "..."}]`: `url`
-  is read-only, so it is discarded and the required `name` is then missing.
-  Validation is behaving correctly; the crash is downstream of it.
-- Since `[]` also 500s, the handler is failing on the popped `security_groups`
-  value unconditionally, before any per-group lookup can happen.
-- Adding a valid `fixed_ips` entry (`ip_address` plus the subnet's *backend*
-  id, `f775592d-4f27-4c22-864a-6f737df3d8ea` — the Waldur uuid is rejected
-  here) does not help. Nor does `port_security_enabled: true`, worth noting
-  since both the network and the subnet report `port_security_enabled: null`.
-- `PATCH /api/openstack-ports/{uuid}/` with `security_groups` as dicts also
-  500s; as URL strings it returns 400 (`Expected a dictionary, but got str`).
-- `POST /api/openstack-ports/{uuid}/update_security_groups/` with a list of URL
-  *strings* works (202). The capability exists, just not at creation — and the
-  two endpoints disagree on whether they want strings or dicts.
-- This makes the `waldur_openstack_port` example in the Terraform provider docs
-  unusable, since it declares `security_groups` on the port.
-
-Context for their logs: project `NAISS 2025/22-1577`
-(`950a75640950426a94a8ac2cd446b7e3`), tenant `1cb7834e0b48471398af441b7c1af91a`,
-2026-08-25 around 12:30–12:45 CEST and again around 19:45–20:00 CEST. The 500s
-are Django's `DEBUG=False` HTML page (145 bytes, `server: gunicorn`), so there
-is no body on our side at all. A traceback from theirs would say whether it is
-the serializer or the backend executor.
-
 ## Frontend build config
 
 The `production` GitHub environment was created on this repo on 2026-08-31 and
@@ -642,343 +636,4 @@ content.
 unset; the old repo has it as `PlantGenIE`. The workflow has never run — there
 are no releases on this repo, and the deployment serves the `plantgenie-ui`
 v0.3.4 zip instead.
-
-## Completed — moved out of TODO.md on 2026-09-10
-
-TODO.md was restructured into open work only (Now / Next / Long term). The
-finished items below moved here so the record survives.
-
-### Dev build and release convention
-
-Dev builds are driven by prerelease tags like `v0.3.5-dev`. Both
-`build-frontend-release.yaml` and `build-docker-image-release.yaml` fire on
-`v*.*.*`, and that pattern matches a `-dev` suffix, so one tag produces all
-three artifacts: the `plantgenie-ui-<tag>.zip` attached to the release, plus
-`fastapi-backend:<tag>` and `celery-worker:<tag>`. Tags fire regardless of
-branch, so tagging a feature branch gives a deployable dev build — no
-per-branch CI needed.
-
-- `build-frontend-release.yaml` marks `-dev` tags as prereleases
-  (`prerelease: ${{ contains(github.ref_name, '-dev') }}`) so they do not take
-  over "Latest".
-- First dev tag `v0.4.6-dev` cut 2026-08-31. Both workflows succeeded, the
-  release is correctly marked Pre-release, and `dev.tfvars` points at
-  `v0.4.6-dev` for both images and the UI zip. The zip URL is deterministic:
-  `https://github.com/UPSC-PlantGenIE/plantgenie-api/releases/download/<tag>/plantgenie-ui-<tag>.zip`
-  That bundle is the **new React UI** from `ui/`, built with
-  `VITE_API_BASE_URL=/api/` — unlike prod, which serves `plantgenie-ui` v0.3.4.
-- `build-docker-image.yaml` built `plantgenie-api:latest`, which nothing
-  deployed — the tfvars pin `fastapi-backend` and `celery-worker`. Deleted in
-  `96904db` alongside the Waldur terraform rewrite.
-
-### First dev apply
-
-- `terraform workspace select dev && terraform apply -var-file=dev.tfvars`.
-  Six instances, two volumes, a floating IP. Remember
-  `set -a; source ../.env.shared; set +a` first — the destroy provisioners read
-  the token from the environment.
-- `dev.plantgenie.se` pointed at the dev nginx floating IP. It previously
-  pointed at the old SSC deployment, so this was a cutover, not a new record.
-- `sudo certbot --nginx -d dev.plantgenie.se` on the dev nginx VM. HTTPS
-  confirmed working 2026-09-01.
-- Graph loaded into dev neo4j 2026-09-02, not by loading CSVs on the VM but by
-  dumping the local store and restoring it:
-  `neo4j-admin database dump neo4j --to-stdout` locally, then
-  `database load neo4j --from-stdin --overwrite-destination=true` on dev. Only
-  the `neo4j` database moves, so dev keeps its own tfvars password (auth lives
-  in the untouched `system` database). Reachable over bolt at
-  `dev.plantgenie.se:7687` through the nginx stream proxy. See
-  `neo4j-data-load-plan.md` for how the local store was built.
-
-### Gene list feature
-
-Merged in from `plantgenie-old/api-new-react-ui-api-integration/TODO.md`, whose
-API section is fully superseded by v2: `/v2/taxa` with common names, string slug
-IDs on Assembly and Annotation, `?taxon=` / `?assembly=` filters, and
-`geneCount` / `isDefault` on Annotation.
-
-- React wizard rewired onto `/v2/taxa` + `/v2/assemblies` + `/v2/annotations` —
-  `GenomeSelector.tsx` uses all three hooks. Retiring the v1 endpoints is still
-  outstanding.
-- Empty gene list page after "create list" — `lists/ListPage.tsx`.
-- Screens for adding user-entered gene IDs, with a validation view showing
-  descriptions and IDs that were not found — `lists/AddByIdPage.tsx`, backed by
-  `/v2/genes/lookup`.
-- Gene list page populated with real genes, rows linking through to gene pages.
-
-### Account IDs
-
-Specced 2026-09-03 and built out over the following week. Confirmed done
-2026-09-10:
-
-- `POST /v2/accounts` (201, returns the plaintext ID once) and
-  `GET /v2/accounts/me` in `api/v2/accounts/routes.py`
-- `AccountDep` at `dependencies.py:173`, hashing the bearer and 401ing on an
-  unknown ID, in the same shape as `Neo4jDep` and `SqliteDep`
-- lists scoped by owner — the `account_id="stub"` placeholder is gone from
-  `api/v2/lists/routes.py`
-- `prepareHeaders` in `plantgenieApi.ts:124` injecting the bearer from
-  `accountSlice`
-- verified end to end by `test_a_list_url_is_private_to_its_owner` in
-  `src/tests/e2e/test_functional.py`
-
-The schema change that landed:
-
-```sql
-CREATE TABLE IF NOT EXISTS accounts (
-    account_hash TEXT PRIMARY KEY,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-ALTER TABLE gene_lists ADD COLUMN account_hash TEXT NOT NULL DEFAULT '';
-CREATE INDEX IF NOT EXISTS gene_lists_account ON gene_lists (account_hash);
-```
-
-The `ALTER` is not idempotent under `schema.sql`'s `CREATE TABLE IF NOT EXISTS`
-style and needed a guard. Existing dev lists became ownerless, so they were
-deleted.
-
-The build ladder followed, backend first, because the UI could not be
-meaningfully faked against an auth scheme that did not exist yet: accounts
-endpoint → `/me` 401ing on an unknown ID → `GET /v2/lists` filtered to the
-account → UI header injection. The remaining rung, the login UI, shipped on
-2026-09-16 — see "Landing page and log in" below.
-
-### BLAST database versions
-
-Moved out of TODO.md on 2026-09-11. The dropdown showed
-"Picea abies — Coding sequences" with no assembly or annotation version, so two
-annotations for one species were indistinguishable.
-
-Resolved by `a2156b4`, which labels each option with the database id
-(`BlastPage.tsx:98`). Ids are built as `{taxon}-{version}-{sequenceType}` in
-`scripts/neo4j/generate-blast-databases-csv.py:36`, so the version is visible.
-The readable label originally wanted, "Picea abies — Coding sequences (v2.0)",
-was not built: `api/v2/blast/routes.py` still does not return `version`.
-Accepted as enough on 2026-09-11.
-
-### Landing page and log in
-
-Finished 2026-09-16, commits `a8b3b17` through `c43714b`, tagged `v0.4.8-dev`
-and pushed. 128 UI tests and 8 e2e tests green, `yarn lint` and `yarn build`
-clean. **Deployed to dev by hand on 2026-09-17** following `MANUAL-DEPLOY.md`,
-and the account flow confirmed working in the browser. The deploy needed both
-data stores brought forward as well as the code — see "Dev data stores" below.
-
-What ships:
-
-- `/` is `LandingPage`: two cards side by side, `#returning-user` (paste an ID,
-  verified through `verifyAccount`, `role="alert"` when rejected) and
-  `#new-account-card` ("Generate a new ID" → `POST /v2/accounts`, the ID in
-  groups of four, a copy button, the save-it warning).
-- `MyListsPage` moved to `/lists`. `RequireAccount` in `App.tsx` redirects to
-  `/` for any path matching a prefix in `routePrefixesWithAuthentication`,
-  currently just `/lists`. Adding BLAST later is one string.
-- The navbar shows the account ID and a "Log out" button when signed in.
-- A signed-in visitor hitting `/` is redirected straight to `/lists`.
-
-Three designs were tried and two abandoned. **The welcome-back card** (a valid
-stored ID showing "Welcome back" plus "Not you?") was built and then removed:
-it exists to let the next person at a shared machine switch accounts, and a
-"Log out" button in the navbar does that job everywhere, not just on `/`.
-**Masking the ID** (`•••• •••• •••• 3456`) was specced and dropped — anyone at
-the keyboard can read it out of localStorage or just click Continue, so it
-protects nothing. **A `verificationStatus` flag** (checking / idle) was half
-built and thrown away; see the next item for what replaced it.
-
-Decisions worth not re-litigating:
-
-- **The store is initialised from localStorage**, so `accountId` is set on the
-  very first render and `RequireAccount` never sees a false "signed out". The
-  saved ID is verified in the background and cleared if the backend rejects it.
-  The alternative — verify first, hold a "checking" state, render nothing until
-  the answer arrives — was built and reverted: it pays a guaranteed delay on
-  every page load to avoid a rare flash of a list page for an ID that is no
-  longer valid. The ID *is* the credential and every request carries it, so
-  optimistic trust is the normal shape for this.
-
-  This was not cosmetic. With verify-first, reloading or bookmarking any
-  `/lists/<id>` URL bounced the user to the list index, because the guard
-  decided before verification finished. Reproducible in the browser: no
-  `GET /api/v2/lists/<id>` request ever went out, only `/accounts/me` then
-  `/lists`. `test_a_bookmarked_list_opens_directly` covers it.
-- **Logging out resets the RTK Query cache.** `getMyLists` takes no argument
-  and the account ID rides in a header, so the cache key is identical for every
-  user and Bob was served Ada's cached lists on a shared machine — caught by
-  `test_someone_else_signs_in_on_a_shared_computer`, which showed Bob's ID in
-  the navbar above Ada's list. `handleLogOut` now dispatches
-  `plantgenieApi.util.resetApiState()`.
-- **A generated ID is only saved when "Continue to my lists" is clicked**, not
-  when it is generated. Otherwise an accidental click on Generate stored an ID
-  the user never wrote down, and the redirect then made the landing page
-  unreachable. The cost: closing the tab without clicking Continue forgets the
-  ID, which the warning already covers.
-- **Reducers stay pure.** `clearAccountId` briefly removed the localStorage key
-  itself; the `removeItem` now sits at the two call sites, `handleLogOut` and
-  the `.catch` in `useAccountIdSync`. A `signOut` helper is worth adding if a
-  third call site appears.
-- **Cards are `<section>` with `aria-labelledby`**, which makes them `region`
-  landmarks that both the unit tests and the e2e tests select by name. A
-  `<section>` without an accessible name is not a region and the queries fail —
-  this cost a round of confusing failures twice.
-
-### Dev data stores
-
-Brought forward on 2026-09-17, alongside the `v0.4.8-dev` deploy. Both were
-behind, and neither is fixed by restarting a service.
-
-- **neo4j.** The dev graph was loaded on 2026-09-02, but
-  `arath-best-hit-load.cypher` (`50860a7`) and `blast-database-load.cypher`
-  (`57655af`) both landed after that, so the gene page's Arabidopsis card had
-  no data and the BLAST database dropdown was empty. Fixed by dumping the local
-  store and restoring it, the same way as on 2026-09-02, rather than running
-  the cypher against dev: `LOAD CSV FROM 'file:///…'` reads the *server's*
-  import directory, so the CSVs would have had to be copied onto the VM first.
-  Dumped to a file rather than piped over ssh — the image's entrypoint writes
-  startup noise to stdout, which corrupts a piped dump, and a broken pipe
-  leaves the far end half-overwritten.
-- **sqlite.** Rebuilt from scratch, because `schema.sql` never applied
-  `account_hash` to the existing `gene_lists` table. See the watch-list entry
-  above; this is the one that will need real work for prod.
-
-The neo4j VM is on DHCP at `192.168.42.101` as of 2026-09-17, reached with
-`ssh -J` through nginx like the others.
-
-### Manual deploy
-
-`MANUAL-DEPLOY.md` (repo root, written 2026-09-16, untracked) documents
-updating a running dev deployment without a `terraform apply`: bump the tags in
-`dev.tfvars`, replace the UI bundle on nginx, `sed` the image tag in
-`fastapi.service` and `celery-worker.service`, restart, verify. nginx is the
-only host with a floating IP, so application (`192.168.42.12`) and queue
-(`192.168.42.43`) are reached with `ssh -J` through it. The nginx login is
-`jamie@dev.plantgenie.se`, and so is every internal VM — each cloud-init
-declares `users: - name: ${server_username}` and `dev.tfvars` sets that to
-`jamie`, with no `- default` entry, so the image's stock `ubuntu` account is
-never created. Both docs claimed `ubuntu` until 2026-09-21.
-
-One deliberate difference from cloud-init: the UI step moves the old
-`/var/www/html/dist` aside instead of unzipping over it, because Vite writes
-hashed filenames and stale bundles otherwise accumulate.
-
-Proven by the 2026-09-17 deploy, which also added a step 0 covering both data
-stores — the part that actually cost time.
-
-The `MANUAL-DEPLOY.md` neo4j section disagrees with itself: it scps the dump to
-the VM (line 91) and then loads it with `--from-stdin` (line 99). The load
-needs `--from-path=/backup`. Used in that corrected form on 2026-09-18; the
-document still says `--from-stdin`.
-
-### Arabidopsis tair10 and the T89 haplotypes
-
-Added 2026-09-17 and 2026-09-18, graph-only — no image or UI change, so the
-deploy was a neo4j dump and restore on its own.
-
-- **`arath-tair10`**, 28,775 genes, `isDefault` false, sharing the existing
-  `arath-tair10` assembly with araport11. The gene records already existed in
-  `/opt/neo4j/import/old/`. Loaded ad hoc in cypher-shell rather than through
-  a script, so a from-scratch rebuild will not reproduce it. Its `chromosome`
-  values read `Chr1` where araport11's read `1`.
-- **`potra-T89-2026`**, the phased T89 assembly. One Assembly carrying both
-  haplotypes in a single `genome.fa`, split into two Annotations
-  (`potra-T89-2026-h1`, 34,066 genes; `-h2`, 33,987) on the `T89h1`/`T89h2`
-  gene id prefix. Genes scope to an annotation, so each haplotype stays
-  separate in gene search, while BLAST against the assembly genome covers
-  both. Verified in the UI: both haplotypes appear in the genome selector and
-  BLAST works against them.
-
-The disk layout under `/opt/data/plantgenie-knowledge/potra/T89-2026/` matches
-`potra/v2`: genome and its BLAST database at the assembly level, and per
-haplotype the three sequence fastas, `gff.gz`, `annotation.tsv.gz`, BLAST
-`nucl`/`prot` databases and the diamond database and hits.
-
-Scripts are `scripts/neo4j/potra-T89-2026-{load,gene-go-load,arath-best-hit-load}.cypher`
-and `scripts/duckdb/generate-potra-T89-2026-{records,gene-go,arath-best-hits}.sql`.
-All are re-runnable — every create either `MERGE`s or has a clear step ahead
-of it.
-
-`assemblies.csv`, `annotations.csv` and `blast-databases.csv` in
-`/opt/neo4j/import/` are hand-maintained and live outside the repo. They now
-carry the T89 rows. Nothing in git records their contents.
-
-### Gene sequences endpoint
-
-Built 2026-09-21, commits `fc6721c` (backend) and `54e881a` (UI), deployed to
-dev as `v0.4.9-dev` and confirmed working in the browser.
-
-`GET /v2/genes/{annotationId}/{geneId}/sequences` returns
-`{geneId, transcriptId, cds, transcript, protein}`. All three by default;
-`?sequenceType=cds|transcript|protein` narrows it. 404 for an unknown gene,
-200 with every field null for a gene that has no protein-coding transcript.
-
-**Where the sequences come from.** They were already on disk, bgzipped with
-`.fai` and `.gzi` beside them, under each annotation's directory — the same
-files the BLAST databases are built from. `Annotation.path` already stores that
-directory relative to `DATA_PATH` (`potra/T89-2026/h1`), so no path has to be
-composed. Note `Taxon.id` is a *number*, not the `potra` slug, so composing a
-path from taxon and versions does not work; and annotation ids do not compose
-uniformly either — `potra-v2.2` is taxon plus annotation version while
-`potra-T89-2026-h1` also carries the assembly version.
-
-**`longestTranscriptId` on Gene nodes.** The fastas are keyed by transcript id
-and Gene nodes carry the bare gene id, so the transcript id is stored on the
-gene. `scripts/neo4j/generate-longest-transcripts-csv.py` reads each
-annotation's `transcript-sequences.fa.gz.fai` and writes
-`path,geneId,longestTranscriptId`; `longest-transcript-load.cypher` matches on
-`Annotation.path` and `SET`s it. 264,430 properties set across seven
-annotations.
-
-Transcript ids end differently in every annotation, which is why the generator
-is one explicit block per annotation rather than a shared parser with a
-per-file argument:
-
-| annotation | transcript id | strip |
-| --- | --- | --- |
-| `potra/T89-2026/h1`, `h2`, `potra/v2/v2.2` | `T89h1c1g00010.1` | `.rsplit(".", 1)` |
-| `betpe/v1/v1.2` | `Bpev01.c0000.g0001.m0001` | `.rsplit(".", 1)` |
-| `picab/v2/v2.0`, `pinsy/v1/v1.0` | `PA_cUP0115_G000001.mRNA.1` | `.rsplit(".mRNA.", 1)` |
-| `pruav/v2/v2.0` | `FUN_000003-T1` | `.rsplit("-T", 1)` |
-
-`arath/tair10/*` has no sequence fastas at all, so arath genes get no
-transcript id and the endpoint returns nulls for them. `pruav` is short by
-1,707 genes because they are non-coding — `FUN_000001` is `product=tRNA-Val`
-in the gff, typed `tRNA` not `mRNA`, so it is absent from the mRNA fastas by
-construction. `picab` and `pinsy` have *more* genes in the fasta than in the
-graph (11,128 and 9,642); those rows match nothing on load, which is harmless.
-
-`pinsy` and `pruav` had `.fa.gz` and `.gzi` but no `.fai`. Generated by hand
-with `samtools faidx` on 2026-09-21.
-
-**Decisions worth not re-litigating:**
-
-- **pysam, not `subprocess samtools faidx`.** Measured: opening the index is
-  the entire cost, and the seek is free. Per lookup — subprocess 13/48/51 ms
-  for potra T89 / picab / pinsy, pysam opening each call 11/80/69 ms, pysam
-  with the handle held open **0.59 µs**. A subprocess pays the index parse
-  every call and can never amortise it. pysam also bundles htslib in the wheel,
-  where a subprocess would need `samtools` installed in the API image.
-- **No handle cache, deliberately.** The measurement above says caching is
-  worth ~100,000×, but 21 open handles cost **402 MB** resident (~19 MB each,
-  proportional to entry count). Left uncached until it is a real problem;
-  `lru_cache(maxsize=6)` on the handle getter is the fix, and duckdb or parquet
-  is the alternative if memory matters more than latency. A columnar store
-  would not be faster — the seek is already 0.59 µs.
-- **JSON, not FASTA text**, so the response stays a `PlantGenieModel` like
-  every other v2 route. The UI assembles the download.
-- **Single gene, not batch.** The gene page shows one gene. A
-  `POST /v2/genes/sequences` mirroring `/lookup` is the shape if a list export
-  is ever wanted.
-- **The UI downloads the sequence in the selected tab only, never all three in
-  one file.** A FASTA carries no type declaration, so a file mixing nucleotide
-  and protein makes every downstream tool guess wrong; and all three records
-  would share one identifier, which `makeblastdb` rejects and `samtools faidx`
-  refuses to index. Disambiguating the headers would then break id matching
-  against every other file for that gene.
-- Sequence colouring by base or residue was discussed and **not built**. It is
-  about twenty lines and one DOM node per character, which is nothing at these
-  lengths; it was dropped as unnecessary, not as expensive.
-
-**VM logins are `jamie`, not `ubuntu`.** Every cloud-init declares
-`users: - name: ${server_username}` and `dev.tfvars` sets that to `jamie`, with
-no `- default` entry, so the image's stock `ubuntu` account is never created.
-Both `MANUAL-DEPLOY.md` and this file claimed `ubuntu` until 2026-09-21.
 

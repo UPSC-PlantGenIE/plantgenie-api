@@ -5,6 +5,7 @@ import LandingPage from "./components/landing/LandingPage";
 import AddByIdPage from "./components/lists/AddByIdPage";
 import ListPage from "./components/lists/ListPage";
 import MyListsPage from "./components/lists/MyListsPage";
+import HeatmapPage from "./components/heatmap/HeatmapPage";
 import BlastPage from "./components/blast/BlastPage";
 import BlastResultsPage from "./components/blast/BlastResultsPage";
 import Wizard from "./components/wizard/Wizard";
@@ -44,6 +45,10 @@ const App = () => {
             <Route
               path="/lists/:listId/genes/add-by-id"
               component={AddByIdPage}
+            />
+            <Route
+              path="/lists/:listId/heatmap"
+              component={HeatmapPage}
             />
             <Route path="/lists/:listId" component={ListPage} />
             <Route path="/genes/:annotationId/:geneId" component={GenePage} />

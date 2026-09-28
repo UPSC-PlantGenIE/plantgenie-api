@@ -101,6 +101,51 @@ describe("ListPage", () => {
     );
   });
 
+  it("has 'Add by ID' and 'Search genes' links when the list has genes", async () => {
+    server.use(
+      http.get("http://localhost:8000/api/v2/lists/:listId", ({ params }) => {
+        return HttpResponse.json({
+          listId: params.listId,
+          name: "Populated list",
+          description: null,
+          annotationId: "arath-Araport11",
+          taxonName: "Arabidopsis thaliana",
+          createdAt: "2026-04-14 12:00:00",
+          geneCount: 1,
+          memberGeneIds: ["AT1G01010"],
+        });
+      })
+    );
+    renderListPage();
+    expect(
+      await screen.findByRole("link", { name: /add by id/i })
+    ).toHaveAttribute("href", "/lists/abc-123/genes/add-by-id");
+    expect(
+      screen.getByRole("link", { name: /search genes/i })
+    ).toBeInTheDocument();
+  });
+
+  it("has a 'Heatmap' link when the list has genes", async () => {
+    server.use(
+      http.get("http://localhost:8000/api/v2/lists/:listId", ({ params }) => {
+        return HttpResponse.json({
+          listId: params.listId,
+          name: "Populated list",
+          description: null,
+          annotationId: "arath-Araport11",
+          taxonName: "Arabidopsis thaliana",
+          createdAt: "2026-04-14 12:00:00",
+          geneCount: 1,
+          memberGeneIds: ["AT1G01010"],
+        });
+      })
+    );
+    renderListPage();
+    expect(
+      await screen.findByRole("link", { name: /heatmap/i })
+    ).toHaveAttribute("href", "/lists/abc-123/heatmap");
+  });
+
   it("renders a Remove button for each member gene", async () => {
     server.use(
       http.get("http://localhost:8000/api/v2/lists/:listId", ({ params }) => {

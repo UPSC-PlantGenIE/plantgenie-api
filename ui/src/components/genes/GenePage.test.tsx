@@ -291,6 +291,7 @@ describe("GenePage", () => {
     mockAnnotation();
     renderGenePage();
     const scoped = await sequencesCard();
+    await scoped.findByText("ATGGATAATGAAGGCAATATCATC");
     await user.click(await scoped.findByRole("button", { name: /copy/i }));
     expect(await navigator.clipboard.readText()).toBe(
       "ATGGATAATGAAGGCAATATCATC"

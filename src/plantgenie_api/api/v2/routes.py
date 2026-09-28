@@ -5,6 +5,9 @@ from neo4j.graph import Node
 
 from plantgenie_api.api.v2.accounts.routes import router as accounts_router
 from plantgenie_api.api.v2.blast.routes import router as blast_router
+from plantgenie_api.api.v2.expression.routes import (
+    router as expression_router,
+)
 from plantgenie_api.api.v2.genes.routes import router as genes_router
 from plantgenie_api.api.v2.lists.routes import router as user_lists_router
 from plantgenie_api.api.v2.models import (
@@ -24,6 +27,7 @@ router.include_router(user_lists_router)
 router.include_router(genes_router)
 router.include_router(accounts_router)
 router.include_router(blast_router)
+router.include_router(expression_router)
 
 
 @router.get("/taxa", response_model=TaxaResponse, tags=["taxon"])
