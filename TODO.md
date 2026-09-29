@@ -30,15 +30,17 @@ before the UI can be faked against it.
 
       betpe rode along with the v1.4 assembly swap below and uses a different
       transcript regex — see the entry in `HANDOFF.md`.
-- [ ] **Deploy the heatmap to dev.** Nothing from this work is on dev. Dump the
-      local store and restore it there, as on 2026-09-03, rather than copying
-      CSVs and re-running loads on the VM. Then deploy the UI and API and open
-      a picab list.
+- [ ] **Finish the dev deploy: the UI bundle.** The API half is done and
+      verified — `v0.4.11-dev` images, the graph restored from the local store,
+      and `betpe/v1/` rsynced onto `/srv/shared`, all three confirmed by curl
+      (see `HANDOFF.md`). **Not confirmed: the UI bundle on nginx.** Steps are
+      in `MANUAL-DEPLOY.md` section 2 — `wget` the release zip,
+      `mv /var/www/html/dist` aside, unzip, nothing to restart. Then open a
+      betpe list and a picab list in the browser and check the heatmap renders
+      with the experiment dropdown populated.
 
-      Now also carries the betpe v1.4 swap, which is bigger than a graph
-      restore: `/opt/data/plantgenie-knowledge/betpe/` has to be replaced on
-      the shared volume too, since the sequence endpoint and BLAST both read
-      from it. Dev still has the contig v1.2 tree.
+      Also fix `MANUAL-DEPLOY.md:99` while the deploy is fresh: it says
+      `--from-stdin` where the restore needs `--from-path=/backup`.
 - [ ] **Reorder the wizard artboards in Figma.** The code shipped in
       `23ac913` (taxon → genome → list details, deployed as `v0.4.10-dev`), but
       the design still has naming as step 1 across three artboards

@@ -225,6 +225,13 @@ IP quota 50.
   — nothing errors — so compare `count(DISTINCT sample_id)` in the expression
   CSV against the samples CSV whenever a load comes up short.
 
+- **`MANUAL-DEPLOY.md:99` says `--from-stdin` for the graph restore, which
+  cannot work.** The step before it `scp`s `/tmp/neo4j.dump` to the neo4j VM
+  and the `docker run` mounts `/tmp` at `/backup`, so nothing is piped in. It
+  has to be `neo4j-admin database load neo4j --from-path=/backup
+  --overwrite-destination=true`. Spotted 2026-09-28 while walking through the
+  dev deploy; **the document has not been corrected.**
+
 - **`annotation-load.cypher` deletes every `Annotation` node and recreates
   them**, which takes `HAS_GENE` with it — its own header says "Re-running
   this means re-running the gene loads afterwards." Caught before running it
@@ -453,7 +460,9 @@ deployment config, not source history.
 
 ## Current state
 
-**Expression is loaded locally only, for all five taxa, as of 2026-09-28.**
+**Expression is loaded for all five taxa, as of 2026-09-28, and is now on dev
+too** — the local graph was dumped and restored onto the dev neo4j VM on
+2026-09-28/29.
 18 experiments, 913 samples, 38,969,527 `EXPRESSED_IN` edges, every count
 matching its source CSV:
 
@@ -465,9 +474,8 @@ matching its source CSV:
 | pruav-v2.0 | 1 | 82 | 3,122,150 |
 | betpe-v1.4 | 1 | 66 | 1,487,838 |
 
-Plus 2,940,805 `COEXPRESSED_WITH` edges for picab cold-roots only. Nothing of
-this is on dev: the heatmap, both v2 endpoints and the CSVs exist only on the
-laptop. Shape is `(Annotation)-[:HAS_EXPERIMENT]->(Experiment)`,
+Plus 2,940,805 `COEXPRESSED_WITH` edges for picab cold-roots only. Shape is
+`(Annotation)-[:HAS_EXPERIMENT]->(Experiment)`,
 `(Sample)-[:PART_OF]->(Experiment)`,
 `(Gene)-[:EXPRESSED_IN {value}]->(Sample)`, and
 `(Gene)-[:COEXPRESSED_WITH {experiment, pearson, spearman}]->(Gene)` stored
@@ -483,17 +491,37 @@ carry a v1.2 id, 99.38% with byte-identical spans, and every strand flip is a
 whole contig or a whole piece of a split contig turning over together. 3,292
 v1.2 genes were dropped, 6 are new.
 
-**Dev runs the `v0.4.10-dev` UI bundle as of 2026-09-22**, on `v0.4.9-dev`
-images — the tag is UI-only, so `fastapi.service` and `celery-worker.service`
-were left alone. The reordered wizard and the new navbar links were confirmed
-in the browser after the deploy. The dev graph carries `longestTranscriptId`
-(restored from the local store) and the dev shared volume carries the sequence
-fastas, so `GET /api/v2/genes/{annotationId}/{geneId}/sequences` is live and
-the gene page's Sequences card is populated. Prod is untouched, still `v0.4.5`.
+**Dev runs `v0.4.11-dev` on the API as of 2026-09-28/29**, the first image
+bump since `v0.4.9-dev`. The deploy carried the heatmap work, the expression
+endpoints and the betpe v1.4 swap, and three things were verified against dev
+by curl afterwards:
 
-`dev.tfvars` therefore splits for the first time: `ui_download_url` at
-`v0.4.10-dev`, `fastapi_image_tag` and `celery_worker_image_tag` still at
-`v0.4.9-dev`. Earlier deploys moved all three together.
+- `GET /api/v2/annotations/betpe-v1.4/experiments` returns the one experiment,
+  `vst`, 66 samples
+- `POST /api/v2/experiments/betpe-v1.4-wood-cutting/expression` for
+  `Bpev01.c0942.g0002` returns `5.3676944833534295` at the index of sample
+  `B2.11-ExpXylem`, matching the local spot-check exactly, `missingGeneIds`
+  empty
+- `GET /api/v2/genes/betpe-v1.4/Bpev01.c0942.g0002/sequences` returns real
+  CDS, transcript and protein — which also proves the shared volume rsync
+  landed and the application VM can see it, since that endpoint returns 200
+  with nulls when the files are missing
+
+`celery-worker.service` was left at `v0.4.9-dev`: the celery tasks did not
+change. **The UI bundle step was not confirmed in this session** — the
+commands were handed over but no browser check was reported, so whether dev
+serves the heatmap UI is unverified.
+
+The dev graph was replaced wholesale by a dump/restore from the local store,
+so it now carries all 18 experiments and betpe v1.4 rather than v1.2. The dev
+shared volume's `betpe/v1/` was replaced by rsync with `--delete`, which
+removed the whole `v1.2/` tree and `blast/nucl/genome.tar.gz` — dev no longer
+has that tarball, since v1.4's was deliberately not built.
+
+Prod is untouched, still `v0.4.5`.
+
+`dev.tfvars` split for the first time at `v0.4.10-dev` (UI ahead of images);
+check whether it has been brought back in line at `v0.4.11-dev`.
 
 Six instances are running as of 2026-08-31 — neo4j, nginx, rabbitmq, redis,
 queue and application. `plantgenie-test` was removed. They can be stopped and
