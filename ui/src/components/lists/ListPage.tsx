@@ -1,4 +1,5 @@
 import { Link, useParams } from "wouter";
+import SemanticSearchButton from "./SemanticSearchButton";
 import {
   useGetListQuery,
   useLookupGenesQuery,
@@ -113,12 +114,11 @@ export default function ListPage() {
                 >
                   + Add by ID
                 </Link>
-                <Link
-                  href="#"
+                <SemanticSearchButton
+                  listId={data.listId}
+                  taxonName={data.taxonName}
                   className="inline-flex h-8 items-center justify-center rounded-md border border-primary bg-card px-3 text-xs font-semibold text-primary shadow-card"
-                >
-                  🔍 Search genes
-                </Link>
+                />
                 <Link
                   href={`/lists/${listId}/heatmap`}
                   className="inline-flex h-8 items-center justify-center rounded-md border border-primary bg-card px-3 text-xs font-semibold text-primary shadow-card"
@@ -211,12 +211,11 @@ export default function ListPage() {
           >
             + Add by ID
           </Link>
-          <Link
-            href="#"
+          <SemanticSearchButton
+            listId={data.listId}
+            taxonName={data.taxonName}
             className="inline-flex h-11 items-center justify-center rounded-lg border-2 border-primary bg-card px-5 text-sm font-semibold text-primary shadow-card"
-          >
-            🔍 Search genes
-          </Link>
+          />
         </div>
       </section>
       )}

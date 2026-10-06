@@ -26,7 +26,11 @@ dependencies = [
     "go-enrich",
     "neo4j>=6.1.0",
     "pysam>=0.24.1",
+    "numpy>=2.0",
 ]
+
+[project.optional-dependencies]
+semantic-search = ["sentence-transformers>=5.0"]
 
 [tool.uv.workspace]
 members = [
