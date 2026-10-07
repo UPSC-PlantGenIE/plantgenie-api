@@ -20,7 +20,7 @@ COPY packages/go-enrich ./packages/go-enrich
 COPY packages/task-queue ./packages/task-queue
 
 # lockfile cannot change, dev deps not installed
-RUN uv sync --locked --no-group dev
+RUN uv sync --locked --no-group dev --extra semantic-search
 
 RUN useradd --no-create-home appuser
 

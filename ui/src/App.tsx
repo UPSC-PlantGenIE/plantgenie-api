@@ -4,6 +4,7 @@ import GenePage from "./components/genes/GenePage";
 import LandingPage from "./components/landing/LandingPage";
 import AddByIdPage from "./components/lists/AddByIdPage";
 import ListPage from "./components/lists/ListPage";
+import SemanticSearchPage from "./components/lists/SemanticSearchPage";
 import MyListsPage from "./components/lists/MyListsPage";
 import HeatmapPage from "./components/heatmap/HeatmapPage";
 import BlastPage from "./components/blast/BlastPage";
@@ -49,6 +50,10 @@ const App = () => {
             <Route
               path="/lists/:listId/heatmap"
               component={HeatmapPage}
+            />
+            <Route
+              path="/lists/:listId/search"
+              component={SemanticSearchPage}
             />
             <Route path="/lists/:listId" component={ListPage} />
             <Route path="/genes/:annotationId/:geneId" component={GenePage} />

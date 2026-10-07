@@ -17,6 +17,7 @@ class CreateListResponse(PlantGenieModel):
 
 
 class PatchListRequest(PlantGenieModel):
+    name: str | None = Field(default=None, min_length=1)
     add_gene_ids: list[str] | None = None
     remove_gene_ids: list[str] | None = None
 

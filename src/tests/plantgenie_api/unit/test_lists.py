@@ -448,3 +448,31 @@ async def test_patch_list_adds_genes(
         (list_id,),
     ).fetchall()
     assert [r[0] for r in rows] == ["AT1G01010", "AT1G01020"]
+
+
+@pytest.mark.anyio
+async def test_patch_list_renames(
+    async_client: AsyncClient,
+    sqlite_conn: sqlite3.Connection,
+    auth_headers: dict[str, str],
+):
+    create = await async_client.post(
+        "/v2/lists",
+        headers=auth_headers,
+        json={"name": "Old", "annotationId": "arath-Araport11", "taxonName": "Arabidopsis thaliana"},
+    )
+    list_id = create.json()["listId"]
+
+    response = await async_client.patch(
+        f"/v2/lists/{list_id}", headers=auth_headers, json={"name": " New "}
+    )
+    empty = await async_client.patch(
+        f"/v2/lists/{list_id}", headers=auth_headers, json={"name": ""}
+    )
+
+    assert response.status_code == 200
+    assert empty.status_code == 422
+    row = sqlite_conn.execute(
+        "SELECT name FROM gene_lists WHERE list_id = ?", (list_id,)
+    ).fetchone()
+    assert row[0] == "New"

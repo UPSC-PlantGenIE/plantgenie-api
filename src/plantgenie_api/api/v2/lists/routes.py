@@ -140,6 +140,11 @@ async def patch_list(
             status_code=404, detail=f"List '{list_id}' not found"
         )
 
+    if body.name is not None:
+        await conn.execute(
+            "UPDATE gene_lists SET name = ? WHERE list_id = ?",
+            (body.name.strip(), list_id),
+        )
     if body.add_gene_ids:
         await conn.executemany(
             "INSERT OR IGNORE INTO gene_list_members "
