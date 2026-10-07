@@ -64,10 +64,10 @@ export default function GenePage() {
             )}
           </div>
           <Link
-            href="/lists"
+            href={navState.listId ? `/lists/${navState.listId}` : "/lists"}
             className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card px-4 text-sm font-semibold text-label shadow-card"
           >
-            ← Back to My Lists
+            ← {navState.listId ? "Back to list" : "Back to My Lists"}
           </Link>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">

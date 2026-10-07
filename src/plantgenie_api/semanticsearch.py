@@ -16,9 +16,10 @@ Environment variables:
 Layout of the embeddings directory (``SEMANTIC_SEARCH_DATA_DIR``,
 default ``$DATA_PATH/embeddings``)::
 
-    <prefix>.csv                 gene id, description (one per line)
     <prefix>-gene-ids.npy        gene ids aligned with the embeddings
     <prefix>-embeddings.npy      one embedding row per gene
+
+Gene descriptions are read from Neo4j for the hits only.
 """
 
 import logging
@@ -32,7 +33,9 @@ from typing import Any, AsyncIterator
 
 import numpy
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.concurrency import run_in_threadpool
 
+from plantgenie_api.dependencies import Neo4jDep
 from plantgenie_api.models import PlantGenieModel
 
 MODEL_NAME = "FremyCompany/BioLORD-2023"
@@ -56,8 +59,9 @@ SEMANTIC_SPECIES: dict[str, SemanticSpecies] = {
         SemanticSpecies("pinsy", "Pinus sylvestris", "pinsy"),
         SemanticSpecies("potra", "Populus tremula", "potra"),
         SemanticSpecies("picab", "Picea abies", "picab"),
-        SemanticSpecies("betpe", "Betula pendula", "bepen"),
+        SemanticSpecies("betpe", "Betula pendula", "betpe"),
         SemanticSpecies("arath", "Arabidopsis thaliana", "arabidopsis"),
+        SemanticSpecies("pruav", "Prunus avium", "pruav"),
     )
 }
 
@@ -92,10 +96,9 @@ def _data_dir() -> Path:
     return Path(os.environ.get("DATA_PATH", ".")) / "embeddings"
 
 
-def _species_files(species: SemanticSpecies) -> tuple[Path, Path, Path]:
+def _species_files(species: SemanticSpecies) -> tuple[Path, Path]:
     base = _data_dir() / species.file_prefix
     return (
-        base.with_suffix(".csv"),
         Path(f"{base}-gene-ids.npy"),
         Path(f"{base}-embeddings.npy"),
     )
@@ -132,11 +135,7 @@ def _get_model() -> Any:
 
 def _get_embeddings(species: SemanticSpecies) -> dict[str, Any]:
     if species.abbreviation not in _embeddings:
-        csv_path, ids_path, embeddings_path = _species_files(species)
-        descriptions: dict[str, str] = {}
-        for line in csv_path.read_text().splitlines():
-            gene_id, _, description = line.partition(",")
-            descriptions[gene_id] = description
+        ids_path, embeddings_path = _species_files(species)
         gene_ids = [
             str(gene_id)
             for gene_id in numpy.load(ids_path, allow_pickle=True)
@@ -145,7 +144,6 @@ def _get_embeddings(species: SemanticSpecies) -> dict[str, Any]:
 
         _embeddings[species.abbreviation] = {
             "gene_ids": gene_ids,
-            "descriptions": [descriptions.get(g, "") for g in gene_ids],
             # from_numpy shares memory, so similarity() skips a copy
             "embeddings": torch.from_numpy(numpy.load(embeddings_path)),
         }
@@ -202,21 +200,10 @@ def list_semantic_species() -> list[SemanticSpeciesResponse]:
     ]
 
 
-# Plain ``def`` (not ``async def``): model loading and encoding are
-# blocking, so FastAPI runs this in its threadpool.
-@router.get("", response_model=list[SemanticSearchHit])
-def semantic_search(
-    species: str = Query(description="Taxon abbreviation, e.g. potra"),
-    query: str = Query(min_length=1),
-    number_of_results: int = Query(default=10, ge=1),
-) -> list[SemanticSearchHit]:
-    selected = SEMANTIC_SPECIES.get(species)
-    if selected is None or not _has_data(selected):
-        raise HTTPException(
-            status_code=404,
-            detail=f"Semantic search is not available for '{species}'",
-        )
-
+def _rank(
+    selected: SemanticSpecies, query: str, number_of_results: int
+) -> list[tuple[str, float]]:
+    """Blocking: load the model/embeddings and return (gene id, similarity)."""
     with _lock:
         model = _get_model()
         data = _get_embeddings(selected)
@@ -228,10 +215,55 @@ def semantic_search(
     count = min(number_of_results, len(data["gene_ids"]))
     top = similarities.argsort(descending=True)[:count].tolist()
     return [
-        SemanticSearchHit(
-            gene_id=data["gene_ids"][index],
-            description=data["descriptions"][index],
-            similarity=similarities[index].item(),
+        (data["gene_ids"][index], similarities[index].item()) for index in top
+    ]
+
+
+async def _descriptions(
+    session: Neo4jDep, species: str, gene_ids: list[str]
+) -> dict[str, str]:
+    result = await session.run(
+        "MATCH (:Taxon {abbreviation: $species})-[:HAS_ASSEMBLY]->"
+        "(:Assembly)-[:HAS_ANNOTATION]->(:Annotation)-[:HAS_GENE]->"
+        "(g:Gene) WHERE g.id IN $geneIds "
+        "RETURN g.id AS geneId, g.description AS description",
+        species=species,
+        geneIds=gene_ids,
+    )
+    descriptions: dict[str, str] = {}
+    async for record in result:
+        descriptions.setdefault(
+            record["geneId"], record["description"] or ""
         )
-        for index in top
+    return descriptions
+
+
+@router.get("", response_model=list[SemanticSearchHit])
+async def semantic_search(
+    session: Neo4jDep,
+    species: str = Query(description="Taxon abbreviation, e.g. potra"),
+    query: str = Query(min_length=1),
+    number_of_results: int = Query(default=10, ge=1),
+) -> list[SemanticSearchHit]:
+    selected = SEMANTIC_SPECIES.get(species)
+    if selected is None or not _has_data(selected):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Semantic search is not available for '{species}'",
+        )
+
+    # Model loading and encoding are blocking, so run them in a thread.
+    ranked = await run_in_threadpool(
+        _rank, selected, query, number_of_results
+    )
+    descriptions = await _descriptions(
+        session, species, [gene_id for gene_id, _ in ranked]
+    )
+    return [
+        SemanticSearchHit(
+            gene_id=gene_id,
+            description=descriptions.get(gene_id, ""),
+            similarity=similarity,
+        )
+        for gene_id, similarity in ranked
     ]
