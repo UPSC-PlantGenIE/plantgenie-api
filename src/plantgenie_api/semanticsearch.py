@@ -1,25 +1,19 @@
 """Semantic (embedding based) gene search, exposed as a FastAPI router.
 
-Embeddings are precomputed per species (see the Feature_integrated
-project). The BioLORD sentence-transformer model and all available
-embeddings are preloaded in a background thread at startup, so the API
-comes up immediately and searches are fast once loading has finished. A
-search that arrives earlier loads what it needs itself and still works.
+Gene embeddings live in Neo4j (``Gene.embedding``, indexed by the vector
+index ``gene_desc_embedding``) and are kept up to date by
+``plantgenie_api.embeddings_worker``. The BioLORD sentence-transformer
+model is preloaded in a background thread at startup, so the API comes
+up immediately and searches are fast once loading has finished. A search
+that arrives earlier loads the model itself and still works.
 
 Environment variables:
-    SEMANTIC_SEARCH_DATA_DIR       embeddings directory (see below)
     SEMANTIC_SEARCH_PRELOAD        set to 0 to disable startup preloading
     SEMANTIC_SEARCH_TORCH_THREADS  CPU threads for the model (default
                                    min(4, cpu count); using every core
                                    makes single queries much slower)
 
-Layout of the embeddings directory (``SEMANTIC_SEARCH_DATA_DIR``,
-default ``$DATA_PATH/embeddings``)::
-
-    <prefix>-gene-ids.npy        gene ids aligned with the embeddings
-    <prefix>-embeddings.npy      one embedding row per gene
-
-Gene descriptions are read from Neo4j for the hits only.
+The HuggingFace model cache is ``$DATA_PATH/huggingface``.
 """
 
 import logging
@@ -31,7 +25,6 @@ from pathlib import Path
 from threading import Lock, Thread
 from typing import Any, AsyncIterator
 
-import numpy
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
 
@@ -39,6 +32,8 @@ from plantgenie_api.dependencies import Neo4jDep
 from plantgenie_api.models import PlantGenieModel
 
 MODEL_NAME = "FremyCompany/BioLORD-2023"
+INDEX_NAME = "gene_desc_embedding"
+EMBEDDING_DIMENSIONS = 768
 RETRIEVAL_PROMPT = (
     "Represent this sentence for searching relevant passages: "
 )
@@ -50,18 +45,17 @@ logger = logging.getLogger(__name__)
 class SemanticSpecies:
     abbreviation: str  # matches Taxon.abbreviation in the main API
     scientific_name: str
-    file_prefix: str  # prefix of the embedding files
 
 
 SEMANTIC_SPECIES: dict[str, SemanticSpecies] = {
     s.abbreviation: s
     for s in (
-        SemanticSpecies("pinsy", "Pinus sylvestris", "pinsy"),
-        SemanticSpecies("potra", "Populus tremula", "potra"),
-        SemanticSpecies("picab", "Picea abies", "picab"),
-        SemanticSpecies("betpe", "Betula pendula", "betpe"),
-        SemanticSpecies("arath", "Arabidopsis thaliana", "arabidopsis"),
-        SemanticSpecies("pruav", "Prunus avium", "pruav"),
+        SemanticSpecies("pinsy", "Pinus sylvestris"),
+        SemanticSpecies("potra", "Populus tremula"),
+        SemanticSpecies("picab", "Picea abies"),
+        SemanticSpecies("betpe", "Betula pendula"),
+        SemanticSpecies("arath", "Arabidopsis thaliana"),
+        SemanticSpecies("pruav", "Prunus avium"),
     )
 }
 
@@ -78,8 +72,37 @@ class SemanticSearchHit(PlantGenieModel):
 
 
 _model: Any = None
-_embeddings: dict[str, dict[str, Any]] = {}
 _lock = Lock()
+
+# Cosine similarity of the query against each Gene, restricted to the
+# species. The vector index spans all species, so the nearest `k` genes
+# are fetched first and filtered afterwards (see _rank).
+RANK_QUERY = (
+    "CYPHER 25 "
+    "MATCH (g:Gene) SEARCH g IN ("
+    f"VECTOR INDEX {INDEX_NAME} FOR $embedding LIMIT $k"
+    ") SCORE AS score "
+    "MATCH (:Taxon {abbreviation: $species})-[:HAS_ASSEMBLY]->"
+    "(:Assembly)-[:HAS_ANNOTATION]->(:Annotation)-[:HAS_GENE]->(g) "
+    # A gene id can appear under several annotations of one species.
+    "RETURN DISTINCT g.id AS geneId, g.description AS description, "
+    "score ORDER BY score DESC LIMIT $limit"
+)
+
+SPECIES_WITH_EMBEDDINGS_QUERY = (
+    "UNWIND $species AS abbreviation "
+    "CALL (abbreviation) { "
+    "MATCH (:Taxon {abbreviation: abbreviation})-[:HAS_ASSEMBLY]->"
+    "(:Assembly)-[:HAS_ANNOTATION]->(:Annotation)-[:HAS_GENE]->"
+    "(g:Gene) WHERE g.embedding IS NOT NULL RETURN true AS found LIMIT 1 "
+    "} RETURN abbreviation"
+)
+
+# Start by fetching this many neighbours per requested result and grow
+# until enough belong to the species, never beyond MAX_NEIGHBOURS.
+INITIAL_OVERFETCH = 10
+OVERFETCH_GROWTH = 4
+MAX_NEIGHBOURS = 20_000
 
 
 def _torch_threads() -> int:
@@ -89,33 +112,19 @@ def _torch_threads() -> int:
     return max(1, min(4, os.cpu_count() or 1))
 
 
-def _data_dir() -> Path:
-    configured = os.environ.get("SEMANTIC_SEARCH_DATA_DIR")
-    if configured:
-        return Path(configured)
-    return Path(os.environ.get("DATA_PATH", ".")) / "embeddings"
-
-
-def _species_files(species: SemanticSpecies) -> tuple[Path, Path]:
-    base = _data_dir() / species.file_prefix
-    return (
-        Path(f"{base}-gene-ids.npy"),
-        Path(f"{base}-embeddings.npy"),
+def configure_model_cache() -> None:
+    """Keep the HuggingFace cache next to the data (persisted by the
+    mount), as the container user has no home directory."""
+    os.environ.setdefault(
+        "HF_HOME",
+        str(Path(os.environ.get("DATA_PATH", ".")) / "huggingface"),
     )
-
-
-def _has_data(species: SemanticSpecies) -> bool:
-    return all(path.is_file() for path in _species_files(species))
 
 
 def _get_model() -> Any:
     global _model
     if _model is None:
-        # The container user has no home directory, so keep the
-        # HuggingFace cache next to the data (persisted by the mount).
-        os.environ.setdefault(
-            "HF_HOME", str(_data_dir().parent / "huggingface")
-        )
+        configure_model_cache()
         try:
             from sentence_transformers import SentenceTransformer
         except ImportError as error:
@@ -133,36 +142,22 @@ def _get_model() -> Any:
     return _model
 
 
-def _get_embeddings(species: SemanticSpecies) -> dict[str, Any]:
-    if species.abbreviation not in _embeddings:
-        ids_path, embeddings_path = _species_files(species)
-        gene_ids = [
-            str(gene_id)
-            for gene_id in numpy.load(ids_path, allow_pickle=True)
-        ]
-        import torch
-
-        _embeddings[species.abbreviation] = {
-            "gene_ids": gene_ids,
-            # from_numpy shares memory, so similarity() skips a copy
-            "embeddings": torch.from_numpy(numpy.load(embeddings_path)),
-        }
-    return _embeddings[species.abbreviation]
-
-
 @lru_cache(maxsize=256)
-def _encode_query(query: str) -> Any:
-    return _get_model().encode_query(query)
+def _encode_query(query: str) -> list[float]:
+    return [float(x) for x in _get_model().encode_query(query)]
+
+
+def _embed_query(query: str) -> list[float]:
+    """Blocking: load the model if needed and embed the query."""
+    with _lock:
+        _get_model()
+    return _encode_query(query.strip())
 
 
 def preload() -> None:
-    """Load the model and every available species' embeddings."""
+    """Load the model so the first search does not have to."""
     with _lock:
         _get_model()
-    for species in SEMANTIC_SPECIES.values():
-        if _has_data(species):
-            with _lock:
-                _get_embeddings(species)
     logger.info("Semantic search preloaded")
 
 
@@ -188,54 +183,53 @@ router = APIRouter(
 
 
 @router.get("/species", response_model=list[SemanticSpeciesResponse])
-def list_semantic_species() -> list[SemanticSpeciesResponse]:
-    """Species that currently support semantic search."""
+async def list_semantic_species(
+    session: Neo4jDep,
+) -> list[SemanticSpeciesResponse]:
+    """Species whose genes currently have embeddings in Neo4j."""
+    result = await session.run(
+        SPECIES_WITH_EMBEDDINGS_QUERY, species=list(SEMANTIC_SPECIES)
+    )
+    available = {record["abbreviation"] async for record in result}
     return [
         SemanticSpeciesResponse(
             abbreviation=species.abbreviation,
             scientific_name=species.scientific_name,
         )
         for species in SEMANTIC_SPECIES.values()
-        if _has_data(species)
+        if species.abbreviation in available
     ]
 
 
-def _rank(
-    selected: SemanticSpecies, query: str, number_of_results: int
-) -> list[tuple[str, float]]:
-    """Blocking: load the model/embeddings and return (gene id, similarity)."""
-    with _lock:
-        model = _get_model()
-        data = _get_embeddings(selected)
-    query_embedding = _encode_query(query.strip())
-
-    similarities = model.similarity(
-        query_embedding, data["embeddings"]
-    ).squeeze(0)
-    count = min(number_of_results, len(data["gene_ids"]))
-    top = similarities.argsort(descending=True)[:count].tolist()
-    return [
-        (data["gene_ids"][index], similarities[index].item()) for index in top
-    ]
-
-
-async def _descriptions(
-    session: Neo4jDep, species: str, gene_ids: list[str]
-) -> dict[str, str]:
-    result = await session.run(
-        "MATCH (:Taxon {abbreviation: $species})-[:HAS_ASSEMBLY]->"
-        "(:Assembly)-[:HAS_ANNOTATION]->(:Annotation)-[:HAS_GENE]->"
-        "(g:Gene) WHERE g.id IN $geneIds "
-        "RETURN g.id AS geneId, g.description AS description",
-        species=species,
-        geneIds=gene_ids,
-    )
-    descriptions: dict[str, str] = {}
-    async for record in result:
-        descriptions.setdefault(
-            record["geneId"], record["description"] or ""
+async def _rank(
+    session: Neo4jDep,
+    species: str,
+    query_embedding: list[float],
+    number_of_results: int,
+) -> list[SemanticSearchHit]:
+    """Nearest genes of one species, as cosine similarities."""
+    neighbours = number_of_results * INITIAL_OVERFETCH
+    while True:
+        neighbours = min(neighbours, MAX_NEIGHBOURS)
+        result = await session.run(
+            RANK_QUERY,
+            k=neighbours,
+            embedding=query_embedding,
+            species=species,
+            limit=number_of_results,
         )
-    return descriptions
+        hits = [
+            SemanticSearchHit(
+                gene_id=record["geneId"],
+                description=record["description"] or "",
+                # Neo4j scores cosine as (1 + cos) / 2; undo that.
+                similarity=2 * record["score"] - 1,
+            )
+            async for record in result
+        ]
+        if len(hits) >= number_of_results or neighbours >= MAX_NEIGHBOURS:
+            return hits
+        neighbours *= OVERFETCH_GROWTH
 
 
 @router.get("", response_model=list[SemanticSearchHit])
@@ -245,25 +239,12 @@ async def semantic_search(
     query: str = Query(min_length=1),
     number_of_results: int = Query(default=10, ge=1),
 ) -> list[SemanticSearchHit]:
-    selected = SEMANTIC_SPECIES.get(species)
-    if selected is None or not _has_data(selected):
+    if species not in SEMANTIC_SPECIES:
         raise HTTPException(
             status_code=404,
             detail=f"Semantic search is not available for '{species}'",
         )
 
     # Model loading and encoding are blocking, so run them in a thread.
-    ranked = await run_in_threadpool(
-        _rank, selected, query, number_of_results
-    )
-    descriptions = await _descriptions(
-        session, species, [gene_id for gene_id, _ in ranked]
-    )
-    return [
-        SemanticSearchHit(
-            gene_id=gene_id,
-            description=descriptions.get(gene_id, ""),
-            similarity=similarity,
-        )
-        for gene_id, similarity in ranked
-    ]
+    query_embedding = await run_in_threadpool(_embed_query, query)
+    return await _rank(session, species, query_embedding, number_of_results)
