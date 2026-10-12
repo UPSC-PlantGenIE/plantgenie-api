@@ -1,10 +1,6 @@
-.env
-
 # possibly temporary
-CLAUDE.md
 neo4j-docker-start.sh
 infra/modules/nginx/scripts/certbot.sh
-infra/plantgenie-north-dev.pem
 
 # Python-generated files
 __pycache__/
@@ -24,10 +20,15 @@ wheels/
 .venv
 
 # Alternative environment variable files
+.env
 .env.*
+
+# keys
+*.pem
 
 .DS_STORE
 ui/.pnp.cjs
 ui/.pnp.loader.mjs
 .claude
 MANUAL-DEPLOY.md
+.snakemake
