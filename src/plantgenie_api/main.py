@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from plantgenie_api.api.v1.routes import v1_router
 from plantgenie_api.api.v2.routes import router as v2_router
 from plantgenie_api.dependencies import lifespan
+from plantgenie_api.semanticsearch import router as semantic_search_router
 
 app = FastAPI(
     root_path="/api",
@@ -25,6 +26,7 @@ app.add_middleware(
 )
 app.include_router(router=v1_router)
 app.include_router(router=v2_router)
+app.include_router(router=semantic_search_router, prefix="/v2")
 
 
 @app.get("/")
