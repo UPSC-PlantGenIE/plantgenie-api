@@ -123,6 +123,16 @@ write_files:
                   index index.html index.htm;
                   try_files $uri $uri/ /index.html;
               }
+
+              location = /jbrowse { return 301 /jbrowse/; }
+
+              location /jbrowse/ {
+   	              proxy_pass http://192.168.42.75:3000/;
+    	            proxy_set_header Host $host;
+    	            proxy_set_header X-Forwarded-Proto $scheme;
+    	            proxy_http_version 1.1;
+    	            proxy_buffering off;
+              }
           }
       }
 
