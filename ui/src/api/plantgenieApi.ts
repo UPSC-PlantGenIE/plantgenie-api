@@ -281,6 +281,7 @@ export const plantgenieApi = createApi({
       { listId: string },
       {
         listId: string;
+        name?: string;
         addGeneIds?: string[];
         removeGeneIds?: string[];
       }
