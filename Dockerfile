@@ -9,6 +9,9 @@ RUN apt-get update && \
 
 COPY --from=ghcr.io/astral-sh/uv:0.11.3 /uv /uvx /bin/
 
+# flaky DNS in docker builds: fewer parallel lookups, more retries
+ENV UV_CONCURRENT_DOWNLOADS=4 UV_CONCURRENT_BUILDS=1 UV_HTTP_RETRIES=10 UV_HTTP_TIMEOUT=120
+
 WORKDIR /app
 
 COPY README.md .
@@ -20,7 +23,7 @@ COPY packages/go-enrich ./packages/go-enrich
 COPY packages/task-queue ./packages/task-queue
 
 # lockfile cannot change, dev deps not installed
-RUN uv sync --locked --no-group dev
+RUN uv sync --locked --no-group dev 
 
 RUN useradd --no-create-home appuser
 
