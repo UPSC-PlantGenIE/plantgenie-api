@@ -49,6 +49,33 @@ const search = async (text: string) => {
 };
 
 describe("SemanticSearchPage", () => {
+  it("suggests the topic of an '<x> in <species>' list title; Tab fills it", async () => {
+    server.use(
+      http.get(`${API}/lists/:listId`, ({ params }) =>
+        HttpResponse.json({
+          listId: params.listId,
+          name: "dehydration in Arabidopsis thaliana",
+          description: null,
+          annotationId: "arath-Araport11",
+          taxonName: "Arabidopsis thaliana",
+          createdAt: "2026-04-14 12:00:00",
+          geneCount: 1,
+          memberGeneIds: ["AT1G01010"],
+        })
+      )
+    );
+    renderPage();
+    const input = screen.getByLabelText("Search query");
+    await waitFor(() =>
+      expect(input).toHaveAttribute("placeholder", "e.g. dehydration")
+    );
+    const user = userEvent.setup();
+    await user.click(input);
+    await user.tab();
+    expect(input).toHaveValue("dehydration");
+    expect(input).toHaveFocus();
+  });
+
   it("requests 10 results by default", async () => {
     const requested = renderPage();
     await search("kinase");

@@ -5,6 +5,7 @@ import {
   useLookupGenesQuery,
   usePatchListMutation,
 } from "../../api/plantgenieApi";
+import { titleTopic } from "./listTitle";
 import {
   DEFAULT_NUMBER_OF_RESULTS,
   findSemanticSpecies,
@@ -21,6 +22,8 @@ export default function SemanticSearchPage() {
   const { data: speciesList, isLoading: speciesLoading } =
     useGetSemanticSpeciesQuery();
   const species = findSemanticSpecies(speciesList, list?.taxonName);
+  // "<topic> in <species>" list titles suggest "<topic>" as the example.
+  const suggestedQuery = list && titleTopic(list.name, list.taxonName);
 
   const [text, setText] = useState("");
   const [query, setQuery] = useState("");
@@ -142,7 +145,13 @@ export default function SemanticSearchPage() {
           autoFocus
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="e.g. cell wall biosynthesis, drought response…"
+          placeholder={`e.g. ${suggestedQuery ?? "cell wall biosynthesis, drought response…"}`}
+          onKeyDown={(e) => {
+            if (e.key === "Tab" && !e.shiftKey && !text && suggestedQuery) {
+              e.preventDefault();
+              setText(suggestedQuery);
+            }
+          }}
           aria-label="Search query"
           className="h-11 flex-1 rounded-lg border border-border bg-card px-4 text-sm text-heading focus:border-primary focus:outline-none"
         />
@@ -249,7 +258,8 @@ export default function SemanticSearchPage() {
                         </p>
                       </div>
                       <span className="shrink-0 text-xs text-muted">
-                        {status || `${(hit.similarity * 100).toFixed(0)}% match`}
+                        {status ||
+                          `${(hit.similarity * 100).toFixed(0)}% match`}
                       </span>
                     </li>
                   );
