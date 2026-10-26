@@ -250,6 +250,17 @@ describe("GenePage", () => {
     expect(listLink).toHaveAttribute("href", "/lists/abc-123");
   });
 
+  it("shows 'Back to list' linking to the originating list", async () => {
+    window.history.replaceState(
+      { listId: "abc-123", listName: "Drought-response TFs" },
+      ""
+    );
+    mockAnnotation();
+    renderGenePage();
+    const link = await screen.findByRole("link", { name: /back to list/i });
+    expect(link).toHaveAttribute("href", "/lists/abc-123");
+  });
+
   const sequencesCard = async () => {
     const heading = await screen.findByRole("heading", {
       name: /^sequences$/i,
