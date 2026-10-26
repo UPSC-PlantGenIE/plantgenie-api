@@ -3,8 +3,10 @@ import {
   useCreateListMutation,
   useGetAnnotationsQuery,
   useGetAssembliesQuery,
+  useGetMyListsQuery,
   useGetTaxaQuery,
 } from "../../../api/plantgenieApi";
+import { titleTopic } from "../../lists/listTitle";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks";
 import {
   back,
@@ -12,6 +14,8 @@ import {
   setDescription,
   setName,
 } from "../../../store/wizardSlice";
+
+const DEFAULT_TITLE_TOPIC = "Drought resistance genes";
 
 export default function ListName() {
   const [createList] = useCreateListMutation();
@@ -24,6 +28,7 @@ export default function ListName() {
   const annotationId = useAppSelector((s) => s.wizard.annotationId);
 
   const { data: taxa } = useGetTaxaQuery();
+  const { data: myLists } = useGetMyListsQuery();
   const { data: assemblies } = useGetAssembliesQuery(
     { taxon: taxonId ?? undefined },
     { skip: !taxonId }
@@ -40,6 +45,19 @@ export default function ListName() {
   const selectedAssembly = assemblies?.find(
     (assembly) => assembly.id === selectedAnnotation?.assemblyId
   );
+
+  // Suggest "<topic> in <species>". The topic is the default, unless the
+  // latest saved list was for a different species: then reuse its topic.
+  const speciesName = selectedTaxon?.scientificName;
+  const lastList = myLists?.length
+    ? myLists.reduce((a, b) => (b.createdAt > a.createdAt ? b : a))
+    : undefined;
+  const lastTopic = lastList && titleTopic(lastList.name, lastList.taxonName);
+  const topic =
+    lastTopic && speciesName && lastList.taxonName !== speciesName
+      ? lastTopic
+      : DEFAULT_TITLE_TOPIC;
+  const suggestedName = speciesName ? `${topic} in ${speciesName}` : "";
 
   const eyebrow = [
     "New gene list",
@@ -89,11 +107,23 @@ export default function ListName() {
           </label>
           <input
             id="list-name"
-            placeholder="e.g. Drought-response TFs in Pinus sylvestris"
+            placeholder={suggestedName ? `e.g. ${suggestedName}` : ""}
             value={name}
             onChange={(e) => dispatch(setName(e.target.value))}
+            onKeyDown={(e) => {
+              if (e.key === "Tab" && !e.shiftKey && !name && suggestedName) {
+                e.preventDefault();
+                dispatch(setName(suggestedName));
+              }
+            }}
             className="mt-2 block h-11 w-full rounded-lg border border-border bg-input px-3 text-sm outline-none"
           />
+
+          {suggestedName && !name && (
+            <p className="mt-1 text-xs text-muted">
+              Press Tab to use the suggestion
+            </p>
+          )}
 
           <div className="mt-6 flex items-baseline justify-between">
             <label
