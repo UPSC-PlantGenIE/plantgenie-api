@@ -355,4 +355,42 @@ describe("ListPage", () => {
     renderListPage();
     expect(await screen.findByText(/first gene/i)).toBeInTheDocument();
   });
+
+  it("clicking the title renames the list", async () => {
+    server.use(
+      http.get("http://localhost:8000/api/v2/lists/:listId", ({ params }) =>
+        HttpResponse.json({
+          listId: params.listId,
+          name: "Populated list",
+          description: null,
+          annotationId: "arath-Araport11",
+          taxonName: "Arabidopsis thaliana",
+          createdAt: "2026-04-14 12:00:00",
+          geneCount: 1,
+          memberGeneIds: ["AT1G01010"],
+        })
+      )
+    );
+    const patched = vi.fn();
+    server.use(
+      http.patch(
+        "http://localhost:8000/api/v2/lists/:listId",
+        async ({ request }) => {
+          patched(await request.json());
+          return HttpResponse.json({ listId: "abc-123" });
+        }
+      )
+    );
+    const user = userEvent.setup();
+    renderListPage();
+    await user.click(
+      await screen.findByRole("button", { name: "Populated list" })
+    );
+    const input = screen.getByLabelText("List name");
+    await user.clear(input);
+    await user.type(input, "Renamed{Enter}");
+    await waitFor(() =>
+      expect(patched).toHaveBeenCalledWith({ name: "Renamed" })
+    );
+  });
 });

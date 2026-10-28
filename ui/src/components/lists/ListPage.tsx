@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, useParams } from "wouter";
 import {
   useGetListQuery,
@@ -16,6 +17,21 @@ export default function ListPage() {
     { skip: !data || (data?.memberGeneIds.length ?? 0) === 0 }
   );
   const [patchList, { isLoading: isRemoving }] = usePatchListMutation();
+
+  const [renaming, setRenaming] = useState(false);
+  const [draftName, setDraftName] = useState("");
+
+  const startRenaming = () => {
+    setDraftName(data?.name ?? "");
+    setRenaming(true);
+  };
+
+  const finishRenaming = async (save: boolean) => {
+    setRenaming(false);
+    const name = draftName.trim();
+    if (!save || !listId || !name || name === data?.name) return;
+    await patchList({ listId, name });
+  };
 
   const handleRemove = (geneId: string) => {
     if (!listId) return;
@@ -80,7 +96,31 @@ export default function ListPage() {
       <article className="mt-6 rounded-xl border border-border bg-card px-6 py-5 shadow-card">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-xl font-bold text-heading">{data.name}</h1>
+            {renaming ? (
+              <input
+                autoFocus
+                aria-label="List name"
+                value={draftName}
+                onChange={(e) => setDraftName(e.target.value)}
+                onBlur={() => finishRenaming(true)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") finishRenaming(true);
+                  if (e.key === "Escape") finishRenaming(false);
+                }}
+                className="h-9 w-full min-w-64 rounded-lg border border-primary bg-input px-3 text-xl font-bold text-heading outline-none"
+              />
+            ) : (
+              <h1 className="text-xl font-bold text-heading">
+                <button
+                  type="button"
+                  onClick={startRenaming}
+                  title="Click to rename"
+                  className="cursor-text text-left hover:underline hover:decoration-dotted"
+                >
+                  {data.name}
+                </button>
+              </h1>
+            )}
             {data.description && (
               <p className="mt-1 text-sm text-muted">{data.description}</p>
             )}
