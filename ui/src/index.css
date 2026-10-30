@@ -42,3 +42,39 @@ body {
 button:not(:disabled) {
   cursor: pointer;
 }
+
+.range-input {
+  appearance: none;
+  height: 0.375rem;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    var(--color-primary) var(--range-fill),
+    var(--color-border) var(--range-fill)
+  );
+  cursor: pointer;
+}
+
+.range-input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 4px;
+}
+
+.range-input::-webkit-slider-thumb {
+  appearance: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid var(--color-primary);
+  border-radius: 9999px;
+  background: var(--color-card);
+  box-shadow: var(--shadow-nav);
+}
+
+.range-input::-moz-range-thumb {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--color-primary);
+  border-radius: 9999px;
+  background: var(--color-card);
+  box-shadow: var(--shadow-nav);
+}

@@ -81,4 +81,24 @@ describe("BlastResultsPage", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/failed/i);
   });
+
+  it("offers a TSV export once there are hits", async () => {
+    mockJob("SUCCESS", [HIT]);
+    renderResults();
+
+    expect(
+      await screen.findByRole("link", { name: /export tsv/i })
+    ).toHaveAttribute(
+      "href",
+      `http://localhost:8000/api/v2/blast/${JOB_ID}/tsv`
+    );
+  });
+
+  it("does not offer an export when there are no hits", async () => {
+    mockJob("SUCCESS", []);
+    renderResults();
+
+    await screen.findByText(/no hits were found/i);
+    expect(screen.queryByRole("link", { name: /export tsv/i })).toBeNull();
+  });
 });

@@ -13,8 +13,8 @@ PROGRAMS = {
 
 
 class BlastParameters(PlantGenieModel):
-    evalue: float = Field(default=1e-4, gt=0)
-    max_target_seqs: int = Field(default=50, ge=1, le=1000)
+    evalue: float = Field(default=1e-4, ge=1e-30, le=10)
+    max_target_seqs: int = Field(default=50, ge=1, le=100)
     word_size: int | None = Field(default=None, ge=2)
     gapopen: int | None = Field(default=None, ge=0)
     gapextend: int | None = Field(default=None, ge=0)

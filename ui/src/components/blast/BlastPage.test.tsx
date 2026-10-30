@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, http, HttpResponse } from "msw";
 import { server } from "../../mocks/server";
@@ -220,7 +220,140 @@ describe("BlastPage", () => {
         databaseId: "picab-v2.0-cds",
         program: "blastn",
         query: ">my sequence\nACGTACGTACGT",
+        parameters: { evalue: 0.0001, maxTargetSeqs: 50 },
       })
+    );
+  });
+
+  it("starts at the default e-value and max hits", () => {
+    renderWithStore(<BlastPage />);
+    expect(screen.getByRole("textbox", { name: /e-value/i })).toHaveValue(
+      "1e-4"
+    );
+    expect(screen.getByRole("slider", { name: /e-value/i })).toHaveValue("-4");
+    expect(screen.getByRole("textbox", { name: /max hits/i })).toHaveValue(
+      "50"
+    );
+    expect(screen.getByRole("slider", { name: /max hits/i })).toHaveValue("50");
+  });
+
+  it.each([
+    ["100", "10", "1"],
+    ["1e-50", "1e-30", "-30"],
+    ["0", "1e-30", "-30"],
+    ["-1", "1e-30", "-30"],
+    ["3e-7", "3e-7", "-7"],
+    ["abc", "1e-4", "-4"],
+  ])("applies a typed e-value of %s as %s", async (typed, shown, position) => {
+    renderWithStore(<BlastPage />);
+    const box = screen.getByRole("textbox", { name: /e-value/i });
+
+    await userEvent.clear(box);
+    await userEvent.type(box, `${typed}{enter}`);
+
+    expect(box).toHaveValue(shown);
+    expect(screen.getByRole("slider", { name: /e-value/i })).toHaveValue(
+      position
+    );
+  });
+
+  it.each([
+    ["500", "100"],
+    ["0", "1"],
+    ["12.7", "13"],
+    ["abc", "50"],
+  ])("applies typed max hits of %s as %s", async (typed, shown) => {
+    renderWithStore(<BlastPage />);
+    const box = screen.getByRole("textbox", { name: /max hits/i });
+
+    await userEvent.clear(box);
+    await userEvent.type(box, `${typed}{enter}`);
+
+    expect(box).toHaveValue(shown);
+    expect(screen.getByRole("slider", { name: /max hits/i })).toHaveValue(
+      shown
+    );
+  });
+
+  it("applies a typed value when leaving the box and submits it", async () => {
+    let submitted: { parameters?: unknown } | null = null;
+    server.use(
+      http.post("http://localhost:8000/api/v2/blast", async ({ request }) => {
+        submitted = (await request.json()) as { parameters?: unknown };
+        return HttpResponse.json({
+          jobId: "11111111-1111-1111-1111-111111111111",
+        });
+      })
+    );
+
+    renderWithStore(<BlastPage />);
+    await fillInSearch();
+    const box = screen.getByRole("textbox", { name: /e-value/i });
+    await userEvent.clear(box);
+    await userEvent.type(box, "3e-7");
+    await userEvent.click(screen.getByRole("button", { name: /search/i }));
+
+    await waitFor(() =>
+      expect(submitted?.parameters).toEqual({
+        evalue: 3e-7,
+        maxTargetSeqs: 50,
+      })
+    );
+  });
+
+  it("submits the e-value and max hits chosen with the sliders", async () => {
+    let submitted: { parameters?: unknown } | null = null;
+    server.use(
+      http.post("http://localhost:8000/api/v2/blast", async ({ request }) => {
+        submitted = (await request.json()) as { parameters?: unknown };
+        return HttpResponse.json({
+          jobId: "11111111-1111-1111-1111-111111111111",
+        });
+      })
+    );
+
+    renderWithStore(<BlastPage />);
+    await fillInSearch();
+    const evalueSlider = screen.getByRole("slider", { name: /e-value/i });
+    fireEvent.change(evalueSlider, {
+      target: { value: evalueSlider.getAttribute("max") },
+    });
+    fireEvent.change(screen.getByRole("slider", { name: /max hits/i }), {
+      target: { value: "100" },
+    });
+    await userEvent.click(screen.getByRole("button", { name: /search/i }));
+
+    await waitFor(() =>
+      expect(submitted?.parameters).toEqual({
+        evalue: 10,
+        maxTargetSeqs: 100,
+      })
+    );
+  });
+
+  it("shows the validation messages when the server rejects a search", async () => {
+    server.use(
+      http.post("http://localhost:8000/api/v2/blast", () =>
+        HttpResponse.json(
+          {
+            detail: [
+              {
+                loc: ["body", "parameters", "evalue"],
+                msg: "Input should be less than or equal to 10",
+              },
+            ],
+          },
+          { status: 422 }
+        )
+      )
+    );
+
+    renderWithStore(<BlastPage />);
+    await fillInSearch();
+    await userEvent.click(screen.getByRole("button", { name: /search/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Input should be less than or equal to 10"
     );
   });
 

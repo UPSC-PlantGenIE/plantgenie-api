@@ -1,6 +1,6 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 
-const baseUrl =
+export const baseUrl =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/";
 
 export interface Taxon {
@@ -243,7 +243,12 @@ export const plantgenieApi = createApi({
     }),
     submitBlast: build.mutation<
       { jobId: string },
-      { databaseId: string; program: string; query: string }
+      {
+        databaseId: string;
+        program: string;
+        query: string;
+        parameters: { evalue: number; maxTargetSeqs: number };
+      }
     >({
       query: (body) => ({ url: "v2/blast", method: "POST", body }),
     }),

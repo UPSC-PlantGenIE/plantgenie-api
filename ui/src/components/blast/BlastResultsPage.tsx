@@ -1,5 +1,6 @@
 import { useParams } from "wouter";
 import {
+  baseUrl,
   useGetBlastResultsQuery,
   usePollBlastQuery,
 } from "../../api/plantgenieApi";
@@ -30,7 +31,17 @@ export default function BlastResultsPage() {
 
   return (
     <div className="mx-auto w-full max-w-7xl px-6 py-8">
-      <h1 className="text-2xl font-bold text-heading">BLAST results</h1>
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold text-heading">BLAST results</h1>
+        {hits !== undefined && hits.length > 0 && (
+          <a
+            href={`${baseUrl}v2/blast/${jobId}/tsv`}
+            className="inline-flex h-11 items-center rounded-lg bg-primary px-5 text-sm font-semibold text-white transition hover:brightness-95 active:brightness-90"
+          >
+            Export TSV
+          </a>
+        )}
+      </div>
 
       {!isFinished && (
         <p className="mt-4 text-sm text-muted">Running your search…</p>

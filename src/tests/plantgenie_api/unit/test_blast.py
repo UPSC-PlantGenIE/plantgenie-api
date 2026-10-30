@@ -223,3 +223,27 @@ async def test_submit_blast_503s_when_the_broker_is_unreachable(
     assert response.json() == {
         "detail": "BLAST is temporarily unavailable, try again later"
     }
+
+
+@pytest.mark.parametrize(
+    "parameters",
+    [{"evalue": 11}, {"evalue": 1e-31}, {"maxTargetSeqs": 101}],
+    ids=["evalue too high", "evalue too low", "too many hits"],
+)
+@pytest.mark.anyio
+async def test_submit_blast_422s_when_a_parameter_is_out_of_range(
+    async_client: AsyncClient,
+    neo4j_session: FakeNeo4jSession,
+    parameters: dict[str, float],
+):
+    response = await async_client.post(
+        "/v2/blast",
+        json={
+            "databaseId": "picab-v2.0-cds",
+            "program": "blastn",
+            "query": VALID_QUERY,
+            "parameters": parameters,
+        },
+    )
+
+    assert response.status_code == 422

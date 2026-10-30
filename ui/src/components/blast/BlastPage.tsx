@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { useLocation } from "wouter";
 import {
   useGetBlastDatabasesQuery,
@@ -11,6 +11,89 @@ const PROGRAMS: Record<string, string[]> = {
   "prot-nucl": ["tblastn"],
   "prot-prot": ["blastp"],
 };
+
+const MINIMUM_EVALUE = 1e-30;
+const MAXIMUM_EVALUE = 10;
+const MINIMUM_HITS = 1;
+const MAXIMUM_HITS = 100;
+
+function rangeFill(value: number, minimum: number, maximum: number) {
+  const percent = ((value - minimum) / (maximum - minimum)) * 100;
+  return { "--range-fill": `${percent}%` } as CSSProperties;
+}
+
+function parseTyped(text: string) {
+  const value = Number(text.trim());
+  return text.trim() === "" || Number.isNaN(value) ? null : value;
+}
+
+function clip(value: number, minimum: number, maximum: number) {
+  return Math.min(Math.max(value, minimum), maximum);
+}
+
+function formatEvalue(value: number) {
+  return value >= 0.01 ? String(value) : value.toExponential();
+}
+
+type RangeFieldProps = {
+  id: string;
+  label: string;
+  minimum: number;
+  maximum: number;
+  position: number;
+  displayValue: string;
+  onSlide: (position: number) => void;
+  onType: (text: string) => void;
+};
+
+function RangeField({
+  id,
+  label,
+  minimum,
+  maximum,
+  position,
+  displayValue,
+  onSlide,
+  onType,
+}: RangeFieldProps) {
+  const [draft, setDraft] = useState<string | null>(null);
+
+  function apply() {
+    if (draft !== null) onType(draft);
+    setDraft(null);
+  }
+
+  return (
+    <div>
+      <label htmlFor={id} className="block text-xs font-medium text-label">
+        {label}
+      </label>
+      <div className="mt-1 flex items-center gap-3">
+        <input
+          id={id}
+          type="range"
+          min={minimum}
+          max={maximum}
+          value={position}
+          onChange={(event) => onSlide(Number(event.target.value))}
+          style={rangeFill(position, minimum, maximum)}
+          className="range-input w-full"
+        />
+        <input
+          type="text"
+          aria-label={label}
+          value={draft ?? displayValue}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={apply}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") apply();
+          }}
+          className="h-11 w-16 shrink-0 rounded-lg border border-border bg-card text-center text-sm text-heading"
+        />
+      </div>
+    </div>
+  );
+}
 
 function moleculeTypeOf(query: string) {
   const residues = query
@@ -28,6 +111,8 @@ export default function BlastPage() {
   const [query, setQuery] = useState("");
   const [databaseId, setDatabaseId] = useState("");
   const [program, setProgram] = useState("");
+  const [evalue, setEvalue] = useState(1e-4);
+  const [maxHits, setMaxHits] = useState(50);
   const [submitError, setSubmitError] = useState("");
   const [, setLocation] = useLocation();
 
@@ -128,6 +213,39 @@ export default function BlastPage() {
           </select>
         </div>
 
+        <div className="grid gap-5 sm:grid-cols-2">
+          <RangeField
+            id="blast-evalue"
+            label="E-value"
+            minimum={Math.log10(MINIMUM_EVALUE)}
+            maximum={Math.log10(MAXIMUM_EVALUE)}
+            position={Math.round(Math.log10(evalue))}
+            displayValue={formatEvalue(evalue)}
+            onSlide={(position) => setEvalue(Number(`1e${position}`))}
+            onType={(text) => {
+              const value = parseTyped(text);
+              if (value !== null) {
+                setEvalue(clip(value, MINIMUM_EVALUE, MAXIMUM_EVALUE));
+              }
+            }}
+          />
+          <RangeField
+            id="blast-max-hits"
+            label="Max hits"
+            minimum={MINIMUM_HITS}
+            maximum={MAXIMUM_HITS}
+            position={maxHits}
+            displayValue={String(maxHits)}
+            onSlide={setMaxHits}
+            onType={(text) => {
+              const value = parseTyped(text);
+              if (value !== null) {
+                setMaxHits(clip(Math.round(value), MINIMUM_HITS, MAXIMUM_HITS));
+              }
+            }}
+          />
+        </div>
+
         <button
           type="button"
           disabled={!canSearch || isSubmitting}
@@ -138,14 +256,21 @@ export default function BlastPage() {
                 databaseId,
                 program: selectedProgram,
                 query,
+                parameters: {
+                  evalue,
+                  maxTargetSeqs: maxHits,
+                },
               }).unwrap();
               setLocation(`/blast/${jobId}`);
             } catch (error) {
               const detail = (error as { data?: { detail?: unknown } }).data
                 ?.detail;
+              const messages = Array.isArray(detail)
+                ? detail.map((entry: { msg: string }) => entry.msg).join(" ")
+                : detail;
               setSubmitError(
-                typeof detail === "string"
-                  ? detail
+                typeof messages === "string" && messages
+                  ? messages
                   : "Your search could not be submitted. Please try again."
               );
             }
