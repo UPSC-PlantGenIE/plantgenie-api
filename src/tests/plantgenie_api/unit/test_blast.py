@@ -1,7 +1,9 @@
+import threading
 from pathlib import Path
 
 import pytest
 from httpx import AsyncClient
+from kombu.exceptions import OperationalError
 from task_queue.blast.tasks import run_blast_search
 
 from tests.plantgenie_api.unit.conftest import FakeNeo4jSession
@@ -154,3 +156,70 @@ async def test_submit_blast_requires_the_data_ready_marker(
     )
 
     assert response.status_code == expected_status
+
+
+async def submit_valid_blast(
+    async_client: AsyncClient,
+    neo4j_session: FakeNeo4jSession,
+    tmp_path: Path,
+):
+    (tmp_path / ".data-ready").touch()
+    neo4j_session.next_records = [
+        {
+            "db": {
+                "id": "picab-v2.0-cds",
+                "moleculeType": "nucl",
+                "path": "picab/v2/v2.0/blast/nucl/coding-sequences.fa",
+            }
+        }
+    ]
+
+    return await async_client.post(
+        "/v2/blast",
+        json={
+            "databaseId": "picab-v2.0-cds",
+            "program": "blastn",
+            "query": VALID_QUERY,
+        },
+    )
+
+
+@pytest.mark.anyio
+async def test_submit_blast_sends_the_job_off_the_event_loop_thread(
+    async_client: AsyncClient,
+    neo4j_session: FakeNeo4jSession,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    sending_threads: list[threading.Thread] = []
+    monkeypatch.setattr(
+        run_blast_search,
+        "apply_async",
+        lambda **kwargs: sending_threads.append(threading.current_thread()),
+    )
+
+    await submit_valid_blast(async_client, neo4j_session, tmp_path)
+
+    assert sending_threads[0] is not threading.current_thread()
+
+
+@pytest.mark.anyio
+async def test_submit_blast_503s_when_the_broker_is_unreachable(
+    async_client: AsyncClient,
+    neo4j_session: FakeNeo4jSession,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    def raise_broker_error(**kwargs):
+        raise OperationalError("timed out")
+
+    monkeypatch.setattr(run_blast_search, "apply_async", raise_broker_error)
+
+    response = await submit_valid_blast(
+        async_client, neo4j_session, tmp_path
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "BLAST is temporarily unavailable, try again later"
+    }

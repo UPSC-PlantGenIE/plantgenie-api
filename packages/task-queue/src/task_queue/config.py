@@ -1,6 +1,7 @@
 enable_utc = True
 timezone = 'Europe/Stockholm'
 broker_url = "amqp://guest:guest@localhost:5672/celery_testing"
+broker_connection_timeout = 10
 result_backend = "redis://localhost:6379/0"
 task_compression = "zlib"
 result_extended = True

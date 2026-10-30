@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { http, HttpResponse } from "msw";
+import { delay, http, HttpResponse } from "msw";
 import { server } from "../../mocks/server";
 import { renderWithStore } from "../../test-utils";
 import BlastPage from "./BlastPage";
@@ -241,6 +241,24 @@ describe("BlastPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "BLAST data is not ready, try again later"
     );
+  });
+
+  it("shows a spinner on the button while the search is submitted", async () => {
+    server.use(
+      http.post("http://localhost:8000/api/v2/blast", async () => {
+        await delay(100);
+        return HttpResponse.json({
+          jobId: "11111111-1111-1111-1111-111111111111",
+        });
+      })
+    );
+
+    renderWithStore(<BlastPage />);
+    await fillInSearch();
+    await userEvent.click(screen.getByRole("button", { name: /search/i }));
+
+    expect(await screen.findByRole("status")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /submitting/i })).toBeDisabled();
   });
 
   it("accepts a query that has a FASTA header", async () => {

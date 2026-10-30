@@ -3,7 +3,9 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
+from kombu.exceptions import OperationalError
 from task_queue.blast.tasks import run_blast_search
 
 from plantgenie_api.api.v2.blast import fasta
@@ -105,18 +107,27 @@ async def submit_blast(
     query_path = blast_path / f"{job_id}.fa"
     query_path.write_text(body.query)
 
-    run_blast_search.apply_async(
-        kwargs={
-            "job_id": job_id,
-            "program": body.program,
-            "query_path": query_path.as_posix(),
-            "database_path": (
-                Path(environment["DATA_PATH"]) / database["path"]
-            ).as_posix(),
-            "parameters": body.parameters.model_dump(exclude_none=True),
-        },
-        task_id=job_id,
-    )
+    try:
+        await run_in_threadpool(
+            run_blast_search.apply_async,
+            kwargs={
+                "job_id": job_id,
+                "program": body.program,
+                "query_path": query_path.as_posix(),
+                "database_path": (
+                    Path(environment["DATA_PATH"]) / database["path"]
+                ).as_posix(),
+                "parameters": body.parameters.model_dump(
+                    exclude_none=True
+                ),
+            },
+            task_id=job_id,
+        )
+    except OperationalError as error:
+        raise HTTPException(
+            status_code=503,
+            detail="BLAST is temporarily unavailable, try again later",
+        ) from error
 
     return SubmitBlastResponse(job_id=job_id)
 

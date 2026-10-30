@@ -24,7 +24,7 @@ function moleculeTypeOf(query: string) {
 
 export default function BlastPage() {
   const { data: databases } = useGetBlastDatabasesQuery();
-  const [submitBlast] = useSubmitBlastMutation();
+  const [submitBlast, { isLoading: isSubmitting }] = useSubmitBlastMutation();
   const [query, setQuery] = useState("");
   const [databaseId, setDatabaseId] = useState("");
   const [program, setProgram] = useState("");
@@ -130,7 +130,7 @@ export default function BlastPage() {
 
         <button
           type="button"
-          disabled={!canSearch}
+          disabled={!canSearch || isSubmitting}
           onClick={async () => {
             setSubmitError("");
             try {
@@ -152,7 +152,15 @@ export default function BlastPage() {
           }}
           className="h-11 cursor-pointer rounded-lg bg-primary px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Search
+          {isSubmitting ? (
+            <span
+              role="status"
+              aria-label="Submitting search"
+              className="inline-block size-5 animate-spin rounded-full border-2 border-white border-t-transparent"
+            />
+          ) : (
+            "Search"
+          )}
         </button>
         {submitError && (
           <p role="alert" className="text-xs text-red-600">
