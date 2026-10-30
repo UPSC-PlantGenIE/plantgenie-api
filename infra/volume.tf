@@ -68,4 +68,15 @@ resource "null_resource" "neo4j_data_attachment" {
 
     command = "python3 ${path.module}/attach-volume.py"
   }
+
+  provisioner "local-exec" {
+    when        = destroy
+    interpreter = ["/bin/bash", "-c"]
+
+    environment = {
+      VOLUME_UUID = self.triggers.volume_id
+    }
+
+    command = "python3 ${path.module}/detach-volume.py"
+  }
 }

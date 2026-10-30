@@ -21,6 +21,7 @@ from plantgenie_api.dependencies import (
     BlastPathDep,
     EnvironmentDep,
     Neo4jDep,
+    data_is_ready,
 )
 
 MAX_QUERY_BYTES = 2**20
@@ -91,6 +92,12 @@ async def submit_blast(
                 f"{query_molecule_type} query. Use one of: "
                 f"{', '.join(allowed)}"
             ),
+        )
+
+    if not data_is_ready(environment):
+        raise HTTPException(
+            status_code=503,
+            detail="BLAST data is not ready, try again later",
         )
 
     job_id = str(uuid.uuid4())

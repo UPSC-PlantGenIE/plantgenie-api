@@ -26,6 +26,8 @@ async def get_sqlite_connection(
 async def lifespan(app: FastAPI):
     APP_ENVIRONMENT: Dict[str, str] = {}
     required_environmental_variables = [
+        "CELERY_BROKER_URL",
+        "CELERY_RESULT_BACKEND",
         "DATA_PATH",
         "DATABASE_NAME",
         "OS_AUTH_TYPE",
@@ -99,6 +101,10 @@ async def lifespan(app: FastAPI):
 
 def get_environment(request: Request) -> dict[str, str]:
     return request.app.state.APP_ENVIRONMENT
+
+
+def data_is_ready(environment: dict[str, str]) -> bool:
+    return (Path(environment["DATA_PATH"]) / ".data-ready").exists()
 
 
 def get_blast_path(request: Request) -> Path:

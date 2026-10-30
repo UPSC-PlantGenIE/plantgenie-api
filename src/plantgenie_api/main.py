@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from plantgenie_api.api.v1.routes import v1_router
 from plantgenie_api.api.v2.routes import router as v2_router
 from plantgenie_api.dependencies import lifespan
 
@@ -23,7 +22,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.include_router(router=v1_router)
 app.include_router(router=v2_router)
 
 

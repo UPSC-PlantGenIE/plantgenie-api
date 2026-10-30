@@ -14,6 +14,10 @@ def to_native(v: object) -> object:
 NativeDate = Annotated[date, BeforeValidator(to_native)]
 
 
+class HealthResponse(PlantGenieModel):
+    status: str
+
+
 class Taxon(PlantGenieModel):
     id: int
     scientific_name: str

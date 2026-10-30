@@ -16,25 +16,6 @@ packages:
   - docker-ce-cli
   - containerd.io
 
-# The data volume is created and formatted once, by hand, and then moves
-# between instances by detach/attach. Uncomment the three blocks below only
-# when bringing up an instance with a brand new, unformatted volume.
-#
-# device_aliases:
-#   app_data: /dev/sdb
-#
-# disk_setup:
-#   app_data:
-#     layout: true
-#     overwrite: false
-#     table_type: gpt
-#
-# fs_setup:
-#   - device: app_data
-#     label: neo4j_data
-#     filesystem: ext4
-#     overwrite: false
-
 users:
   - name: ${server_username}
     lock_passwd: true
@@ -50,6 +31,35 @@ mounts:
   - [ "LABEL=neo4j_data", /opt/neo4j, "ext4", "defaults,nofail", "0", "2" ]
 
 write_files:
+  - path: /usr/local/sbin/prepare-neo4j-volume
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+
+      if ! blkid /dev/sdb >/dev/null 2>&1; then
+          mkfs.ext4 -L neo4j_data /dev/sdb
+      fi
+
+      mkdir -p /opt/neo4j
+      mount -a
+      systemctl --no-block start neo4j
+
+  - path: /etc/systemd/system/neo4j-volume.service
+    content: |
+      [Unit]
+      Description=Prepare and mount the neo4j data volume
+      BindsTo=dev-sdb.device
+      After=dev-sdb.device
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/local/sbin/prepare-neo4j-volume
+
+      [Install]
+      WantedBy=dev-sdb.device
+
   - path: /etc/systemd/system/neo4j.service
     content: |
       [Unit]
@@ -122,4 +132,5 @@ runcmd:
   - systemctl start docker
   - systemctl daemon-reload
   - systemctl enable neo4j
-  - systemctl start neo4j
+  - systemctl enable neo4j-volume
+  - systemctl start --no-block neo4j-volume

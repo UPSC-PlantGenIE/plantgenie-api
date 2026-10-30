@@ -224,6 +224,25 @@ describe("BlastPage", () => {
     );
   });
 
+  it("shows why a search could not be submitted", async () => {
+    server.use(
+      http.post("http://localhost:8000/api/v2/blast", () =>
+        HttpResponse.json(
+          { detail: "BLAST data is not ready, try again later" },
+          { status: 503 }
+        )
+      )
+    );
+
+    renderWithStore(<BlastPage />);
+    await fillInSearch();
+    await userEvent.click(screen.getByRole("button", { name: /search/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "BLAST data is not ready, try again later"
+    );
+  });
+
   it("accepts a query that has a FASTA header", async () => {
     renderWithStore(<BlastPage />);
     await userEvent.type(

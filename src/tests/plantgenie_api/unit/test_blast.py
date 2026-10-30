@@ -1,5 +1,8 @@
+from pathlib import Path
+
 import pytest
 from httpx import AsyncClient
+from task_queue.blast.tasks import run_blast_search
 
 from tests.plantgenie_api.unit.conftest import FakeNeo4jSession
 
@@ -112,3 +115,42 @@ async def test_submit_blast_422s_when_the_program_does_not_fit(
     )
 
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "marker_exists,expected_status", [(True, 200), (False, 503)]
+)
+@pytest.mark.anyio
+async def test_submit_blast_requires_the_data_ready_marker(
+    async_client: AsyncClient,
+    neo4j_session: FakeNeo4jSession,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    marker_exists: bool,
+    expected_status: int,
+):
+    monkeypatch.setattr(
+        run_blast_search, "apply_async", lambda **kwargs: None
+    )
+    if marker_exists:
+        (tmp_path / ".data-ready").touch()
+    neo4j_session.next_records = [
+        {
+            "db": {
+                "id": "picab-v2.0-cds",
+                "moleculeType": "nucl",
+                "path": "picab/v2/v2.0/blast/nucl/coding-sequences.fa",
+            }
+        }
+    ]
+
+    response = await async_client.post(
+        "/v2/blast",
+        json={
+            "databaseId": "picab-v2.0-cds",
+            "program": "blastn",
+            "query": VALID_QUERY,
+        },
+    )
+
+    assert response.status_code == expected_status

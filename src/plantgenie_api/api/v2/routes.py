@@ -16,10 +16,15 @@ from plantgenie_api.api.v2.models import (
     AnnotationsResponse,
     AssembliesResponse,
     Assembly,
+    HealthResponse,
     TaxaResponse,
     Taxon,
 )
-from plantgenie_api.dependencies import Neo4jDep
+from plantgenie_api.dependencies import (
+    EnvironmentDep,
+    Neo4jDep,
+    data_is_ready,
+)
 
 router = APIRouter(prefix="/v2", tags=["v2"])
 
@@ -28,6 +33,13 @@ router.include_router(genes_router)
 router.include_router(accounts_router)
 router.include_router(blast_router)
 router.include_router(expression_router)
+
+
+@router.get("/health", response_model=HealthResponse, tags=["health"])
+async def retrieve_health(environment: EnvironmentDep) -> HealthResponse:
+    if not data_is_ready(environment):
+        raise HTTPException(status_code=503, detail="Data is not ready")
+    return HealthResponse(status="ready")
 
 
 @router.get("/taxa", response_model=TaxaResponse, tags=["taxon"])

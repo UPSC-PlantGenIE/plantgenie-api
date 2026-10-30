@@ -28,6 +28,7 @@ export default function BlastPage() {
   const [query, setQuery] = useState("");
   const [databaseId, setDatabaseId] = useState("");
   const [program, setProgram] = useState("");
+  const [submitError, setSubmitError] = useState("");
   const [, setLocation] = useLocation();
 
   const trimmedQuery = query.trim();
@@ -131,17 +132,33 @@ export default function BlastPage() {
           type="button"
           disabled={!canSearch}
           onClick={async () => {
-            const { jobId } = await submitBlast({
-              databaseId,
-              program: selectedProgram,
-              query,
-            }).unwrap();
-            setLocation(`/blast/${jobId}`);
+            setSubmitError("");
+            try {
+              const { jobId } = await submitBlast({
+                databaseId,
+                program: selectedProgram,
+                query,
+              }).unwrap();
+              setLocation(`/blast/${jobId}`);
+            } catch (error) {
+              const detail = (error as { data?: { detail?: unknown } }).data
+                ?.detail;
+              setSubmitError(
+                typeof detail === "string"
+                  ? detail
+                  : "Your search could not be submitted. Please try again."
+              );
+            }
           }}
           className="h-11 cursor-pointer rounded-lg bg-primary px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           Search
         </button>
+        {submitError && (
+          <p role="alert" className="text-xs text-red-600">
+            {submitError}
+          </p>
+        )}
       </div>
     </div>
   );

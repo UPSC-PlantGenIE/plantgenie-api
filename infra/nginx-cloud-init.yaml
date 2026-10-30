@@ -26,7 +26,7 @@ mounts:
 
 write_files:
   - path: /etc/exports
-    content: /srv/shared ${internal_subnet_cidr}(rw,sync,no_subtree_check)
+    content: /srv/shared ${internal_subnet_cidr}(rw,sync,no_subtree_check,fsid=1)
     append: true
 
   - path: /usr/local/sbin/prepare-shared-volume

@@ -1,3 +1,5 @@
+import os
+import signal
 import subprocess
 import time
 from collections.abc import Callable
@@ -54,6 +56,7 @@ def site(live_server: str):
         cwd=REPO_ROOT / "ui",
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        start_new_session=True,
     )
     wait_until(
         lambda: responds(SITE_URL),
@@ -63,5 +66,5 @@ def site(live_server: str):
 
     yield SITE_URL
 
-    vite.terminate()
+    os.killpg(vite.pid, signal.SIGTERM)
     vite.wait(timeout=10)
