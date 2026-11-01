@@ -6,6 +6,7 @@ import {
 } from "../../../api/plantgenieApi";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks";
 import { back, next, setAnnotationId } from "../../../store/wizardSlice";
+import { buttonClassName } from "../../shared/buttonClassName";
 
 const numberFmt = new Intl.NumberFormat("en-US");
 
@@ -162,7 +163,7 @@ export default function GenomeSelector() {
           <button
             type="button"
             onClick={() => dispatch(back())}
-            className="h-11 cursor-pointer rounded-lg border border-border bg-card px-5 text-sm font-semibold text-label"
+            className={buttonClassName("secondary")}
           >
             ← Back
           </button>
@@ -171,7 +172,7 @@ export default function GenomeSelector() {
             type="button"
             disabled={!canContinue}
             onClick={() => dispatch(next())}
-            className="h-11 cursor-pointer rounded-lg bg-primary px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className={buttonClassName()}
           >
             Continue →
           </button>

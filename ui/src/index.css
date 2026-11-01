@@ -4,8 +4,8 @@
   --color-surface: #f5f7fa;
   --color-card: #ffffff;
   --color-border: #dee3eb;
-  --color-primary: #3885f5;
-  --color-primary-tint: rgba(56, 133, 245, 0.06);
+  --color-primary: #097e35;
+  --color-primary-tint: rgba(9, 126, 53, 0.06);
   --color-heading: #1a1c26;
   --color-label: #616980;
   --color-muted: #9ea6b8;
@@ -19,6 +19,8 @@
   --color-namespace-cc: #8f5cd9;
 
   --font-sans: "Source Sans 3", sans-serif;
+
+  --radius-control: 0.5rem;
 
   --shadow-nav: 0 2px 8px 0 rgba(0, 0, 0, 0.05);
   --shadow-card: 0 4px 16px 0 rgba(0, 0, 0, 0.08);

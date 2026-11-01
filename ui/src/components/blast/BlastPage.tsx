@@ -4,6 +4,7 @@ import {
   useGetBlastDatabasesQuery,
   useSubmitBlastMutation,
 } from "../../api/plantgenieApi";
+import { buttonClassName } from "../shared/buttonClassName";
 
 const PROGRAMS: Record<string, string[]> = {
   "nucl-nucl": ["blastn", "tblastx"],
@@ -275,7 +276,7 @@ export default function BlastPage() {
               );
             }
           }}
-          className="h-11 cursor-pointer rounded-lg bg-primary px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          className={buttonClassName()}
         >
           {isSubmitting ? (
             <span

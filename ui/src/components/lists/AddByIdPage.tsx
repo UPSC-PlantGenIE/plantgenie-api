@@ -5,6 +5,7 @@ import {
   useLazyLookupGenesQuery,
   usePatchListMutation,
 } from "../../api/plantgenieApi";
+import { buttonClassName } from "../shared/buttonClassName";
 
 export default function AddByIdPage() {
   const { listId } = useParams<{ listId: string }>();
@@ -93,7 +94,7 @@ export default function AddByIdPage() {
         <button
           type="button"
           onClick={handleValidate}
-          className="mt-3 inline-flex h-11 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-white shadow-card"
+          className={`${buttonClassName()} mt-3`}
         >
           Validate
         </button>
@@ -143,7 +144,7 @@ export default function AddByIdPage() {
               type="checkbox"
               checked={allSelected}
               onChange={toggleAll}
-              className="size-4"
+              className="size-4 accent-primary"
             />
             Select all
           </label>
@@ -158,7 +159,7 @@ export default function AddByIdPage() {
                     type="checkbox"
                     checked={selected.has(gene.geneId)}
                     onChange={() => toggle(gene.geneId)}
-                    className="mt-1 size-4"
+                    className="mt-1 size-4 accent-primary"
                   />
                   <div>
                     <div className="font-semibold text-primary">
@@ -209,7 +210,7 @@ export default function AddByIdPage() {
         <button
           type="button"
           onClick={() => setView("input")}
-          className="inline-flex h-11 items-center justify-center rounded-lg border border-border bg-card px-5 text-sm font-semibold text-label shadow-card"
+          className={buttonClassName("secondary")}
         >
           ← Edit IDs
         </button>
@@ -217,7 +218,7 @@ export default function AddByIdPage() {
           <button
             type="button"
             onClick={handleAdd}
-            className="inline-flex h-11 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-white shadow-card"
+            className={buttonClassName()}
           >
             Add {selected.size} {selected.size === 1 ? "gene" : "genes"} to
             list →

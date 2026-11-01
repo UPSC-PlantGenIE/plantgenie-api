@@ -8,6 +8,7 @@ import {
   useGetGeneQuery,
   useGetGeneSequencesQuery,
 } from "../../api/plantgenieApi";
+import { buttonClassName } from "../shared/buttonClassName";
 
 type GeneNavState = {
   listId?: string;
@@ -65,7 +66,7 @@ export default function GenePage() {
           </div>
           <Link
             href="/lists"
-            className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card px-4 text-sm font-semibold text-label shadow-card"
+            className={`${buttonClassName("secondary", "small")} shrink-0`}
           >
             ← Back to My Lists
           </Link>
@@ -270,13 +271,13 @@ function SequencesCard({
               </span>
               <button
                 onClick={handleCopy}
-                className="rounded-lg border border-border px-3 py-1 text-xs font-semibold text-label"
+                className={buttonClassName("secondary", "small")}
               >
                 Copy
               </button>
               <button
                 onClick={handleDownload}
-                className="rounded-lg border border-border px-3 py-1 text-xs font-semibold text-label"
+                className={buttonClassName("secondary", "small")}
               >
                 Download
               </button>

@@ -99,7 +99,7 @@ export default function Heatmap({
               fontFamily="ui-sans-serif, system-ui, sans-serif"
               fontSize={GENE_LABEL_FONT_SIZE}
               fontWeight={600}
-              fill="#3885f5"
+              fill="#1a1c26"
             >
               {gene}
             </text>

@@ -1,6 +1,7 @@
 import { useGetTaxaQuery } from "../../../api/plantgenieApi";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks";
 import { next, setTaxonId } from "../../../store/wizardSlice";
+import { buttonClassName } from "../../shared/buttonClassName";
 
 export default function TaxonSelector() {
   const dispatch = useAppDispatch();
@@ -105,7 +106,7 @@ export default function TaxonSelector() {
             type="button"
             disabled={!canContinue}
             onClick={() => dispatch(next())}
-            className="h-11 cursor-pointer rounded-lg bg-primary px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className={buttonClassName()}
           >
             Continue →
           </button>

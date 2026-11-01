@@ -4,6 +4,7 @@ import {
   useGetBlastResultsQuery,
   usePollBlastQuery,
 } from "../../api/plantgenieApi";
+import { buttonClassName } from "../shared/buttonClassName";
 
 const COLUMNS = [
   ["queryId", "Query"],
@@ -36,7 +37,7 @@ export default function BlastResultsPage() {
         {hits !== undefined && hits.length > 0 && (
           <a
             href={`${baseUrl}v2/blast/${jobId}/tsv`}
-            className="inline-flex h-11 items-center rounded-lg bg-primary px-5 text-sm font-semibold text-white transition hover:brightness-95 active:brightness-90"
+            className={buttonClassName()}
           >
             Export TSV
           </a>

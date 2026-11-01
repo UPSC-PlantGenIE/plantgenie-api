@@ -3,6 +3,7 @@ import {
   useDeleteListMutation,
   useGetMyListsQuery,
 } from "../../api/plantgenieApi";
+import { buttonClassName } from "../shared/buttonClassName";
 
 const dateFmt = new Intl.DateTimeFormat("en-US", {
   month: "short",
@@ -40,7 +41,7 @@ export default function MyListsPage() {
         </div>
         <Link
           href="/lists/new"
-          className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-white shadow-card"
+          className={buttonClassName()}
         >
           + New list
         </Link>
@@ -77,7 +78,7 @@ export default function MyListsPage() {
           </p>
           <Link
             href="/lists/new"
-            className="inline-flex h-11 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-white shadow-card"
+            className={buttonClassName()}
           >
             + Create your first list
           </Link>

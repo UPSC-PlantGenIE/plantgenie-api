@@ -12,6 +12,7 @@ import {
   setDescription,
   setName,
 } from "../../../store/wizardSlice";
+import { buttonClassName } from "../../shared/buttonClassName";
 
 export default function ListName() {
   const [createList] = useCreateListMutation();
@@ -117,7 +118,7 @@ export default function ListName() {
           <button
             type="button"
             onClick={() => dispatch(back())}
-            className="h-11 cursor-pointer rounded-lg border border-border bg-card px-5 text-sm font-semibold text-label"
+            className={buttonClassName("secondary")}
           >
             ← Back
           </button>
@@ -126,7 +127,7 @@ export default function ListName() {
             type="button"
             disabled={!canCreate}
             onClick={handleCreateList}
-            className="h-11 cursor-pointer rounded-lg bg-primary px-5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            className={buttonClassName()}
           >
             Create list →
           </button>

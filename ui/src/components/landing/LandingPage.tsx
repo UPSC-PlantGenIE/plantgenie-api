@@ -6,6 +6,7 @@ import {
 } from "../../api/plantgenieApi";
 import { setAccountId } from "../../store/accountSlice";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
+import { buttonClassName } from "../shared/buttonClassName";
 
 function formatAccountId(accountId: string) {
   return accountId.match(/.{1,4}/g)?.join(" ") ?? accountId;
@@ -99,7 +100,7 @@ export default function LandingPage() {
             )}
             <button
               type="submit"
-              className="mt-4 h-11 rounded-lg bg-primary px-4 text-sm font-medium text-white"
+              className={`${buttonClassName()} mt-4`}
               disabled={generatedAccountId !== null}
             >
               Continue
@@ -126,7 +127,7 @@ export default function LandingPage() {
                 <button
                   type="button"
                   onClick={() => handleCopy(generatedAccountId)}
-                  className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium text-label"
+                  className={`${buttonClassName("secondary", "small")} shrink-0 gap-1.5`}
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -156,7 +157,7 @@ export default function LandingPage() {
               <Link
                 onClick={() => handleContinue(generatedAccountId)}
                 href="/lists"
-                className="mt-4 inline-flex h-11 items-center rounded-lg bg-primary px-4 text-sm font-medium text-white"
+                className={`${buttonClassName()} mt-4`}
               >
                 Continue to my lists
               </Link>
@@ -169,7 +170,7 @@ export default function LandingPage() {
               <button
                 type="button"
                 onClick={handleGenerate}
-                className="mt-5 h-11 rounded-lg bg-primary px-4 text-sm font-medium text-white"
+                className={`${buttonClassName()} mt-5`}
               >
                 Generate a new ID
               </button>

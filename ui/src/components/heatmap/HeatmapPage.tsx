@@ -5,6 +5,7 @@ import {
   useGetExpressionQuery,
   useGetListQuery,
 } from "../../api/plantgenieApi";
+import { buttonClassName } from "../shared/buttonClassName";
 import Heatmap from "./Heatmap";
 
 const storageKey = (annotationId: string) =>
@@ -217,7 +218,7 @@ export default function HeatmapPage() {
               disabled={!expression}
               aria-haspopup="menu"
               aria-expanded={isExportOpen}
-              className="mt-5 inline-flex h-8 items-center justify-center rounded-md border border-border bg-card px-3 text-xs font-semibold text-label shadow-card disabled:cursor-not-allowed disabled:opacity-50"
+              className={`${buttonClassName("secondary", "small")} mt-5`}
             >
               Export ▾
             </button>

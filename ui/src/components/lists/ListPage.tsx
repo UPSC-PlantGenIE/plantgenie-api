@@ -5,6 +5,7 @@ import {
   useLookupGenesQuery,
   usePatchListMutation,
 } from "../../api/plantgenieApi";
+import { buttonClassName } from "../shared/buttonClassName";
 
 export default function ListPage() {
   const { listId } = useParams<{ listId: string }>();
@@ -149,19 +150,19 @@ export default function ListPage() {
               <>
                 <Link
                   href={`/lists/${listId}/genes/add-by-id`}
-                  className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 text-xs font-semibold text-white shadow-card"
+                  className={buttonClassName("primary", "small")}
                 >
                   + Add by ID
                 </Link>
                 <Link
                   href="#"
-                  className="inline-flex h-8 items-center justify-center rounded-md border border-primary bg-card px-3 text-xs font-semibold text-primary shadow-card"
+                  className={buttonClassName("secondary", "small")}
                 >
                   🔍 Search genes
                 </Link>
                 <Link
                   href={`/lists/${listId}/heatmap`}
-                  className="inline-flex h-8 items-center justify-center rounded-md border border-primary bg-card px-3 text-xs font-semibold text-primary shadow-card"
+                  className={buttonClassName("secondary", "small")}
                 >
                   ▦ Heatmap
                 </Link>
@@ -171,7 +172,7 @@ export default function ListPage() {
               type="button"
               onClick={handleExport}
               disabled={data.memberGeneIds.length === 0}
-              className="inline-flex h-8 items-center justify-center rounded-md border border-border bg-card px-3 text-xs font-semibold text-label shadow-card disabled:cursor-not-allowed disabled:opacity-50"
+              className={buttonClassName("secondary", "small")}
             >
               Export
             </button>
@@ -247,13 +248,13 @@ export default function ListPage() {
         <div className="mt-3 flex flex-wrap justify-center gap-3">
           <Link
             href={`/lists/${listId}/genes/add-by-id`}
-            className="inline-flex h-11 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-white shadow-card"
+            className={buttonClassName()}
           >
             + Add by ID
           </Link>
           <Link
             href="#"
-            className="inline-flex h-11 items-center justify-center rounded-lg border-2 border-primary bg-card px-5 text-sm font-semibold text-primary shadow-card"
+            className={buttonClassName("secondary")}
           >
             🔍 Search genes
           </Link>
