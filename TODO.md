@@ -322,3 +322,12 @@ Notes:
   `--color-primary` is still `#3885f5`, so every `bg-primary` button — the
   landing page's three, the wizard's, the list pages' — is still the old blue.
   Pointing `--color-primary` at `#097e35` switches them all at once.
+
+## Reference: bundle size
+
+Output of `yarn build` in `ui/`. Add a row whenever a dependency or major UI
+change lands.
+
+| Date | Commit | Change | JS | JS gzip | CSS | CSS gzip |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2026-10-31 | `0f81f37` | Baseline before Tabulator | 329.41 kB | 100.77 kB | 24.35 kB | 5.59 kB |
