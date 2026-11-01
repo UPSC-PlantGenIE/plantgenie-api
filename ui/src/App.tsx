@@ -2,6 +2,7 @@ import { Redirect, Route, Switch, useLocation } from "wouter";
 import Navbar from "./components/Navbar";
 import GenePage from "./components/genes/GenePage";
 import LandingPage from "./components/landing/LandingPage";
+import NewAccountPage from "./components/landing/NewAccountPage";
 import AddByIdPage from "./components/lists/AddByIdPage";
 import ListPage from "./components/lists/ListPage";
 import MyListsPage from "./components/lists/MyListsPage";
@@ -37,6 +38,7 @@ const App = () => {
         <RequireAccount>
           <Switch>
             <Route path="/" component={LandingPage} />
+            <Route path="/accounts/new" component={NewAccountPage} />
             <Route path="/blast" component={BlastPage} />
             <Route path="/blast/" component={BlastPage} />
             <Route path="/blast/:jobId" component={BlastResultsPage} />

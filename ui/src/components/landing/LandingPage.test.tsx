@@ -11,15 +11,6 @@ import LandingPage from "./LandingPage";
 
 const ACCOUNT_ID = "1234567890123456";
 const STORED_ACCOUNT_ID = "0000111122223333";
-const GENERATED_ACCOUNT_ID = "9876543210987654";
-
-const mockCreateAccount = () => {
-  server.use(
-    http.post("http://localhost:8000/api/v2/accounts", () =>
-      HttpResponse.json({ accountId: GENERATED_ACCOUNT_ID }, { status: 201 })
-    )
-  );
-};
 
 const renderLanding = (preloadedState?: Partial<RootState>) => {
   const { hook, history } = memoryLocation({ path: "/", record: true });
@@ -44,81 +35,35 @@ describe("LandingPage", () => {
     await waitFor(() => expect(history).toContain("/lists"), { timeout: 3 });
   });
 
-  it("shows the returning user and new-user cards to new user or returning user", () => {
+  it("shows one sign-in panel", () => {
     renderLanding();
 
-    expect(
-      screen.getByRole("region", { name: /first time here/i })
-    ).toBeInTheDocument();
-
-    expect(
-      screen.queryByRole("region", { name: "Returning User?" })
-    ).toBeInTheDocument();
-  });
-
-  it("puts the login form in the existing-account card", () => {
-    renderLanding();
-
-    const card = screen.getByRole("region", { name: "Returning User?" });
-    expect(within(card).getByText(/no email/i)).toBeInTheDocument();
-    expect(within(card).getByLabelText(/account id/i)).toHaveAttribute(
+    const panel = screen.getByRole("region", { name: /sign in/i });
+    expect(within(panel).getByText(/no email/i)).toBeInTheDocument();
+    expect(within(panel).getByLabelText(/account id/i)).toHaveAttribute(
       "placeholder",
       "1234 5678 9012 3456"
     );
     expect(
-      within(card).getByRole("button", { name: /continue/i })
+      within(panel).getByRole("button", { name: /continue/i })
     ).toBeInTheDocument();
+    expect(screen.getAllByRole("region")).toHaveLength(1);
   });
 
-  it("offers to generate a new id in the new-account card", () => {
+  it("does not generate ids on the sign-in page", () => {
     renderLanding();
 
-    const card = screen.getByRole("region", { name: /first time here/i });
     expect(
-      within(card).getByRole("button", { name: /generate a new id/i })
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /generate a new id/i })
+    ).toBeNull();
   });
 
-  it("shows a generated id in groups of four with a warning", async () => {
-    mockCreateAccount();
-    const { store } = renderLanding();
+  it("sends new visitors to the new account page", async () => {
+    const { history } = renderLanding();
 
-    await userEvent.click(
-      screen.getByRole("button", { name: /generate a new id/i })
-    );
+    await userEvent.click(screen.getByRole("link", { name: /new here/i }));
 
-    expect(await screen.findByText("9876 5432 1098 7654")).toBeInTheDocument();
-    expect(screen.getByRole("alert")).toHaveTextContent(/lose/i);
-    expect(store.getState().account.accountId).toBeNull();
-  });
-
-  it("copies a generated id to the clipboard", async () => {
-    mockCreateAccount();
-    const user = userEvent.setup();
-    renderLanding();
-
-    await user.click(
-      screen.getByRole("button", { name: /generate a new id/i })
-    );
-    await user.click(await screen.findByRole("button", { name: /copy id/i }));
-
-    expect(await navigator.clipboard.readText()).toBe(GENERATED_ACCOUNT_ID);
-    expect(screen.getByRole("button", { name: /copied/i })).toBeInTheDocument();
-  });
-
-  it("continues to my lists after generating an id", async () => {
-    mockCreateAccount();
-    const { store, history } = renderLanding();
-
-    await userEvent.click(
-      screen.getByRole("button", { name: /generate a new id/i })
-    );
-    await userEvent.click(
-      await screen.findByRole("link", { name: /continue to my lists/i })
-    );
-
-    expect(history).toContain("/lists");
-    expect(store.getState().account.accountId).toBe(GENERATED_ACCOUNT_ID);
+    expect(history).toContain("/accounts/new");
   });
 
   // it("welcomes back a signed-in visitor", () => {
@@ -187,6 +132,32 @@ describe("LandingPage", () => {
   //   await waitFor(() => expect(authorization).toBe(`Bearer ${ACCOUNT_ID}`));
   // });
 
+  it("shows the error page when the sign-in check fails", async () => {
+    server.use(
+      http.get("http://localhost:8000/api/v2/accounts/me", () =>
+        HttpResponse.json({ detail: "Server error" }, { status: 500 })
+      )
+    );
+    const user = userEvent.setup();
+    renderLanding();
+
+    await user.type(
+      screen.getByRole("textbox", { name: /account id/i }),
+      ACCOUNT_ID
+    );
+    await user.click(screen.getByRole("button", { name: /continue/i }));
+
+    expect(
+      await screen.findByRole("heading", { name: /something went wrong/i })
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /try again/i }));
+
+    expect(screen.getByRole("textbox", { name: /account id/i })).toHaveValue(
+      ACCOUNT_ID
+    );
+  });
+
   it("shows an alert when the pasted id is rejected", async () => {
     server.use(
       http.get("http://localhost:8000/api/v2/accounts/me", () =>
@@ -201,7 +172,12 @@ describe("LandingPage", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: /continue/i }));
 
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /wasn't recognised/i
+    );
+    expect(
+      screen.queryByRole("heading", { name: /something went wrong/i })
+    ).toBeNull();
     expect(history).not.toContain("/lists");
     expect(store.getState().account.accountId).toBeNull();
   });
