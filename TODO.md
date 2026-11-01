@@ -95,6 +95,22 @@ before the UI can be faked against it.
       the same, so a network failure silently signs the user out and drops
       their ID. A rejected ID should be cleared; an unreachable backend should
       keep it and say so.
+
+      **Plan, on its own branch.** `components/shared/ErrorPage.tsx` exists and
+      is used per page on the sign-in and new account pages, as the example.
+      Going app-wide, handle it once rather than per page or with a hook that
+      every page must remember to call:
+      - Redux middleware in `store/index.ts` watches every RTK Query request
+        and sets an `appError` flag on a 5xx or a network failure. 4xx stays
+        with the page's inline message, such as a rejected ID or a bad query.
+      - `App.tsx` renders `ErrorPage` in place of the routes while `appError`
+        is set, so the URL is kept and pages need no error code.
+      - An error boundary around the routes catches render crashes, which
+        `isError` never sees.
+      - Exclude background requests: one failed BLAST poll must not take over
+        the app, and check `useAccountIdSync` too.
+      - Replacing the route loses anything held only in that page's state,
+        such as a pasted BLAST query. Wizard input survives in Redux.
 - [ ] **Server-side validation of BLAST queries.** `BlastPage.tsx` checks the
       query starts with `>` so the user is not made to wait for a round trip,
       but that is a convenience, not a gate — anyone can POST directly. The
