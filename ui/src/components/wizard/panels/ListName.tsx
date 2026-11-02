@@ -90,7 +90,7 @@ export default function ListName() {
           </label>
           <input
             id="list-name"
-            placeholder="e.g. Drought-response TFs in Pinus sylvestris"
+            placeholder="e.g. Drought-response TFs"
             value={name}
             onChange={(e) => dispatch(setName(e.target.value))}
             className="mt-2 block h-11 w-full rounded-lg border border-border bg-input px-3 text-sm outline-none"
