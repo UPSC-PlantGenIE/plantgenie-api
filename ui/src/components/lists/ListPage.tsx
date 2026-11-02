@@ -5,6 +5,7 @@ import {
   useLookupGenesQuery,
   usePatchListMutation,
 } from "../../api/plantgenieApi";
+import NetworkGraph from "../network/NetworkGraph";
 import { buttonClassName } from "../shared/buttonClassName";
 
 export default function ListPage() {
@@ -19,6 +20,7 @@ export default function ListPage() {
   );
   const [patchList, { isLoading: isRemoving }] = usePatchListMutation();
 
+  const [networkOpen, setNetworkOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [draftName, setDraftName] = useState("");
 
@@ -166,6 +168,13 @@ export default function ListPage() {
                 >
                   ▦ Heatmap
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => setNetworkOpen(true)}
+                  className={buttonClassName("secondary", "small")}
+                >
+                  Network graph
+                </button>
               </>
             )}
             <button
@@ -260,6 +269,15 @@ export default function ListPage() {
           </Link>
         </div>
       </section>
+      )}
+      {networkOpen && (
+        <NetworkGraph
+          listId={data.listId}
+          listName={data.name}
+          annotationId={data.annotationId}
+          taxonName={data.taxonName}
+          onClose={() => setNetworkOpen(false)}
+        />
       )}
     </div>
   );
