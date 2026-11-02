@@ -39,7 +39,7 @@ const LogOutIcon = () => (
 // );
 
 const navLinkClassName = (isActive: boolean) =>
-  `rounded-t-md border-b-2 px-3 py-1.5 text-sm font-bold text-white transition-colors hover:bg-white/15 ${
+  `rounded-t-md border-b-2 px-2 py-1.5 text-sm font-bold sm:px-3 text-white transition-colors hover:bg-white/15 ${
     isActive ? "border-white" : "border-transparent"
   }`;
 
@@ -57,11 +57,14 @@ export default function Navbar() {
 
   return (
     <header className="h-14 w-full border-b border-border shadow-nav bg-upsc-blue">
-      <div className="flex h-full items-center px-6">
-        <Link href="/" className="text-2xl font-bold text-white">
+      <div className="flex h-full items-center px-3 sm:px-6">
+        <Link
+          href="/"
+          className="whitespace-nowrap text-lg font-bold text-white sm:text-2xl"
+        >
           🌿 PlantGenIE
         </Link>
-        <nav className="ml-8 flex items-center gap-2">
+        <nav className="ml-2 flex items-center gap-1 sm:ml-8 sm:gap-2">
           {accountId ? (
             <Link
               href="/lists"
@@ -79,7 +82,9 @@ export default function Navbar() {
         </nav>
         {accountId ? (
           <div className="flex ml-auto items-center gap-2">
-            <p className="text-white font-bold text-xs">{accountId}</p>
+            <p className="hidden text-white font-bold text-xs sm:block">
+              {accountId}
+            </p>
             <button
               type="button"
               onClick={handleLogOut}
