@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import Heatmap from "./Heatmap";
 
@@ -40,6 +40,32 @@ describe("Heatmap", () => {
       <Heatmap genes={genes} samples={samples} values={values} />
     );
     expect(container.querySelector("svg")).toHaveClass("max-w-full");
+  });
+
+  it("sizes its cells from the measured width on first render", () => {
+    const measure = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockReturnValue({ width: 160 } as DOMRect);
+    const manySamples = Array.from({ length: 10 }, (_, index) => ({
+      id: `sample-${index}`,
+      group: 1,
+      order: index,
+    }));
+
+    const { container } = render(
+      <Heatmap
+        genes={["PA_chr01_G000102"]}
+        samples={manySamples}
+        values={[manySamples.map((_, index) => index)]}
+        showLabels={false}
+      />
+    );
+
+    expect(container.querySelector("rect[data-cell]")).toHaveAttribute(
+      "width",
+      "15"
+    );
+    measure.mockRestore();
   });
 
   it("gives the highest and lowest values different fills", () => {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { ExpressionSample } from "../../api/plantgenieApi";
 import { colorFor } from "./colorFor";
 import { cellWidthFor } from "./cellWidthFor";
@@ -44,9 +44,11 @@ export default function Heatmap({
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = containerRef.current;
-    if (!element || typeof ResizeObserver === "undefined") return;
+    if (!element) return;
+    setContainerWidth(element.getBoundingClientRect().width);
+    if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver((entries) => {
       setContainerWidth(entries[0].contentRect.width);
     });
