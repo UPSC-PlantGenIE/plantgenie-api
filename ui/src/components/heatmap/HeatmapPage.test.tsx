@@ -50,6 +50,55 @@ describe("HeatmapPage", () => {
     expect(await screen.findByText("control-1")).toBeInTheDocument();
   });
 
+  it("hides the old heatmap while another experiment loads", async () => {
+    let finishLoading = () => {};
+    const stillLoading = new Promise<void>((resolve) => {
+      finishLoading = resolve;
+    });
+    server.use(
+      http.get(
+        "http://localhost:8000/api/v2/annotations/:annotationId/experiments",
+        () =>
+          HttpResponse.json({
+            experiments: ["first", "second"].map((id) => ({
+              id,
+              name: id,
+              description: null,
+              unit: "tpm",
+              sampleCount: 1,
+            })),
+          })
+      ),
+      http.post(
+        "http://localhost:8000/api/v2/experiments/:experimentId/expression",
+        async ({ params }) => {
+          if (params.experimentId === "second") await stillLoading;
+          return HttpResponse.json({
+            experimentId: params.experimentId,
+            unit: "tpm",
+            samples: [
+              { id: `${params.experimentId}-sample`, group: 1, order: 1 },
+            ],
+            geneIds: ["PA_chr01_G000102"],
+            values: [[1]],
+            missingGeneIds: [],
+          });
+        }
+      )
+    );
+    const user = userEvent.setup();
+    renderHeatmapPage();
+
+    await screen.findByText("first-sample");
+    await user.selectOptions(screen.getByLabelText(/experiment/i), "second");
+
+    await waitFor(() => expect(screen.queryByText("first-sample")).toBeNull());
+    expect(screen.getByRole("button", { name: /export/i })).toBeDisabled();
+
+    finishLoading();
+    expect(await screen.findByText("second-sample")).toBeInTheDocument();
+  });
+
   it("names the genes that have no data in this experiment", async () => {
     renderHeatmapPage();
     expect(

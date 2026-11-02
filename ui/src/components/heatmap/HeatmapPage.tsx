@@ -83,7 +83,7 @@ export default function HeatmapPage() {
     if (annotationId && experimentId) remember(annotationId, experimentId);
   }, [annotationId, experimentId]);
 
-  const { data: expression, isFetching } = useGetExpressionQuery(
+  const { currentData: expression, isFetching } = useGetExpressionQuery(
     {
       experimentId: experimentId ?? "",
       geneIds: list?.memberGeneIds ?? [],
