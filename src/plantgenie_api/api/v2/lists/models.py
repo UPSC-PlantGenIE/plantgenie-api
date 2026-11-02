@@ -22,6 +22,17 @@ class PatchListRequest(PlantGenieModel):
     remove_gene_ids: list[str] | None = None
 
 
+MAX_RANDOM_GENES = 100
+
+
+class RandomGenesRequest(PlantGenieModel):
+    count: int = Field(ge=1, le=MAX_RANDOM_GENES)
+
+
+class RandomGenesResponse(PlantGenieModel):
+    added: int = Field(ge=0)
+
+
 class GeneList(PlantGenieModel):
     list_id: str
     name: str
