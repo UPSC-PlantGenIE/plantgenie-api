@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.13"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -1627,6 +1627,7 @@ dependencies = [
     { name = "go-enrich" },
     { name = "loguru" },
     { name = "neo4j" },
+    { name = "numpy" },
     { name = "pendulum" },
     { name = "py-fasta-validator" },
     { name = "pyarrow" },
@@ -1663,6 +1664,7 @@ requires-dist = [
     { name = "go-enrich", editable = "packages/go-enrich" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "neo4j", specifier = ">=6.1.0" },
+    { name = "numpy", specifier = ">=2.0" },
     { name = "pendulum", specifier = ">=3.1.0" },
     { name = "py-fasta-validator", specifier = ">=0.6" },
     { name = "pyarrow", specifier = ">=19.0.1" },
