@@ -8,6 +8,12 @@ import { server } from "../../mocks/server";
 import { renderWithStore } from "../../test-utils";
 import ListPage from "./ListPage";
 
+vi.mock("../network/NetworkGraph", () => ({
+  default: ({ listId }: { listId: string }) => (
+    <div data-testid="network-graph">{listId}</div>
+  ),
+}));
+
 const renderListPage = (path = "/lists/abc-123") => {
   const { hook } = memoryLocation({ path });
   return renderWithStore(
@@ -57,21 +63,18 @@ describe("ListPage", () => {
 
   it("renders a gene row for each member when the list has genes", async () => {
     server.use(
-      http.get(
-        "http://localhost:8000/api/v2/lists/:listId",
-        ({ params }) => {
-          return HttpResponse.json({
-            listId: params.listId,
-            name: "Populated list",
-            description: null,
-            annotationId: "arath-Araport11",
-            taxonName: "Arabidopsis thaliana",
-            createdAt: "2026-04-14 12:00:00",
-            geneCount: 2,
-            memberGeneIds: ["AT1G01010", "AT1G01020"],
-          });
-        }
-      )
+      http.get("http://localhost:8000/api/v2/lists/:listId", ({ params }) => {
+        return HttpResponse.json({
+          listId: params.listId,
+          name: "Populated list",
+          description: null,
+          annotationId: "arath-Araport11",
+          taxonName: "Arabidopsis thaliana",
+          createdAt: "2026-04-14 12:00:00",
+          geneCount: 2,
+          memberGeneIds: ["AT1G01010", "AT1G01020"],
+        });
+      })
     );
     renderListPage();
     expect(await screen.findByText("AT1G01010")).toBeInTheDocument();
@@ -95,10 +98,7 @@ describe("ListPage", () => {
     );
     renderListPage();
     const link = await screen.findByRole("link", { name: /AT1G01010/ });
-    expect(link).toHaveAttribute(
-      "href",
-      "/genes/arath-Araport11/AT1G01010"
-    );
+    expect(link).toHaveAttribute("href", "/genes/arath-Araport11/AT1G01010");
   });
 
   it("has 'Add by ID' and 'Search genes' links when the list has genes", async () => {
@@ -336,21 +336,18 @@ describe("ListPage", () => {
 
   it("shows the gene description for each member", async () => {
     server.use(
-      http.get(
-        "http://localhost:8000/api/v2/lists/:listId",
-        ({ params }) => {
-          return HttpResponse.json({
-            listId: params.listId,
-            name: "Populated list",
-            description: null,
-            annotationId: "arath-Araport11",
-            taxonName: "Arabidopsis thaliana",
-            createdAt: "2026-04-14 12:00:00",
-            geneCount: 1,
-            memberGeneIds: ["AT1G01010"],
-          });
-        }
-      )
+      http.get("http://localhost:8000/api/v2/lists/:listId", ({ params }) => {
+        return HttpResponse.json({
+          listId: params.listId,
+          name: "Populated list",
+          description: null,
+          annotationId: "arath-Araport11",
+          taxonName: "Arabidopsis thaliana",
+          createdAt: "2026-04-14 12:00:00",
+          geneCount: 1,
+          memberGeneIds: ["AT1G01010"],
+        });
+      })
     );
     renderListPage();
     expect(await screen.findByText(/first gene/i)).toBeInTheDocument();
@@ -392,5 +389,35 @@ describe("ListPage", () => {
     await waitFor(() =>
       expect(patched).toHaveBeenCalledWith({ name: "Renamed" })
     );
+  });
+
+  describe("network graph", () => {
+    const populated = () =>
+      server.use(
+        http.get("http://localhost:8000/api/v2/lists/:listId", ({ params }) =>
+          HttpResponse.json({
+            listId: params.listId,
+            name: "Populated list",
+            description: null,
+            annotationId: "arath-Araport11",
+            taxonName: "Arabidopsis thaliana",
+            createdAt: "2026-04-14 12:00:00",
+            geneCount: 2,
+            memberGeneIds: ["AT1G01010", "AT1G01020"],
+          })
+        )
+      );
+
+    it("opens for the whole list from the 'Network graph' button", async () => {
+      populated();
+      const user = userEvent.setup();
+      renderListPage();
+
+      await user.click(
+        await screen.findByRole("button", { name: /network graph/i })
+      );
+
+      expect(screen.getByTestId("network-graph")).toHaveTextContent("abc-123");
+    });
   });
 });
