@@ -3,3 +3,7 @@ __pycache__
 .env
 .env.*
 packages/shared/.env.shared
+.git
+pg-data
+ui/node_modules
+ui/.yarn
