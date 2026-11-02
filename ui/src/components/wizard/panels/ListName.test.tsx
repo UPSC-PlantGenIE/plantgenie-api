@@ -8,10 +8,7 @@ describe("ListName", () => {
   it("renders the list name input with the Figma placeholder", () => {
     renderWithStore(<ListName />);
     const input = screen.getByLabelText(/list name/i);
-    expect(input).toHaveAttribute(
-      "placeholder",
-      "e.g. Drought-response TFs in Pinus sylvestris"
-    );
+    expect(input).toHaveAttribute("placeholder", "e.g. Drought-response TFs");
   });
 
   it("renders the description textarea", () => {
