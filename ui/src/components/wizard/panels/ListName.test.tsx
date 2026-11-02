@@ -23,7 +23,6 @@ describe("ListName", () => {
     renderWithStore(<ListName />, {
       preloadedState: {
         wizard: {
-          step: 3,
           name: "Existing list",
           description: "Already typed",
           taxonId: null,

@@ -1,23 +1,19 @@
+import { useLocation } from "wouter";
 import { useGetTaxaQuery } from "../../../api/plantgenieApi";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks";
-import { next, setTaxonId } from "../../../store/wizardSlice";
+import { setTaxonId } from "../../../store/wizardSlice";
 import { buttonClassName } from "../../shared/buttonClassName";
 
 export default function TaxonSelector() {
   const dispatch = useAppDispatch();
-  const step = useAppSelector((s) => s.wizard.step);
+  const [, setLocation] = useLocation();
   const taxonId = useAppSelector((s) => s.wizard.taxonId);
   const { data: taxa, isLoading, isError } = useGetTaxaQuery();
 
-  const active = step === 1;
   const canContinue = taxonId !== null && !isLoading;
 
   return (
-    <section
-      className="w-screen shrink-0"
-      aria-hidden={!active}
-      inert={!active}
-    >
+    <section>
       <div className="mx-auto w-full max-w-lg px-4 pt-20 pb-8">
         <p className="text-sm font-medium text-muted">New gene list</p>
         <h1 className="mt-1 text-2xl font-bold text-heading">Select a taxon</h1>
@@ -105,7 +101,7 @@ export default function TaxonSelector() {
           <button
             type="button"
             disabled={!canContinue}
-            onClick={() => dispatch(next())}
+            onClick={() => setLocation("~/lists/new/genome")}
             className={buttonClassName()}
           >
             Continue →

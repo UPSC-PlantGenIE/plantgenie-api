@@ -7,7 +7,6 @@ import { renderWithStore } from "../../../test-utils";
 import TaxonSelector from "./TaxonSelector";
 
 const taxonStepState = {
-  step: 1 as const,
   name: "",
   description: "",
   taxonId: null,

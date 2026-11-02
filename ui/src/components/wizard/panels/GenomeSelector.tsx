@@ -1,18 +1,19 @@
 import { useEffect } from "react";
+import { useLocation } from "wouter";
 import {
   useGetAnnotationsQuery,
   useGetAssembliesQuery,
   useGetTaxaQuery,
 } from "../../../api/plantgenieApi";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks";
-import { back, next, setAnnotationId } from "../../../store/wizardSlice";
+import { setAnnotationId } from "../../../store/wizardSlice";
 import { buttonClassName } from "../../shared/buttonClassName";
 
 const numberFmt = new Intl.NumberFormat("en-US");
 
 export default function GenomeSelector() {
   const dispatch = useAppDispatch();
-  const step = useAppSelector((s) => s.wizard.step);
+  const [, setLocation] = useLocation();
   const taxonId = useAppSelector((s) => s.wizard.taxonId);
   const annotationId = useAppSelector((s) => s.wizard.annotationId);
 
@@ -34,7 +35,6 @@ export default function GenomeSelector() {
     { skip: !taxonId }
   );
 
-  const active = step === 2;
   const isLoading = assembliesLoading || annotationsLoading;
   const isError = assembliesError || annotationsError;
   const canContinue = annotationId !== null && !isLoading;
@@ -61,11 +61,7 @@ export default function GenomeSelector() {
     : "New gene list";
 
   return (
-    <section
-      className="w-screen shrink-0"
-      aria-hidden={!active}
-      inert={!active}
-    >
+    <section>
       <div className="mx-auto w-full max-w-lg px-4 pt-20 pb-8">
         <p className="text-sm font-medium text-muted">{eyebrow}</p>
         <h1 className="mt-1 text-2xl font-bold text-heading">
@@ -162,7 +158,7 @@ export default function GenomeSelector() {
         <div className="mt-6 flex items-center justify-between">
           <button
             type="button"
-            onClick={() => dispatch(back())}
+            onClick={() => setLocation("~/lists/new")}
             className={buttonClassName("secondary")}
           >
             ← Back
@@ -171,7 +167,7 @@ export default function GenomeSelector() {
           <button
             type="button"
             disabled={!canContinue}
-            onClick={() => dispatch(next())}
+            onClick={() => setLocation("~/lists/new/details")}
             className={buttonClassName()}
           >
             Continue →

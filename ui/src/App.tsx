@@ -43,7 +43,7 @@ const App = () => {
             <Route path="/blast/" component={BlastPage} />
             <Route path="/blast/:jobId" component={BlastResultsPage} />
             <Route path="/lists" component={MyListsPage} />
-            <Route path="/lists/new" component={Wizard} />
+            <Route path="/lists/new" nest component={Wizard} />
             <Route
               path="/lists/:listId/genes/add-by-id"
               component={AddByIdPage}

@@ -1,9 +1,6 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 
-export type WizardStep = 1 | 2 | 3;
-
 export interface WizardState {
-  step: WizardStep;
   name: string;
   description: string;
   taxonId: string | null;
@@ -11,7 +8,6 @@ export interface WizardState {
 }
 
 const initialState: WizardState = {
-  step: 1,
   name: "",
   description: "",
   taxonId: null,
@@ -22,16 +18,6 @@ const wizardSlice = createSlice({
   name: "wizard",
   initialState,
   reducers: {
-    next(state) {
-      if (state.step < 3) {
-        state.step = (state.step + 1) as WizardStep;
-      }
-    },
-    back(state) {
-      if (state.step > 1) {
-        state.step = (state.step - 1) as WizardStep;
-      }
-    },
     setName(state, action: PayloadAction<string>) {
       state.name = action.payload;
     },
@@ -53,14 +39,7 @@ const wizardSlice = createSlice({
   },
 });
 
-export const {
-  next,
-  back,
-  setName,
-  setDescription,
-  setTaxonId,
-  setAnnotationId,
-  reset,
-} = wizardSlice.actions;
+export const { setName, setDescription, setTaxonId, setAnnotationId, reset } =
+  wizardSlice.actions;
 
 export default wizardSlice.reducer;

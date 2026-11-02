@@ -62,23 +62,23 @@ class TestNewVisitor:
             )
         ).to_be_visible()
 
-        # She sees two possibilities
-        # (1) to create a new id
-        generate_button = page.locator("#new-account-card").get_by_role(
-            "button", name=re.compile(r"generate a new id", re.IGNORECASE)
-        )
-        expect(generate_button).to_be_visible()
-
-        # (2) to use an existing one
+        # She is asked to sign in with an account ID
         expect(
-            page.locator("#returning-user").get_by_role(
+            page.get_by_role(
                 "button", name=re.compile(r"continue", re.IGNORECASE)
             )
         ).to_be_visible()
 
         # She has never been here before, so she has no account ID.
-        # She takes the offer to have one made for her instead
-        generate_button.click()
+        # She follows the link for new visitors instead
+        page.get_by_role(
+            "link", name=re.compile(r"new here", re.IGNORECASE)
+        ).click()
+
+        # and asks for an ID to be made for her
+        page.get_by_role(
+            "button", name=re.compile(r"generate a new id", re.IGNORECASE)
+        ).click()
 
         # The site shows her the ID it just made, in groups of four so she can
         # copy it down, and warns her that losing it loses her lists
@@ -176,6 +176,120 @@ class TestNewVisitor:
         # She notices her list has a URL of its own
         assert re.search(r"/lists/.+", page.url)
 
+    def test_leaving_the_wizard_starts_it_over(self, page: Page, site):
+        # Ada starts a new list and picks Norway spruce
+        sign_in(page, create_account())
+        page.goto(SITE_URL + "/lists")
+        page.get_by_role(
+            "link", name=re.compile(r"new list", re.IGNORECASE)
+        ).click()
+        spruce = page.get_by_role(
+            "radio", name=re.compile(r"picea abies", re.IGNORECASE)
+        )
+        page.get_by_text(re.compile(r"picea abies", re.IGNORECASE)).click()
+        page.get_by_role(
+            "button", name=re.compile(r"continue", re.IGNORECASE)
+        ).click()
+
+        # The genome step has a URL of its own
+        expect(page).to_have_url(re.compile(r"/lists/new/genome$"))
+
+        # She uses the browser's back button to check her choice, and it is kept
+        page.go_back()
+        expect(spruce).to_be_checked()
+
+        # and forward again to where she was
+        page.go_forward()
+        expect(
+            page.get_by_role(
+                "heading", name=re.compile(r"select a genome", re.IGNORECASE)
+            )
+        ).to_be_visible()
+
+        # She gets distracted and goes off to run a BLAST search
+        page.get_by_role("link", name="Blast").click()
+        expect(page).to_have_url(re.compile(r"/blast"))
+
+        # When she comes back to make a list, the wizard starts from the
+        # beginning with nothing chosen
+        page.get_by_role("link", name="Lists").click()
+        page.get_by_role(
+            "link", name=re.compile(r"new list", re.IGNORECASE)
+        ).click()
+        expect(
+            page.get_by_role(
+                "heading", name=re.compile(r"select a taxon", re.IGNORECASE)
+            )
+        ).to_be_visible()
+        expect(spruce).not_to_be_checked()
+        expect(
+            page.get_by_role(
+                "button", name=re.compile(r"continue", re.IGNORECASE)
+            )
+        ).to_be_disabled()
+
+    def test_refreshing_the_wizard_starts_it_over(self, page: Page, site):
+        # Ada works through the wizard as far as naming her list, then realises
+        # she picked Norway spruce when she meant to build this list for Scots pine
+        sign_in(page, create_account())
+        page.goto(SITE_URL + "/lists")
+        page.get_by_role(
+            "link", name=re.compile(r"new list", re.IGNORECASE)
+        ).click()
+        page.get_by_text(re.compile(r"picea abies", re.IGNORECASE)).click()
+        page.get_by_role(
+            "button", name=re.compile(r"continue", re.IGNORECASE)
+        ).click()
+        page.get_by_text(re.compile(r"genome - ", re.IGNORECASE)).click()
+        page.get_by_role(
+            "button", name=re.compile(r"continue", re.IGNORECASE)
+        ).click()
+        page.get_by_label(re.compile(r"list name", re.IGNORECASE)).fill(
+            "Ada's cold stress genes"
+        )
+
+        # Rather than stepping back through the wizard, she refreshes the page to
+        # start again. The wizard keeps nothing across a refresh, on purpose, so
+        # she is back at the first step with nothing chosen
+        page.reload()
+        expect(page).to_have_url(re.compile(r"/lists/new$"))
+        expect(
+            page.get_by_role(
+                "heading", name=re.compile(r"select a taxon", re.IGNORECASE)
+            )
+        ).to_be_visible()
+        expect(
+            page.get_by_role(
+                "radio", name=re.compile(r"picea abies", re.IGNORECASE)
+            )
+        ).not_to_be_checked()
+
+        # The browser's back button walks her out through the old steps, and
+        # the wizard does not trap her by adding them back to the history
+        page.go_back()
+        expect(page).to_have_url(re.compile(r"/lists/new$"))
+        page.go_back()
+        expect(page).to_have_url(re.compile(r"/lists/new$"))
+        page.go_back()
+        expect(page).to_have_url(re.compile(r"/lists$"))
+
+    def test_a_later_wizard_step_opened_directly_starts_over(
+        self, page: Page, site
+    ):
+        # Ada saved a link to the last step of the wizard. Opening it means
+        # nothing has been chosen yet
+        sign_in(page, create_account())
+        page.goto(SITE_URL + "/lists/new/details")
+
+        # so she is sent to the first step rather than naming a list with no
+        # genome
+        expect(page).to_have_url(re.compile(r"/lists/new$"))
+        expect(
+            page.get_by_role(
+                "heading", name=re.compile(r"select a taxon", re.IGNORECASE)
+            )
+        ).to_be_visible()
+
     def test_returns_to_her_lists_on_the_same_computer(
         self, page: Page, site
     ):
@@ -263,11 +377,10 @@ class TestNewVisitor:
         # She types her ID from memory, but gets the last digit wrong
         mistyped_last_digit = str((int(adas_account_id[-1]) + 1) % 10)
         mistyped_account_id = adas_account_id[:-1] + mistyped_last_digit
-        existing_account_card = page.locator("#returning-user")
-        existing_account_card.get_by_label(
-            re.compile(r"account id", re.IGNORECASE)
-        ).fill(mistyped_account_id)
-        existing_account_card.get_by_role(
+        page.get_by_label(re.compile(r"account id", re.IGNORECASE)).fill(
+            mistyped_account_id
+        )
+        page.get_by_role(
             "button", name=re.compile(r"continue", re.IGNORECASE)
         ).click()
 
@@ -279,7 +392,7 @@ class TestNewVisitor:
         # and she stays where she is, free to try again
         expect(page).not_to_have_url(re.compile(r"/lists"))
         expect(
-            existing_account_card.get_by_role(
+            page.get_by_role(
                 "button", name=re.compile(r"continue", re.IGNORECASE)
             )
         ).to_be_visible()
@@ -310,11 +423,10 @@ class TestNewVisitor:
         ).click()
 
         # He pastes in his own ID
-        existing_account_card = page.locator("#returning-user")
-        existing_account_card.get_by_label(
-            re.compile(r"account id", re.IGNORECASE)
-        ).fill(bobs_account_id)
-        existing_account_card.get_by_role(
+        page.get_by_label(re.compile(r"account id", re.IGNORECASE)).fill(
+            bobs_account_id
+        )
+        page.get_by_role(
             "button", name=re.compile(r"continue", re.IGNORECASE)
         ).click()
 

@@ -6,19 +6,13 @@ import {
   useGetTaxaQuery,
 } from "../../../api/plantgenieApi";
 import { useAppDispatch, useAppSelector } from "../../../store/hooks";
-import {
-  back,
-  reset,
-  setDescription,
-  setName,
-} from "../../../store/wizardSlice";
+import { setDescription, setName } from "../../../store/wizardSlice";
 import { buttonClassName } from "../../shared/buttonClassName";
 
 export default function ListName() {
   const [createList] = useCreateListMutation();
   const [, setLocation] = useLocation();
   const dispatch = useAppDispatch();
-  const step = useAppSelector((s) => s.wizard.step);
   const name = useAppSelector((s) => s.wizard.name);
   const description = useAppSelector((s) => s.wizard.description);
   const taxonId = useAppSelector((s) => s.wizard.taxonId);
@@ -51,7 +45,6 @@ export default function ListName() {
     .filter(Boolean)
     .join("  ·  ");
 
-  const active = step === 3;
   const canCreate = name.trim().length > 0;
 
   const handleCreateList = async () => {
@@ -61,16 +54,11 @@ export default function ListName() {
       annotationId: annotationId!,
       taxonName: selectedTaxon?.scientificName ?? "",
     }).unwrap();
-    setLocation(`/lists/${listId}`);
-    dispatch(reset());
+    setLocation(`~/lists/${listId}`);
   };
 
   return (
-    <section
-      className="w-screen shrink-0"
-      aria-hidden={!active}
-      inert={!active}
-    >
+    <section>
       <div className="mx-auto w-full max-w-lg px-4 pt-20 pb-8">
         <p className="text-sm font-medium text-muted">{eyebrow}</p>
         <h1 className="mt-1 text-2xl font-bold text-heading">Name your list</h1>
@@ -117,7 +105,7 @@ export default function ListName() {
         <div className="mt-6 flex items-center justify-between">
           <button
             type="button"
-            onClick={() => dispatch(back())}
+            onClick={() => setLocation("~/lists/new/genome")}
             className={buttonClassName("secondary")}
           >
             ← Back
