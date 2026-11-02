@@ -31,13 +31,7 @@ class TestNewVisitor:
             "link", name=re.compile(r"new list", re.IGNORECASE)
         ).click()
         page.get_by_text(re.compile(r"picea abies", re.IGNORECASE)).click()
-        page.get_by_role(
-            "button", name=re.compile(r"continue", re.IGNORECASE)
-        ).click()
         page.get_by_text(re.compile(r"genome - ", re.IGNORECASE)).click()
-        page.get_by_role(
-            "button", name=re.compile(r"continue", re.IGNORECASE)
-        ).click()
         page.get_by_label(re.compile(r"list name", re.IGNORECASE)).fill(
             name
         )
@@ -111,14 +105,8 @@ class TestNewVisitor:
         page.get_by_role(
             "link", name=re.compile(r"new list", re.IGNORECASE)
         ).click()
-        # the wizard opens on a list of taxa to choose from, with a disabled
-        # continue button. In the list of taxa, she sees Norway spruce and
-        # clicks on it
-        expect(
-            page.get_by_role(
-                "button", name=re.compile(r"continue", re.IGNORECASE)
-            )
-        ).to_be_disabled()
+        # a form opens with everything she needs to choose on one page. In the
+        # list of taxa, she sees Norway spruce and clicks on it
         page.get_by_text(re.compile(r"picea abies", re.IGNORECASE)).click()
         # and sees that the little circle next to it becomes filled in
         expect(
@@ -126,26 +114,13 @@ class TestNewVisitor:
                 "radio", name=re.compile(r"picea abies", re.IGNORECASE)
             )
         ).to_be_checked()
-        # and the continue button becomes enabled
-        expect(
-            page.get_by_role(
-                "button", name=re.compile(r"continue", re.IGNORECASE)
-            )
-        ).to_be_enabled()
-        # she clicks the continue button
-        page.get_by_role(
-            "button", name=re.compile(r"continue", re.IGNORECASE)
-        ).click()
 
-        # the next step asks which genome the list should be built against.
+        # the form now offers the genomes the list can be built against.
         # There is only one on offer for Norway spruce, so she takes it
         page.get_by_text(re.compile(r"genome - ", re.IGNORECASE)).click()
-        page.get_by_role(
-            "button", name=re.compile(r"continue", re.IGNORECASE)
-        ).click()
 
-        # the last step asks her to name the list, now that she knows what is
-        # in it. The create button stays disabled until she does
+        # the form also asks her to name the list. The create button stays
+        # disabled until she does
         expect(
             page.get_by_role(
                 "button", name=re.compile(r"create list", re.IGNORECASE)
@@ -176,7 +151,7 @@ class TestNewVisitor:
         # She notices her list has a URL of its own
         assert re.search(r"/lists/.+", page.url)
 
-    def test_leaving_the_wizard_starts_it_over(self, page: Page, site):
+    def test_leaving_the_form_clears_it(self, page: Page, site):
         # Ada starts a new list and picks Norway spruce
         sign_in(page, create_account())
         page.goto(SITE_URL + "/lists")
@@ -187,108 +162,51 @@ class TestNewVisitor:
             "radio", name=re.compile(r"picea abies", re.IGNORECASE)
         )
         page.get_by_text(re.compile(r"picea abies", re.IGNORECASE)).click()
-        page.get_by_role(
-            "button", name=re.compile(r"continue", re.IGNORECASE)
-        ).click()
-
-        # The genome step has a URL of its own
-        expect(page).to_have_url(re.compile(r"/lists/new/genome$"))
-
-        # She uses the browser's back button to check her choice, and it is kept
-        page.go_back()
         expect(spruce).to_be_checked()
-
-        # and forward again to where she was
-        page.go_forward()
-        expect(
-            page.get_by_role(
-                "heading", name=re.compile(r"select a genome", re.IGNORECASE)
-            )
-        ).to_be_visible()
 
         # She gets distracted and goes off to run a BLAST search
         page.get_by_role("link", name="Blast").click()
         expect(page).to_have_url(re.compile(r"/blast"))
 
-        # When she comes back to make a list, the wizard starts from the
-        # beginning with nothing chosen
+        # When she comes back to make a list, the form is empty
         page.get_by_role("link", name="Lists").click()
         page.get_by_role(
             "link", name=re.compile(r"new list", re.IGNORECASE)
         ).click()
-        expect(
-            page.get_by_role(
-                "heading", name=re.compile(r"select a taxon", re.IGNORECASE)
-            )
-        ).to_be_visible()
         expect(spruce).not_to_be_checked()
         expect(
             page.get_by_role(
-                "button", name=re.compile(r"continue", re.IGNORECASE)
+                "button", name=re.compile(r"create list", re.IGNORECASE)
             )
         ).to_be_disabled()
 
-    def test_refreshing_the_wizard_starts_it_over(self, page: Page, site):
-        # Ada works through the wizard as far as naming her list, then realises
-        # she picked Norway spruce when she meant to build this list for Scots pine
+    def test_refreshing_the_form_clears_it(self, page: Page, site):
+        # Ada fills in the form as far as naming her list, then realises she
+        # picked Norway spruce when she meant to build this list for Scots pine
         sign_in(page, create_account())
         page.goto(SITE_URL + "/lists")
         page.get_by_role(
             "link", name=re.compile(r"new list", re.IGNORECASE)
         ).click()
-        page.get_by_text(re.compile(r"picea abies", re.IGNORECASE)).click()
-        page.get_by_role(
-            "button", name=re.compile(r"continue", re.IGNORECASE)
-        ).click()
-        page.get_by_text(re.compile(r"genome - ", re.IGNORECASE)).click()
-        page.get_by_role(
-            "button", name=re.compile(r"continue", re.IGNORECASE)
-        ).click()
-        page.get_by_label(re.compile(r"list name", re.IGNORECASE)).fill(
-            "Ada's cold stress genes"
+        spruce = page.get_by_role(
+            "radio", name=re.compile(r"picea abies", re.IGNORECASE)
         )
+        page.get_by_text(re.compile(r"picea abies", re.IGNORECASE)).click()
+        list_name = page.get_by_label(
+            re.compile(r"list name", re.IGNORECASE)
+        )
+        list_name.fill("Ada's cold stress genes")
 
-        # Rather than stepping back through the wizard, she refreshes the page to
-        # start again. The wizard keeps nothing across a refresh, on purpose, so
-        # she is back at the first step with nothing chosen
+        # She refreshes the page to start again. The form keeps nothing across
+        # a refresh, on purpose, so nothing is chosen
         page.reload()
         expect(page).to_have_url(re.compile(r"/lists/new$"))
-        expect(
-            page.get_by_role(
-                "heading", name=re.compile(r"select a taxon", re.IGNORECASE)
-            )
-        ).to_be_visible()
-        expect(
-            page.get_by_role(
-                "radio", name=re.compile(r"picea abies", re.IGNORECASE)
-            )
-        ).not_to_be_checked()
+        expect(spruce).not_to_be_checked()
+        expect(list_name).to_be_empty()
 
-        # The browser's back button walks her out through the old steps, and
-        # the wizard does not trap her by adding them back to the history
-        page.go_back()
-        expect(page).to_have_url(re.compile(r"/lists/new$"))
-        page.go_back()
-        expect(page).to_have_url(re.compile(r"/lists/new$"))
+        # and the browser's back button takes her straight back to her lists
         page.go_back()
         expect(page).to_have_url(re.compile(r"/lists$"))
-
-    def test_a_later_wizard_step_opened_directly_starts_over(
-        self, page: Page, site
-    ):
-        # Ada saved a link to the last step of the wizard. Opening it means
-        # nothing has been chosen yet
-        sign_in(page, create_account())
-        page.goto(SITE_URL + "/lists/new/details")
-
-        # so she is sent to the first step rather than naming a list with no
-        # genome
-        expect(page).to_have_url(re.compile(r"/lists/new$"))
-        expect(
-            page.get_by_role(
-                "heading", name=re.compile(r"select a taxon", re.IGNORECASE)
-            )
-        ).to_be_visible()
 
     def test_returns_to_her_lists_on_the_same_computer(
         self, page: Page, site

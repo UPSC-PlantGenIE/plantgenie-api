@@ -1,12 +1,10 @@
 import { configureStore } from "@reduxjs/toolkit";
 import { plantgenieApi } from "../api/plantgenieApi";
 import accountReducer from "./accountSlice";
-import wizardReducer from "./wizardSlice";
 
 export const store = configureStore({
   reducer: {
     account: accountReducer,
-    wizard: wizardReducer,
     [plantgenieApi.reducerPath]: plantgenieApi.reducer,
   },
   middleware: (getDefaultMiddleware) =>

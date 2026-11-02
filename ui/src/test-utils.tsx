@@ -4,14 +4,12 @@ import { render, type RenderOptions } from "@testing-library/react";
 import { configureStore } from "@reduxjs/toolkit";
 import { plantgenieApi } from "./api/plantgenieApi";
 import type { RootState } from "./store";
-import wizardReducer from "./store/wizardSlice";
 import accountReducer from "./store/accountSlice";
 
 function makeStore(preloadedState?: Partial<RootState>) {
   return configureStore({
     reducer: {
       account: accountReducer,
-      wizard: wizardReducer,
       [plantgenieApi.reducerPath]: plantgenieApi.reducer,
     },
     middleware: (getDefaultMiddleware) =>

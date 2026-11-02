@@ -59,7 +59,7 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the wizard at '/lists/new'", () => {
+  it("renders the new list form at '/lists/new'", () => {
     const { hook } = memoryLocation({ path: "/lists/new" });
     renderWithStore(
       <Router hook={hook}>
@@ -68,7 +68,7 @@ describe("App", () => {
       { preloadedState: { account: { accountId: "1234567890123456" } } }
     );
     expect(
-      screen.getByRole("heading", { name: /select a taxon/i })
+      screen.getByRole("heading", { name: /new gene list/i })
     ).toBeInTheDocument();
   });
 

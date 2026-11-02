@@ -9,7 +9,7 @@ import MyListsPage from "./components/lists/MyListsPage";
 import HeatmapPage from "./components/heatmap/HeatmapPage";
 import BlastPage from "./components/blast/BlastPage";
 import BlastResultsPage from "./components/blast/BlastResultsPage";
-import Wizard from "./components/wizard/Wizard";
+import NewListPage from "./components/lists/NewListPage";
 import { useAccountIdSync } from "./store/useAccountIdSync";
 import type { PropsWithChildren } from "react";
 import { useAppSelector } from "./store/hooks";
@@ -43,7 +43,7 @@ const App = () => {
             <Route path="/blast/" component={BlastPage} />
             <Route path="/blast/:jobId" component={BlastResultsPage} />
             <Route path="/lists" component={MyListsPage} />
-            <Route path="/lists/new" nest component={Wizard} />
+            <Route path="/lists/new" component={NewListPage} />
             <Route
               path="/lists/:listId/genes/add-by-id"
               component={AddByIdPage}
