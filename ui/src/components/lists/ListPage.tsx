@@ -6,6 +6,7 @@ import {
   usePatchListMutation,
 } from "../../api/plantgenieApi";
 import { buttonClassName } from "../shared/buttonClassName";
+import RandomizeControl from "./RandomizeControl";
 
 export default function ListPage() {
   const { listId } = useParams<{ listId: string }>();
@@ -259,6 +260,10 @@ export default function ListPage() {
             🔍 Search genes
           </Link>
         </div>
+        <RandomizeControl
+          listId={data.listId}
+          className={buttonClassName("secondary")}
+        />
       </section>
       )}
     </div>
