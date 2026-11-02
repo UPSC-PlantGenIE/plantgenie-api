@@ -90,6 +90,11 @@ def celery_container(
 ):
     container = DockerContainer(str(celery_image))
     container.with_network(network)
+
+    for k,v in backend_config.items():
+        if isinstance(v, str):
+            container.with_env(k, v)
+
     container.with_env(
         "CELERY_BROKER_URL",
         "amqp://guest:guest@rabbitmq-service:5672/celery_testing",
@@ -98,10 +103,6 @@ def celery_container(
         "CELERY_RESULT_BACKEND",
         "redis://redis-service:6379/0",
     )
-
-    for k,v in backend_config.items():
-        if isinstance(v, str):
-            container.with_env(k, v)
 
     container.with_volume_mapping(
         host=host_data_directory, container="/tests", mode="rw"
