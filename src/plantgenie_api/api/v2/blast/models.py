@@ -117,13 +117,15 @@ class BlastHit(PlantGenieModel):
     subject_end: int
     evalue: float
     bit_score: float
+    query_sequence: str | None = None
+    subject_sequence: str | None = None
+    annotation_id: str | None = None
+    gene_id: str | None = None
 
     @classmethod
     def from_tsv(cls, text: str) -> list["BlastHit"]:
         return [
-            cls(
-                **dict(zip(cls.model_fields, line.split("\t"), strict=True))
-            )
+            cls(**dict(zip(cls.model_fields, line.split("\t"))))
             for line in text.strip().splitlines()
         ]
 
