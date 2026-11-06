@@ -70,7 +70,9 @@ async def submit_blast(
 
     result = await session.run(
         "MATCH (b:BlastDatabase {id: $databaseId}) "
-        "RETURN b {.id, .moleculeType, .path} AS db",
+        "OPTIONAL MATCH (n:Annotation)-[:HAS_BLAST_DB]->(b) "
+        "RETURN b {.id, .moleculeType, .path} AS db, "
+        "n.id AS annotationId, n.path AS annotationPath",
         databaseId=body.database_id,
     )
     database_records = [record async for record in result]
@@ -102,6 +104,14 @@ async def submit_blast(
             detail="BLAST data is not ready, try again later",
         )
 
+    annotation_id = database_records[0]["annotationId"]
+    annotation_path = database_records[0]["annotationPath"]
+    gff_path = (
+        (Path(environment["DATA_PATH"]) / annotation_path / "gff.gz").as_posix()
+        if annotation_path is not None
+        else None
+    )
+
     job_id = str(uuid.uuid4())
     blast_path.mkdir(parents=True, exist_ok=True)
     query_path = blast_path / f"{job_id}.fa"
@@ -120,6 +130,8 @@ async def submit_blast(
                 "parameters": body.parameters.model_dump(
                     exclude_none=True
                 ),
+                "annotation_id": annotation_id,
+                "gff_path": gff_path,
             },
             task_id=job_id,
         )

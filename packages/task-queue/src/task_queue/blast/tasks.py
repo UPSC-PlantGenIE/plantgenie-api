@@ -1,7 +1,7 @@
+import gzip
 import mimetypes
 import subprocess
 from pathlib import Path
-from typing import List
 
 from celery import Task, chain
 from FastaValidator import fasta_validator  # type: ignore
@@ -42,7 +42,7 @@ mimetypes.add_type("application/octet-stream", ".asn")
 def verify_blast_is_installed(
     self: Task,
     blast_program: BlastProgram = "blastn",
-    blast_args: List[str] = ["-version"],
+    blast_args: tuple[str, ...] = ("-version",),
 ) -> None:
     subprocess.run(
         args=[blast_program, *blast_args],
@@ -206,7 +206,7 @@ def blast_result_format_html(input_asn_path: str) -> str:
     base=PathValidationTask,
     files_to_validate={"query_path": "Query file"},
 )
-def upload_results_to_object_store(query_path: str) -> List[str]:
+def upload_results_to_object_store(query_path: str) -> list[str]:
     resolved_query_path = Path(query_path).resolve()
     blast_files_glob = resolved_query_path.parent.glob(
         f"{resolved_query_path.stem}.*"
@@ -254,6 +254,37 @@ def execute_blast_pipeline(args: ExecuteBlastPipelineArgs):
     return workflow()
 
 
+def add_gene_columns(
+    tsv_path: Path, gff_path: str, annotation_id: str
+) -> None:
+    rows = [line.split("\t") for line in tsv_path.read_text().splitlines()]
+    subject_ids = {row[1] for row in rows}
+
+    gene_by_transcript = {}
+    with gzip.open(gff_path, "rt") as gff:
+        for line in gff:
+            columns = line.rstrip("\n").split("\t")
+            if len(columns) < 9 or columns[2] != "mRNA":
+                continue
+            attributes = dict(
+                field.split("=", 1)
+                for field in columns[8].split(";")
+                if "=" in field
+            )
+            if attributes["ID"] in subject_ids:
+                gene_by_transcript[attributes["ID"]] = attributes["Parent"]
+
+    tsv_path.write_text(
+        "".join(
+            "\t".join(
+                [*row, annotation_id, gene_by_transcript.get(row[1], "")]
+            )
+            + "\n"
+            for row in rows
+        )
+    )
+
+
 @app.task(name="blast.run_search")
 def run_blast_search(
     job_id: str,
@@ -261,6 +292,8 @@ def run_blast_search(
     query_path: str,
     database_path: str,
     parameters: dict[str, str],
+    annotation_id: str | None = None,
+    gff_path: str | None = None,
 ) -> str:
     output_directory = Path(query_path).parent
     archive_path = (output_directory / f"{job_id}.asn").as_posix()
@@ -283,20 +316,20 @@ def run_blast_search(
         check=True,
     )
 
-    for output_format, suffix in (("6", "tsv"), ("html", "html")):
-        formatter_arguments = (
-            ["-html"] if output_format == "html" else ["-outfmt", "6"]
-        )
-        subprocess.run(
-            [
-                "blast_formatter",
-                "-archive", archive_path,
-                "-out", (output_directory / f"{job_id}.{suffix}").as_posix(),
-                *formatter_arguments,
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+    base_path = output_directory / job_id
+
+    subprocess.run(
+        ["blast_formatter", "-archive", archive_path,
+         "-outfmt", "6 std qseq sseq", "-out", f"{base_path}.tsv"],
+        capture_output=True, text=True, check=True,
+    )
+    subprocess.run(
+        ["blast_formatter", "-archive", archive_path,
+         "-html", "-out", f"{base_path}.html"],
+        capture_output=True, text=True, check=True,
+    )
+
+    if annotation_id is not None and gff_path is not None:
+        add_gene_columns(Path(f"{base_path}.tsv"), gff_path, annotation_id)
 
     return archive_path

@@ -1,10 +1,11 @@
+import gzip
 import threading
 from pathlib import Path
 
 import pytest
 from httpx import AsyncClient
 from kombu.exceptions import OperationalError
-from task_queue.blast.tasks import run_blast_search
+from task_queue.blast.tasks import add_gene_columns, run_blast_search
 
 from tests.plantgenie_api.unit.conftest import FakeNeo4jSession
 
@@ -142,7 +143,9 @@ async def test_submit_blast_requires_the_data_ready_marker(
                 "id": "picab-v2.0-cds",
                 "moleculeType": "nucl",
                 "path": "picab/v2/v2.0/blast/nucl/coding-sequences.fa",
-            }
+            },
+            "annotationId": "picab-v2.0",
+            "annotationPath": "picab/v2/v2.0",
         }
     ]
 
@@ -170,7 +173,9 @@ async def submit_valid_blast(
                 "id": "picab-v2.0-cds",
                 "moleculeType": "nucl",
                 "path": "picab/v2/v2.0/blast/nucl/coding-sequences.fa",
-            }
+            },
+            "annotationId": "picab-v2.0",
+            "annotationPath": "picab/v2/v2.0",
         }
     ]
 
@@ -247,3 +252,88 @@ async def test_submit_blast_422s_when_a_parameter_is_out_of_range(
     )
 
     assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_blast_results_include_the_aligned_sequences(
+    async_client: AsyncClient, tmp_path: Path
+):
+    job_id = "6f1c2b4e-0000-4000-8000-000000000001"
+    blast_path = tmp_path / "pg-service-blast"
+    blast_path.mkdir()
+    (blast_path / f"{job_id}.tsv").write_text(
+        "query1\tPA_chr01_G000001.mRNA.1\t95.0\t20\t1\t0\t1\t20\t101\t120"
+        "\t1e-5\t40.1\tATGGCTTCAAGTGCAGTTCC\tATGGCTACAAGTGCAGTTCC\n"
+    )
+
+    response = await async_client.get(f"/v2/blast/{job_id}/json")
+
+    hit = response.json()["results"][0]
+    assert hit["querySequence"] == "ATGGCTTCAAGTGCAGTTCC"
+    assert hit["subjectSequence"] == "ATGGCTACAAGTGCAGTTCC"
+
+
+@pytest.mark.anyio
+async def test_blast_results_name_the_gene_of_each_hit(
+    async_client: AsyncClient, tmp_path: Path
+):
+    job_id = "6f1c2b4e-0000-4000-8000-000000000002"
+    blast_path = tmp_path / "pg-service-blast"
+    blast_path.mkdir()
+    (blast_path / f"{job_id}.tsv").write_text(
+        "query1\tPA_chr01_G000001.mRNA.1\t95.0\t20\t1\t0\t1\t20\t101\t120"
+        "\t1e-5\t40.1\tATGG\tATGG\tpicab-v2.0\tPA_chr01_G000001\n"
+    )
+
+    response = await async_client.get(f"/v2/blast/{job_id}/json")
+
+    hit = response.json()["results"][0]
+    assert hit["annotationId"] == "picab-v2.0"
+    assert hit["geneId"] == "PA_chr01_G000001"
+
+
+def test_add_gene_columns_names_the_parent_gene(tmp_path: Path):
+    tsv_path = tmp_path / "job.tsv"
+    tsv_path.write_text(
+        "query1\tFUN_000003-T1\t95.0\t20\t1\t0\t1\t20\t101\t120"
+        "\t1e-5\t40.1\tATGG\tATGG\n"
+    )
+    gff_path = tmp_path / "gff.gz"
+    with gzip.open(gff_path, "wt") as gff:
+        gff.write("##gff-version 3\n")
+        gff.write(
+            "chr1\tfunannotate\tgene\t1\t900\t.\t+\t.\tID=FUN_000003;\n"
+        )
+        gff.write(
+            "chr1\tfunannotate\tmRNA\t1\t900\t.\t+\t.\t"
+            "ID=FUN_000003-T1;Parent=FUN_000003;product=hypothetical\n"
+        )
+
+    add_gene_columns(tsv_path, gff_path.as_posix(), "pruav-v2.0")
+
+    assert tsv_path.read_text().rstrip("\n").split("\t")[-2:] == [
+        "pruav-v2.0",
+        "FUN_000003",
+    ]
+
+
+@pytest.mark.anyio
+async def test_submit_blast_passes_the_annotation_gff_to_the_task(
+    async_client: AsyncClient,
+    neo4j_session: FakeNeo4jSession,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    sent_kwargs = []
+    monkeypatch.setattr(
+        run_blast_search,
+        "apply_async",
+        lambda **kwargs: sent_kwargs.append(kwargs["kwargs"]),
+    )
+
+    await submit_valid_blast(async_client, neo4j_session, tmp_path)
+
+    assert sent_kwargs[0]["annotation_id"] == "picab-v2.0"
+    assert sent_kwargs[0]["gff_path"] == (
+        tmp_path / "picab/v2/v2.0/gff.gz"
+    ).as_posix()
