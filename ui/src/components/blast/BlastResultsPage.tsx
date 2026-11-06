@@ -1,10 +1,12 @@
-import { useParams } from "wouter";
+import { Fragment, useState } from "react";
+import { Link, useParams } from "wouter";
 import {
   baseUrl,
   useGetBlastResultsQuery,
   usePollBlastQuery,
 } from "../../api/plantgenieApi";
 import { buttonClassName } from "../shared/buttonClassName";
+import Alignment from "./Alignment";
 
 const COLUMNS = [
   ["queryId", "Query"],
@@ -20,15 +22,20 @@ const COLUMNS = [
 export default function BlastResultsPage() {
   const { jobId } = useParams<{ jobId: string }>();
 
+  const [pollingInterval, setPollingInterval] = useState(1000);
   const { data: job } = usePollBlastQuery(jobId, {
-    pollingInterval: 1000,
+    pollingInterval,
     skipPollingIfUnfocused: true,
   });
   const isFinished = job?.status === "SUCCESS" || job?.status === "FAILURE";
 
+  if (isFinished && pollingInterval !== 0) setPollingInterval(0);
+
   const { data: hits } = useGetBlastResultsQuery(jobId, {
     skip: job?.status !== "SUCCESS",
   });
+
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
   return (
     <div className="mx-auto w-full max-w-7xl px-6 py-8">
@@ -66,10 +73,7 @@ export default function BlastResultsPage() {
             <thead>
               <tr className="border-b border-border">
                 {COLUMNS.map(([field, heading]) => (
-                  <th
-                    key={field}
-                    className="px-4 py-3 font-medium text-label"
-                  >
+                  <th key={field} className="px-4 py-3 font-medium text-label">
                     {heading}
                   </th>
                 ))}
@@ -77,18 +81,43 @@ export default function BlastResultsPage() {
             </thead>
             <tbody>
               {hits.map((hit, index) => (
-                <tr
-                  key={`${hit.queryId}-${hit.subjectId}-${index}`}
-                  className="border-b border-border last:border-0"
-                >
-                  {COLUMNS.map(([field]) => (
-                    <td key={field} className="px-4 py-3 text-heading">
-                      {field === "percentIdentity"
-                        ? hit[field].toFixed(3)
-                        : hit[field]}
-                    </td>
-                  ))}
-                </tr>
+                <Fragment key={`${hit.queryId}-${hit.subjectId}-${index}`}>
+                  <tr
+                    onClick={() =>
+                      setSelectedIndex(selectedIndex === index ? null : index)
+                    }
+                    className="cursor-pointer border-b border-border last:border-0 hover:bg-surface"
+                  >
+                    {COLUMNS.map(([field]) => (
+                      <td key={field} className="px-4 py-3 text-heading">
+                        {field === "percentIdentity"
+                          ? hit[field].toFixed(3)
+                          : hit[field]}
+                      </td>
+                    ))}
+                  </tr>
+                  {selectedIndex === index &&
+                    hit.querySequence &&
+                    hit.subjectSequence && (
+                      <tr className="border-b border-border">
+                        <td colSpan={COLUMNS.length} className="px-4 py-4">
+                          {hit.annotationId && hit.geneId && (
+                            <Link
+                              href={`/genes/${hit.annotationId}/${hit.geneId}`}
+                              className={`${buttonClassName("secondary", "small")} mb-4`}
+                            >
+                              Go to gene
+                            </Link>
+                          )}
+                          <Alignment
+                            hit={hit}
+                            querySequence={hit.querySequence}
+                            subjectSequence={hit.subjectSequence}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                </Fragment>
               ))}
             </tbody>
           </table>

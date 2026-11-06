@@ -107,6 +107,10 @@ export interface BlastHit {
   subjectEnd: number;
   evalue: number;
   bitScore: number;
+  querySequence?: string;
+  subjectSequence?: string;
+  annotationId?: string;
+  geneId?: string;
 }
 
 export interface BlastDatabase {
