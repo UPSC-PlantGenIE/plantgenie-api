@@ -20,6 +20,11 @@ resource "waldur_openstack_instance" "redis" {
     },
   ]
 
+  security_groups = [
+    { url = data.waldur_openstack_security_group.default.url },
+    { url = data.waldur_openstack_security_group.ssh.url },
+  ]
+
   user_data = trimspace(templatefile("${path.module}/redis-cloud-init.yaml", {
     server_username = var.server_username
     public_ssh_key  = trimspace(tls_private_key.ssh.public_key_openssh)

@@ -2,7 +2,7 @@ terraform {
   required_providers {
     waldur = {
       source  = "waldur/waldur"
-      version = "8.1.3-rc.2"
+      version = "8.1.4"
     }
     tls = {
       source  = "hashicorp/tls"
