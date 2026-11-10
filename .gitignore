@@ -32,3 +32,6 @@ ui/.pnp.loader.mjs
 .claude
 MANUAL-DEPLOY.md
 .snakemake
+# pixi environments
+.pixi/*
+!.pixi/config.toml
