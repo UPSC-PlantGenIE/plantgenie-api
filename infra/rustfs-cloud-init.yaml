@@ -1,0 +1,148 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+
+packages:
+  - ufw
+  - fail2ban
+  - unzip
+
+users:
+  - name: ${server_username}
+    lock_passwd: true
+    shell: /bin/bash
+    ssh-authorized-keys:
+      - ${public_ssh_key}
+    sudo:
+      - ALL=(ALL) NOPASSWD:ALL
+
+mounts:
+  - [ "LABEL=rustfs-data", /mnt/data, "ext4", "defaults,nofail", "0", "2" ]
+
+write_files:
+  - path: /usr/local/sbin/prepare-data-volume
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+
+      if ! blkid /dev/sdb >/dev/null 2>&1; then
+          mkfs.ext4 -L rustfs-data /dev/sdb
+      fi
+
+      mkdir -p /mnt/data
+      mount -a
+      mkdir -p /mnt/data/rustfs0
+
+  - path: /etc/systemd/system/data-volume.service
+    content: |
+      [Unit]
+      Description=Prepare and mount the RustFS data volume
+      BindsTo=dev-sdb.device
+      After=dev-sdb.device
+      Wants=rustfs.service
+      Before=rustfs.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/local/sbin/prepare-data-volume
+
+      [Install]
+      WantedBy=dev-sdb.device
+
+  - path: /etc/systemd/system/rustfs.service.d/data-volume.conf
+    content: |
+      [Unit]
+      Requires=data-volume.service
+      After=data-volume.service
+
+  - path: /etc/default/rustfs
+    permissions: '0600'
+    content: |
+      RUSTFS_ACCESS_KEY="${rustfs_access_key}"
+      RUSTFS_SECRET_KEY="${rustfs_secret_key}"
+      RUSTFS_VOLUMES="/mnt/data/rustfs0"
+      RUSTFS_ADDRESS=":9000"
+      RUSTFS_CONSOLE_ADDRESS=":9001"
+      RUSTFS_CONSOLE_ENABLE=true
+      RUSTFS_OBS_LOGGER_LEVEL=info
+      RUSTFS_OBS_LOG_DIRECTORY="/var/log/rustfs"
+
+  - path: /etc/systemd/system/rustfs.service
+    content: |
+      [Unit]
+      Description=RustFS Object Storage Server
+      Documentation=https://rustfs.com/docs/
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=notify
+      NotifyAccess=main
+      User=root
+      Group=root
+      WorkingDirectory=/usr/local
+      EnvironmentFile=-/etc/default/rustfs
+      ExecStart=/usr/local/bin/rustfs
+      LimitNOFILE=1048576
+      LimitNPROC=32768
+      TasksMax=infinity
+      Restart=always
+      RestartSec=10s
+      OOMScoreAdjust=-1000
+      SendSIGKILL=no
+      TimeoutStartSec=30s
+      TimeoutStopSec=30s
+      NoNewPrivileges=true
+      ProtectHome=true
+
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /etc/ssh/sshd_config
+    content: |
+      Port 22
+      Protocol 2
+      HostKey /etc/ssh/ssh_host_rsa_key
+      HostKey /etc/ssh/ssh_host_ecdsa_key
+      HostKey /etc/ssh/ssh_host_ed25519_key
+      SyslogFacility AUTH
+      LogLevel INFO
+      LoginGraceTime 120
+      PermitRootLogin no
+      PermitEmptyPasswords no
+      PermitUserEnvironment yes
+      PasswordAuthentication no
+      StrictModes yes
+      DebianBanner no
+      PubkeyAuthentication yes
+      IgnoreRhosts yes
+      HostbasedAuthentication no
+      ChallengeResponseAuthentication no
+      X11Forwarding no
+      PrintMotd no
+      PrintLastLog yes
+      TCPKeepAlive yes
+      AcceptEnv LANG LC_*
+      Subsystem sftp /usr/lib/openssh/sftp-server
+      UsePAM yes
+      MaxAuthTries 3
+      MaxStartups 2:30:10
+      AllowAgentForwarding no
+      AllowUsers ${server_username}
+
+runcmd:
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp comment 'SSH'
+  - ufw allow proto tcp from ${internal_subnet_cidr} to any port 9000:9001 comment 'RustFS'
+  - ufw enable
+  - wget -O /tmp/rustfs.zip ${rustfs_download_url}
+  - unzip -o /tmp/rustfs.zip -d /usr/local/bin
+  - rm /tmp/rustfs.zip
+  - chmod 0755 /usr/local/bin/rustfs
+  - mkdir -p /var/log/rustfs
+  - systemctl daemon-reload
+  - systemctl enable data-volume rustfs
+  - systemctl start --no-block data-volume

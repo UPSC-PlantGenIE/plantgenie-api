@@ -19,35 +19,9 @@ resource "waldur_openstack_volume" "shared" {
   size     = var.shared_volume_size * 1024
 }
 
-resource "null_resource" "shared_attachment" {
-  triggers = {
-    volume_id   = waldur_openstack_volume.shared.id
-    instance_id = waldur_openstack_instance.nginx.id
-  }
-
-  provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-
-    environment = {
-      WALDUR_API_URL      = var.waldur_api_url
-      WALDUR_ACCESS_TOKEN = var.waldur_access_token
-      VOLUME_UUID         = waldur_openstack_volume.shared.id
-      INSTANCE_URL        = waldur_openstack_instance.nginx.url
-    }
-
-    command = "python3 ${path.module}/attach-volume.py"
-  }
-
-  provisioner "local-exec" {
-    when        = destroy
-    interpreter = ["/bin/bash", "-c"]
-
-    environment = {
-      VOLUME_UUID = self.triggers.volume_id
-    }
-
-    command = "python3 ${path.module}/detach-volume.py"
-  }
+resource "waldur_openstack_volume_attachment" "shared" {
+  volume   = waldur_openstack_volume.shared.id
+  instance = waldur_openstack_instance.nginx.url
 }
 
 resource "null_resource" "neo4j_data_attachment" {

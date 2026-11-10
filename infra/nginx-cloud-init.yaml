@@ -73,6 +73,58 @@ write_files:
           proxy_pass ${neo4j_internal_ip}:7687;
       }
 
+  - path: /etc/nginx/conf.d/rustfs.conf
+    content: |
+      map $http_upgrade $connection_upgrade {
+          default upgrade;
+          ''      '';
+      }
+
+      upstream rustfs_s3 {
+          server ${rustfs_internal_ip}:9000;
+          keepalive 32;
+      }
+
+      upstream rustfs_console {
+          server ${rustfs_internal_ip}:9001;
+          keepalive 16;
+      }
+
+      server {
+          listen 80;
+          server_name ${rustfs_domain_name};
+
+          ignore_invalid_headers off;
+          client_max_body_size 0;
+          proxy_buffering off;
+          proxy_request_buffering off;
+
+          location / {
+              proxy_http_version 1.1;
+              proxy_set_header Host $http_host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+              proxy_set_header Connection '';
+              proxy_cache_convert_head off;
+              proxy_connect_timeout 300s;
+              chunked_transfer_encoding off;
+              proxy_pass http://rustfs_s3;
+          }
+
+          location /rustfs/console/ {
+              proxy_http_version 1.1;
+              proxy_set_header Host $http_host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+              proxy_set_header Upgrade $http_upgrade;
+              proxy_set_header Connection $connection_upgrade;
+              proxy_connect_timeout 300s;
+              proxy_pass http://rustfs_console;
+          }
+      }
+
   - path: /etc/nginx/nginx.conf
     content: |
       include /etc/nginx/modules-enabled/*.conf;
@@ -89,6 +141,7 @@ write_files:
 
       http {
           include      mime.types;
+          include      /etc/nginx/conf.d/*.conf;
           default_type application/octet-stream;
           sendfile     on;
           keepalive_timeout 65;
@@ -116,6 +169,21 @@ write_files:
                   proxy_http_version 1.1;
                   proxy_set_header Host $host;
                   proxy_set_header X-Real-IP $remote_addr;
+              }
+
+              location = /jbrowse { return 301 /jbrowse/; }
+
+              location /jbrowse/ {
+                  root /var/www/html;
+                  index index.html;
+                  try_files $uri $uri/ @jbrowse_data;
+              }
+
+              location @jbrowse_data {
+                  proxy_pass http://rustfs_s3;
+                  proxy_http_version 1.1;
+                  proxy_set_header Connection '';
+                  proxy_buffering off;
               }
 
               location / {
@@ -171,7 +239,11 @@ runcmd:
   - wget -O /tmp/plantgenie-ui.zip ${ui_download_url}
   - unzip /tmp/plantgenie-ui.zip -d /var/www/html
   - rm /tmp/plantgenie-ui.zip
+  - wget -O /tmp/jbrowse.zip ${jbrowse_download_url}
+  - unzip /tmp/jbrowse.zip -d /var/www/html/jbrowse
+  - rm /tmp/jbrowse.zip
   - systemctl enable nginx
   - systemctl start nginx
   - systemctl daemon-reload
   - systemctl enable shared-volume
+  - systemctl start --no-block shared-volume

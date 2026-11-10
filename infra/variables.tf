@@ -158,3 +158,40 @@ variable "neo4j_password" {
   type        = string
   sensitive   = true
 }
+
+variable "rustfs_flavor_name" {
+  description = "Flavor for the rustfs instance"
+  type        = string
+}
+
+variable "rustfs_data_volume_size" {
+  description = "Size of the rustfs data volume in GB"
+  type        = number
+}
+
+variable "rustfs_download_url" {
+  description = "URL of the rustfs release zip, pinned to a version"
+  type        = string
+}
+
+variable "rustfs_access_key" {
+  description = "RustFS root access key"
+  type        = string
+  sensitive   = true
+}
+
+variable "rustfs_secret_key" {
+  description = "RustFS root secret key"
+  type        = string
+  sensitive   = true
+}
+
+variable "rustfs_domain_name" {
+  description = "Domain name nginx serves the RustFS API and console on"
+  type        = string
+}
+
+variable "jbrowse_download_url" {
+  description = "URL of the JBrowse web release zip, pinned to a version"
+  type        = string
+}
