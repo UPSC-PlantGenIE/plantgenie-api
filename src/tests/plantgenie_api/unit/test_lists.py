@@ -4,6 +4,8 @@ import sqlite3
 import pytest
 from httpx import AsyncClient
 
+from tests.plantgenie_api.unit.conftest import FakeNeo4jSession
+
 ADA = "1111111111111111"
 BOB = "2222222222222222"
 CARL = "3333333333333333"
@@ -476,3 +478,82 @@ async def test_patch_list_renames(
         "SELECT name FROM gene_lists WHERE list_id = ?", (list_id,)
     ).fetchone()
     assert row[0] == "New"
+
+
+@pytest.mark.anyio
+async def test_random_genes_are_added_to_the_list(
+    async_client: AsyncClient,
+    sqlite_conn: sqlite3.Connection,
+    neo4j_session: FakeNeo4jSession,
+    auth_headers: dict[str, str],
+):
+    create = await async_client.post(
+        "/v2/lists",
+        headers=auth_headers,
+        json={"name": "My list", "annotationId": "arath-Araport11", "taxonName": "Arabidopsis thaliana"},
+    )
+    list_id = create.json()["listId"]
+    await async_client.patch(
+        f"/v2/lists/{list_id}",
+        headers=auth_headers,
+        json={"addGeneIds": ["AT1G01010"]},
+    )
+    neo4j_session.next_records = [{"id": "AT2G00010"}, {"id": "AT3G00020"}]
+
+    response = await async_client.post(
+        f"/v2/lists/{list_id}/random-genes",
+        headers=auth_headers,
+        json={"count": 2},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"added": 2}
+    assert neo4j_session.last_params == {
+        "annotationId": "arath-Araport11",
+        "exclude": ["AT1G01010"],
+        "count": 2,
+    }
+    rows = sqlite_conn.execute(
+        "SELECT gene_id FROM gene_list_members "
+        "WHERE list_id = ? ORDER BY gene_id",
+        (list_id,),
+    ).fetchall()
+    assert [r[0] for r in rows] == ["AT1G01010", "AT2G00010", "AT3G00020"]
+
+
+@pytest.mark.anyio
+async def test_random_genes_rejects_a_bad_count(
+    async_client: AsyncClient,
+    neo4j_session: FakeNeo4jSession,
+    auth_headers: dict[str, str],
+):
+    create = await async_client.post(
+        "/v2/lists",
+        headers=auth_headers,
+        json={"name": "My list", "annotationId": "arath-Araport11", "taxonName": "Arabidopsis thaliana"},
+    )
+    url = f"/v2/lists/{create.json()['listId']}/random-genes"
+
+    for count in (0, -3, 101):
+        response = await async_client.post(
+            url, headers=auth_headers, json={"count": count}
+        )
+        assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_random_genes_is_scoped_to_the_account(
+    async_client: AsyncClient,
+    sqlite_conn: sqlite3.Connection,
+    neo4j_session: FakeNeo4jSession,
+    auth_headers: dict[str, str],
+):
+    given_account_with_list(sqlite_conn, ADA, "ada-list", "Ada's list")
+
+    response = await async_client.post(
+        "/v2/lists/ada-list/random-genes",
+        headers=auth_headers,
+        json={"count": 5},
+    )
+
+    assert response.status_code == 404

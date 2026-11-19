@@ -9,10 +9,21 @@ from plantgenie_api.api.v2.lists.models import (
     GeneListWithMember,
     GetListsResponse,
     PatchListRequest,
+    RandomGenesRequest,
+    RandomGenesResponse,
 )
-from plantgenie_api.dependencies import AccountDep, SqliteDep
+from plantgenie_api.dependencies import AccountDep, Neo4jDep, SqliteDep
 
 router = APIRouter(prefix="/lists", tags=["v2", "lists"])
+
+# Every gene of the annotation is a candidate, annotated or not; genes the
+# list already holds are left out so the requested number is really added.
+RANDOM_GENES_QUERY = (
+    "MATCH (:Annotation {id: $annotationId})-[:HAS_GENE]->(g:Gene) "
+    "WHERE NOT g.id IN $exclude "
+    "WITH g.id AS id, rand() AS r ORDER BY r LIMIT $count "
+    "RETURN id"
+)
 
 
 @router.get("")
@@ -159,3 +170,45 @@ async def patch_list(
         )
     await conn.commit()
     return {"listId": list_id}
+
+
+@router.post("/{list_id}/random-genes")
+async def add_random_genes(
+    list_id: str,
+    body: RandomGenesRequest,
+    conn: SqliteDep,
+    session: Neo4jDep,
+    account_hash: AccountDep,
+) -> RandomGenesResponse:
+    async with conn.execute(
+        "SELECT annotation_id FROM gene_lists "
+        "WHERE list_id = ? AND account_hash = ?",
+        (list_id, account_hash),
+    ) as cursor:
+        row = await cursor.fetchone()
+    if row is None:
+        raise HTTPException(
+            status_code=404, detail=f"List '{list_id}' not found"
+        )
+    async with conn.execute(
+        "SELECT gene_id FROM gene_list_members WHERE list_id = ?",
+        (list_id,),
+    ) as cursor:
+        existing = [r[0] for r in await cursor.fetchall()]
+
+    result = await session.run(
+        RANDOM_GENES_QUERY,
+        annotationId=row[0],
+        exclude=existing,
+        count=body.count,
+    )
+    gene_ids = [record["id"] async for record in result]
+
+    if gene_ids:
+        await conn.executemany(
+            "INSERT OR IGNORE INTO gene_list_members "
+            "(list_id, gene_id) VALUES (?, ?)",
+            [(list_id, g) for g in gene_ids],
+        )
+        await conn.commit()
+    return RandomGenesResponse(added=len(gene_ids))
