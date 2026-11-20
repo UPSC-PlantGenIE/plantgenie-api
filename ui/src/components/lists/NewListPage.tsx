@@ -247,7 +247,7 @@ const NewListPage = () => {
           </label>
           <input
             id="list-name"
-            placeholder="e.g. Drought-response TFs in Pinus sylvestris"
+            placeholder="e.g. Drought-response TFs"
             value={name}
             onChange={(event) => setName(event.target.value)}
             className={`${inputClassName} h-11`}
